@@ -262,12 +262,9 @@
         // 洗牌函數
         function shuffle(array) {
             let currentIndex = array.length,  randomIndex;
-            // While there remain elements to shuffle.
             while (currentIndex != 0) {
-                // Pick a remaining element.
                 randomIndex = Math.floor(Math.random() * currentIndex);
                 currentIndex--;
-                // And swap it with the current element.
                 [array[currentIndex], array[randomIndex]] = [
                 array[randomIndex], array[currentIndex]];
             }
@@ -403,10 +400,13 @@
                 if (initError) { setLoading(false); return; }
                 if (auth) {
                     signInAnonymously(auth).catch(e => {
+                        // Firestore might work in offline mode, so auth error is not always blocking
+                        console.warn("Auth failed, but Firestore might work offline", e);
                         if(e.code === 'auth/configuration-not-found' || e.code === 'auth/admin-restricted-operation') {
                             setErrorMsg("⚠️ 請至 Firebase Console 開啟「匿名登入」權限");
                         } else {
-                            setErrorMsg("連線錯誤: " + e.code);
+                            // Don't block UI for network errors, just log
+                            console.warn("Network error during auth", e);
                         }
                         setLoading(false);
                     });
@@ -420,12 +420,21 @@
             }, []);
 
             useEffect(() => {
-                if (!user || !db) return;
+                if (!user && !db) return; 
+                // Even if user is null, we might try to read if rules allow. But best practice is usually with user.
+                // If auth failed due to network, user is null. 
+                // We can try to read anyway, or just wait. 
+                // For this app, let's try reading if db exists.
+                if (!db) return;
+
                 const q = query(collection(db, 'class_scores')); 
                 const unsubscribe = onSnapshot(q, (snapshot) => {
                     const records = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     records.sort((a, b) => b.score - a.score);
                     setLeaderboard(records);
+                }, (error) => {
+                     console.warn("Firestore snapshot error (likely offline):", error);
+                     // Do not set errorMsg to block UI, just let it be empty or show cached data if available
                 });
                 return () => unsubscribe();
             }, [user]);
@@ -733,6 +742,8 @@
 
             const finish = async () => {
                 setAppState('result');
+                // Only attempt to save score if user is authenticated (even anonymously)
+                // Note: if offline, Firebase SDK will queue this write locally
                 if (user && db) {
                     try {
                         await addDoc(collection(db, 'class_scores'), {
@@ -744,7 +755,7 @@
                             wrongAnswers: wrongAnswers.current 
                         });
                     } catch (e) {
-                        console.error("上傳分數失敗", e);
+                        console.error("上傳分數失敗 (可能離線)", e);
                     }
                 }
             };
