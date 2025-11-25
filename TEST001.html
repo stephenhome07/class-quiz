@@ -45,7 +45,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, collection, addDoc, query, onSnapshot, serverTimestamp, orderBy, limit, deleteDoc, doc, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, query, onSnapshot, serverTimestamp, orderBy, limit, deleteDoc, doc, getDocs, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDLoHH3xJcg8RP135anypHnT--rY2O_8ag",
@@ -69,6 +69,10 @@
             app = initializeApp(firebaseConfig);
             auth = getAuth(app);
             db = getFirestore(app);
+            // 嘗試啟用離線持久化
+            enableIndexedDbPersistence(db).catch((err) => {
+                console.log('Persistence failed:', err.code);
+            });
         } catch (e) {
             console.error("Firebase 初始化失敗:", e);
             initError = e.message;
@@ -109,10 +113,13 @@
             ChevronDown: (props) => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="m6 9 6 6 6-6"/></svg>,
             ChevronUp: (props) => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="m18 15-6-6-6 6"/></svg>,
             Coin: (props) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="#FBBF24" stroke="#B45309" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="coin-icon" {...props}><circle cx="12" cy="12" r="9"/><path d="M10 10c0-1.333.8-2 2-2s2 .667 2 2c0 2.667-4 2.667-4 5.333 0 1.333.8 2 2 2s2-.667 2-2"/><path d="M12 18h.01"/></svg>,
-            Users: (props) => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Users: (props) => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+            Wifi: (props) => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={props.className} {...props}><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>,
+            WifiOff: (props) => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={props.className} {...props}><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.58 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
         };
 
-        const CLASS_OPTIONS = ["S2A", "S2B", "S2C", "S2D", "S2E"];
+        // 增加 TEST 班
+        const CLASS_OPTIONS = ["S2A", "S2B", "S2C", "S2D", "S2E", "TEST"];
         const POINTS_PER_COIN = 800; // 800分 = 1 Coin
 
         // 題目資料
@@ -373,17 +380,17 @@
             const [leaderboard, setLeaderboard] = useState([]);
             const [loading, setLoading] = useState(true);
             const [errorMsg, setErrorMsg] = useState("");
+            const [isOnline, setIsOnline] = useState(navigator.onLine);
             
             // 教師端狀態
             const [teacherClassFilter, setTeacherClassFilter] = useState("ALL"); 
             const [isDeleting, setIsDeleting] = useState(false);
             const [showTeacherSuggestions, setShowTeacherSuggestions] = useState(false); 
-            const [passThreshold, setPassThreshold] = useState(60); // 新增：合格分數線
+            const [passThreshold, setPassThreshold] = useState(60); 
 
             // 狀態管理
             const [practiceMode, setPracticeMode] = useState(false); 
             const [challengeMode, setChallengeMode] = useState(false); 
-            // 新增：存儲隨機化後的題目列表
             const [quizQuestions, setQuizQuestions] = useState([]);
             const [currentQuestionData, setCurrentQuestionData] = useState(QUESTIONS_DATA[0]);
             const [showHint, setShowHint] = useState(false); 
@@ -397,16 +404,21 @@
             const { auth, db, signInAnonymously, onAuthStateChanged, collection, addDoc, query, onSnapshot, serverTimestamp, orderBy, limit, deleteDoc, doc, getDocs, AI_PROXY_URL, AI_AUTH_KEY, initError } = window.dbServices;
 
             useEffect(() => {
+                window.addEventListener('online', () => setIsOnline(true));
+                window.addEventListener('offline', () => setIsOnline(false));
+                return () => {
+                    window.removeEventListener('online', () => setIsOnline(true));
+                    window.removeEventListener('offline', () => setIsOnline(false));
+                };
+            }, []);
+
+            useEffect(() => {
                 if (initError) { setLoading(false); return; }
                 if (auth) {
                     signInAnonymously(auth).catch(e => {
-                        // Firestore might work in offline mode, so auth error is not always blocking
-                        console.warn("Auth failed, but Firestore might work offline", e);
+                        console.warn("Auth failed, network issue?", e);
                         if(e.code === 'auth/configuration-not-found' || e.code === 'auth/admin-restricted-operation') {
                             setErrorMsg("⚠️ 請至 Firebase Console 開啟「匿名登入」權限");
-                        } else {
-                            // Don't block UI for network errors, just log
-                            console.warn("Network error during auth", e);
                         }
                         setLoading(false);
                     });
@@ -421,10 +433,6 @@
 
             useEffect(() => {
                 if (!user && !db) return; 
-                // Even if user is null, we might try to read if rules allow. But best practice is usually with user.
-                // If auth failed due to network, user is null. 
-                // We can try to read anyway, or just wait. 
-                // For this app, let's try reading if db exists.
                 if (!db) return;
 
                 const q = query(collection(db, 'class_scores')); 
@@ -434,7 +442,6 @@
                     setLeaderboard(records);
                 }, (error) => {
                      console.warn("Firestore snapshot error (likely offline):", error);
-                     // Do not set errorMsg to block UI, just let it be empty or show cached data if available
                 });
                 return () => unsubscribe();
             }, [user]);
@@ -455,11 +462,8 @@
                 setPracticeMode(false);
                 setChallengeMode(false);
                 
-                // 1. 深度複製題目
                 let randomizedQuestions = JSON.parse(JSON.stringify(QUESTIONS_DATA));
-                // 2. 隨機排序題目
                 randomizedQuestions = shuffle(randomizedQuestions);
-                // 3. 隨機排序每一題的選項
                 randomizedQuestions.forEach(q => {
                     q.options = shuffle(q.options);
                 });
@@ -498,11 +502,9 @@
             };
 
             const startPrebuiltPractice = () => {
-                // 取得類似題並隨機化其選項
                 const similarQ = JSON.parse(JSON.stringify(currentQuestionData.similar));
                 if (similarQ) {
                     similarQ.options = shuffle(similarQ.options);
-                    
                     setPracticeMode(true);
                     setSelectedOption(null);
                     setIsAnswerChecked(false);
@@ -535,7 +537,6 @@
                     const cleanJson = result.replace(/```json/g, '').replace(/```/g, '').trim();
                     const newQ = JSON.parse(cleanJson);
 
-                    // 隨機化 AI 生成的選項
                     if(newQ.options) {
                         newQ.options = shuffle(newQ.options);
                     }
@@ -575,7 +576,6 @@
                     const challengeQs = JSON.parse(cleanJson);
 
                     if (Array.isArray(challengeQs) && challengeQs.length > 0) {
-                        // 隨機化挑戰題的選項
                         challengeQs.forEach(q => {
                             if(q.options) q.options = shuffle(q.options);
                         });
@@ -626,6 +626,9 @@
                 let targetStudents = leaderboard;
                 if (teacherClassFilter !== "ALL") {
                     targetStudents = leaderboard.filter(s => s.classId === teacherClassFilter);
+                } else {
+                    // 排除 TEST 班
+                    targetStudents = leaderboard.filter(s => s.classId !== "TEST");
                 }
 
                 if (targetStudents.length === 0) {
@@ -742,8 +745,6 @@
 
             const finish = async () => {
                 setAppState('result');
-                // Only attempt to save score if user is authenticated (even anonymously)
-                // Note: if offline, Firebase SDK will queue this write locally
                 if (user && db) {
                     try {
                         await addDoc(collection(db, 'class_scores'), {
@@ -920,7 +921,7 @@
                                             </div>
                                         )}
 
-                                        {/* 新增：學生由績列表 */}
+                                        {/* 新增：學生由績列表 (修復崩潰問題) */}
                                         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm mt-6">
                                             <h3 className="font-bold text-slate-700 mb-4 flex items-center justify-between">
                                                 <span className="flex items-center gap-2"><Icons.Users /> 學生由績列表</span>
@@ -949,12 +950,17 @@
                                                     <tbody className="divide-y divide-slate-100">
                                                         {leaderboard
                                                             .filter(s => teacherClassFilter === "ALL" || s.classId === teacherClassFilter)
-                                                            .sort((a, b) => (a.classId || "").localeCompare(b.classId || "") || b.score - a.score)
+                                                            // 這裡使用了 String() 轉換，防止 undefined 造成崩潰
+                                                            .sort((a, b) => {
+                                                                const classA = a.classId ? String(a.classId) : "";
+                                                                const classB = b.classId ? String(b.classId) : "";
+                                                                return classA.localeCompare(classB) || b.score - a.score;
+                                                            })
                                                             .map((r) => {
                                                                 const isFail = r.score < passThreshold;
                                                                 return (
                                                                     <tr key={r.id} className={isFail ? "bg-red-50/50" : ""}>
-                                                                        <td className="p-3"><span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 text-xs">{r.classId}</span></td>
+                                                                        <td className="p-3"><span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 text-xs">{r.classId || "-"}</span></td>
                                                                         <td className="p-3 font-medium text-slate-700">{r.studentName}</td>
                                                                         <td className={`p-3 text-right font-bold ${isFail ? "text-red-600" : "text-blue-600"}`}>
                                                                             {r.score}
@@ -1233,6 +1239,12 @@
                                     </div>
                                 </div>
                             )}
+                        </div>
+                        <div className="fixed bottom-2 right-2 z-50">
+                            <div className={`px-3 py-1 rounded-full text-xs font-bold shadow-md flex items-center gap-1 ${isOnline ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                {isOnline ? <Icons.Wifi className="w-3 h-3" /> : <Icons.WifiOff className="w-3 h-3" />}
+                                {isOnline ? '連線正常' : '離線模式 (資料暫存中)'}
+                            </div>
                         </div>
                         <div className="text-center mt-6 text-xs text-slate-400">
                             S.2 Science | AI-Powered Learning
