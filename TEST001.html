@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>S.2 科學測驗：HOYU COINS 班際保衛戰</title>
+    <title>S.2 Science Quiz: Class Battle (班際保衛戰)</title>
     
     <!-- 1. 載入必要的工具 -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
@@ -69,7 +69,6 @@
             app = initializeApp(firebaseConfig);
             auth = getAuth(app);
             db = getFirestore(app);
-            // 嘗試啟用離線持久化
             enableIndexedDbPersistence(db).catch((err) => {
                 console.log('Persistence failed:', err.code);
             });
@@ -118,150 +117,149 @@
             WifiOff: (props) => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={props.className} {...props}><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.58 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
         };
 
-        // 增加 TEST 班
         const CLASS_OPTIONS = ["S2A", "S2B", "S2C", "S2D", "S2E", "TEST"];
-        const POINTS_PER_COIN = 800; // 800分 = 1 Coin
+        const POINTS_PER_COIN = 800; 
 
-        // 題目資料
+        // 題目資料 (中英對照)
         const QUESTIONS_DATA = [
              {
                 id: 1,
-                question: "一輛手推車原本處於靜止狀態。如圖所示，它受到向左 10 N 和向右 10 N 的力同時作用。預測這輛手推車的運動狀態。",
-                options: ["保持靜止 (Remain at rest)", "勻速運動 (Uniform motion)", "非勻速運動 (Non-uniform motion)", "無法判斷"],
+                question: "一輛手推車原本處於靜止狀態。如圖所示，它受到向左 10 N 和向右 10 N 的力同時作用。預測這輛手推車的運動狀態。\n(A handcart is initially at rest. It is acted upon by a force of 10 N to the left and 10 N to the right. Predict its motion.)",
+                options: ["保持靜止 (Remain at rest)", "勻速運動 (Uniform motion)", "非勻速運動 (Non-uniform motion)", "無法判斷 (Cannot be determined)"],
                 correctAnswer: "保持靜止 (Remain at rest)",
-                explanation: "向左 10N 和向右 10N 的力大小相等、方向相反，合力為 0（平衡力）。根據牛頓第一定律，原本靜止的物體在受平衡力作用下會保持靜止。",
+                explanation: "向左 10N 和向右 10N 的力大小相等、方向相反，合力為 0（平衡力）。根據牛頓第一定律，原本靜止的物體在受平衡力作用下會保持靜止。\n(Forces are equal and opposite, net force is 0. According to Newton's 1st Law, object remains at rest.)",
                 keywords: ["cart", "force"],
                 similar: {
-                    question: "【基礎類似題】一本書靜置在桌面上，小明從左邊施力 5 N，小華從右邊施力 5 N。請問這本書會如何運動？",
-                    options: ["向右移動", "向左移動", "保持靜止", "轉動"],
-                    correctAnswer: "保持靜止",
-                    explanation: "左右兩邊的力大小相同且方向相反，互相抵銷，合力為零，故物體保持原本的靜止狀態。"
+                    question: "【基礎類似題】一本書靜置在桌面上，小明從左邊施力 5 N，小華從右邊施力 5 N。請問這本書會如何運動？\n(A book is on a table. 5 N force from left, 5 N force from right. How will it move?)",
+                    options: ["向右移動 (Move right)", "向左移動 (Move left)", "保持靜止 (Remain at rest)", "轉動 (Rotate)"],
+                    correctAnswer: "保持靜止 (Remain at rest)",
+                    explanation: "左右兩邊的力大小相同且方向相反，互相抵銷，合力為零。\n(Forces cancel out, net force is zero.)"
                 }
             },
             {
                 id: 2,
-                question: "一個箱子正在光滑的地面上向右移動。此時，它受到向左 5 N 和向右 5 N 的力作用。預測箱子接下來的運動。",
-                options: ["立即停止", "保持靜止 (Remain at rest)", "勻速運動 (Uniform motion)", "非勻速運動 (Non-uniform motion)"],
+                question: "一個箱子正在光滑的地面上向右移動。此時，它受到向左 5 N 和向右 5 N 的力作用。預測箱子接下來的運動。\n(A box moving right on smooth floor is acted upon by 5 N left and 5 N right. Predict its motion.)",
+                options: ["立即停止 (Stop immediately)", "保持靜止 (Remain at rest)", "勻速運動 (Uniform motion)", "非勻速運動 (Non-uniform motion)"],
                 correctAnswer: "勻速運動 (Uniform motion)",
-                explanation: "左右受力各 5N，合力為 0。雖然有力作用，但因為是「平衡力」，物體會維持原本的運動狀態。既然原本在向右動，就會繼續以同樣速度向右做勻速運動。",
+                explanation: "合力為 0。因為是「平衡力」，物體會維持原本的運動狀態（向右勻速）。\n(Net force is 0. Under balanced forces, it maintains original uniform motion to the right.)",
                 keywords: ["box", "force"],
                 similar: {
-                    question: "【基礎類似題】冰球在冰面上以 2 m/s 向前滑行，假設摩擦力忽略不計，且沒有其他外力作用，冰球會？",
-                    options: ["越來越慢", "保持 2 m/s 勻速直線運動", "越來越快", "立即停止"],
-                    correctAnswer: "保持 2 m/s 勻速直線運動",
-                    explanation: "不受外力（或合力為零）時，運動中的物體會維持原本的速度和方向，這就是慣性。"
+                    question: "【基礎類似題】冰球在冰面上以 2 m/s 向前滑行，假設摩擦力忽略不計，且沒有其他外力作用，冰球會？\n(An ice puck slides at 2 m/s with no friction or external forces. It will?)",
+                    options: ["越來越慢 (Slow down)", "保持 2 m/s 勻速直線運動 (Keep 2 m/s uniform motion)", "越來越快 (Speed up)", "立即停止 (Stop immediately)"],
+                    correctAnswer: "保持 2 m/s 勻速直線運動 (Keep 2 m/s uniform motion)",
+                    explanation: "不受外力時，物體維持原本速度（慣性）。\n(No external force means maintaining original velocity due to inertia.)"
                 }
             },
             {
                 id: 3,
-                question: "一輛玩具車靜止在地面上，受到向右 20 N 的推力和向左 5 N 的摩擦力作用。預測玩具車的運動。",
-                options: ["保持靜止", "勻速運動", "非勻速運動 (Non-uniform motion)", "先向左移動，再向右移動"],
+                question: "一輛玩具車靜止在地面上，受到向右 20 N 的推力和向左 5 N 的摩擦力作用。預測玩具車的運動。\n(A toy car at rest: 20 N push to right, 5 N friction to left. Predict motion.)",
+                options: ["保持靜止 (Remain at rest)", "勻速運動 (Uniform motion)", "非勻速運動 (Non-uniform motion)", "先左後右 (Left then right)"],
                 correctAnswer: "非勻速運動 (Non-uniform motion)",
-                explanation: "向右 20N，向左 5N，合力 = 20 - 5 = 15N 向右。因為受力「不平衡」，物體會產生加速度，從靜止開始變快，這屬於非勻速運動。",
+                explanation: "合力 = 15N 向右。受力「不平衡」，物體會加速（非勻速）。\n(Net force = 15N right. Unbalanced force causes acceleration/non-uniform motion.)",
                 keywords: ["car", "force"],
                 similar: {
-                    question: "【基礎類似題】一艘快艇引擎提供向前 5000 N 的推力，水阻力為 2000 N。請問快艇的運動狀態？",
-                    options: ["靜止", "勻速運動", "向前加速 (非勻速運動)", "向後加速"],
-                    correctAnswer: "向前加速 (非勻速運動)",
-                    explanation: "推力大於阻力，合力不為零且向前，物體會沿合力方向加速。"
+                    question: "【基礎類似題】快艇引擎提供向前 5000 N 推力，水阻力 2000 N。快艇狀態？\n(Speedboat: 5000 N forward thrust, 2000 N resistance. Motion state?)",
+                    options: ["靜止 (At rest)", "勻速運動 (Uniform motion)", "向前加速 (Accelerate forward)", "向後加速 (Accelerate backward)"],
+                    correctAnswer: "向前加速 (Accelerate forward)",
+                    explanation: "推力大於阻力，合力向前，物體加速。\n(Thrust > Resistance, net force forward causes acceleration.)"
                 }
             },
             {
                 id: 4,
-                question: "圖片顯示一個足球在草地上滾動，最終停了下來。這過程中，足球處於什麼運動狀態？這暗示了什麼？",
-                options: ["勻速運動；受力平衡", "非勻速運動；受力平衡", "非勻速運動；受力不平衡 (Unbalanced forces)", "保持靜止；受力不平衡"],
-                correctAnswer: "非勻速運動 (Non-uniform motion)；受力不平衡 (Unbalanced forces)",
-                explanation: "足球從滾動到停止，速度在改變（減速），所以是「非勻速運動」。速度改變必定是因為受到「不平衡力」（摩擦力）的作用。",
+                question: "圖片顯示一個足球在草地上滾動，最終停了下來。這過程中，足球處於什麼運動狀態？這暗示了什麼？\n(A soccer ball rolls and stops. What is its motion state and implication?)",
+                options: ["勻速；受力平衡 (Uniform; Balanced)", "非勻速；受力平衡 (Non-uniform; Balanced)", "非勻速；受力不平衡 (Non-uniform; Unbalanced)", "靜止；受力不平衡 (Rest; Unbalanced)"],
+                correctAnswer: "非勻速；受力不平衡 (Non-uniform; Unbalanced)",
+                explanation: "速度改變（減速）是「非勻速運動」，必定受到「不平衡力」（摩擦力）。\n(Changing speed (deceleration) is non-uniform motion caused by unbalanced force/friction.)",
                 keywords: ["ball", "force"],
                 similar: {
-                    question: "【基礎類似題】騎腳踏車時停止踩踏板，車子會慢慢停下來，這是因為受到什麼力的作用？此時合力是否為零？",
-                    options: ["重力；合力為零", "摩擦力；合力不為零", "推力；合力為零", "支撐力；合力不為零"],
-                    correctAnswer: "摩擦力；合力不為零",
-                    explanation: "車子減速是加速度運動（非勻速），代表合力不為零，主要受到地面的摩擦力阻礙運動。"
+                    question: "【基礎類似題】騎腳踏車停止踩踏板後慢慢停下，是因為什麼力？\n(Bicycle stops after pedaling stops due to what force?)",
+                    options: ["重力 (Gravity)", "摩擦力 (Friction)", "推力 (Thrust)", "支撐力 (Support force)"],
+                    correctAnswer: "摩擦力 (Friction)",
+                    explanation: "減速是因為地面摩擦力。\n(Deceleration is caused by ground friction.)"
                 }
             },
             {
                 id: 5,
-                question: "一個物體懸掛在繩子上保持靜止（如圖）。下列哪項關於受力的描述是正確的？",
-                options: ["物體沒有受到任何力的作用", "作用在物體上的力是不平衡力", "作用在物體上的力是平衡力 (Balanced forces)", "重力大於拉力"],
-                correctAnswer: "作用在物體上的力是平衡力 (Balanced forces)",
-                explanation: "物體靜止不動，代表合力為 0。它受到向下的重力和向上的繩子拉力，這兩個力大小相等、方向相反，屬於平衡力。",
+                question: "一個物體懸掛在繩子上保持靜止。下列哪項正確？\n(An object hanging on a rope is stationary. Which is true?)",
+                options: ["沒受力 (No force)", "受不平衡力 (Unbalanced forces)", "受平衡力 (Balanced forces)", "重力 > 拉力 (Gravity > Tension)"],
+                correctAnswer: "受平衡力 (Balanced forces)",
+                explanation: "靜止代表合力為 0（平衡力）。重力與拉力抵銷。\n(Stationary means net force 0. Gravity and tension cancel out.)",
                 keywords: ["box", "arrow"],
                 similar: {
-                    question: "【基礎類似題】電燈吊在天花板上靜止不動。請問電燈受到的重力和電線的拉力關係為何？",
-                    options: ["重力 > 拉力", "拉力 > 重力", "大小相等，方向相反", "大小相等，方向相同"],
-                    correctAnswer: "大小相等，方向相反",
-                    explanation: "靜止代表受平衡力作用，故向下的重力與向上的拉力必須抵銷。"
+                    question: "【基礎類似題】電燈吊在天花板上靜止。重力和拉力關係？\n(Lamp hanging stationary. Gravity vs Tension?)",
+                    options: ["重力 > 拉力 (Gravity > Tension)", "拉力 > 重力 (Tension > Gravity)", "大小相等，方向相反 (Equal & Opposite)", "大小相等，方向相同 (Equal & Same dir)"],
+                    correctAnswer: "大小相等，方向相反 (Equal & Opposite)",
+                    explanation: "靜止 = 平衡力。\n(Stationary = Balanced forces.)"
                 }
             },
             {
                 id: 6,
-                question: "小明在溜冰場上滑行。假設冰面完全沒有摩擦力，根據牛頓第一定律，他在停止用力後會如何運動？",
-                options: ["立即停止", "慢慢停下來", "以勻速運動繼續滑行 (Uniform motion)", "越滑越快"],
-                correctAnswer: "以勻速運動繼續滑行 (Uniform motion)",
-                explanation: "如果沒有摩擦力（合力為 0），根據牛頓第一定律（慣性定律），運動中的物體會一直保持原本的速度和方向前進，即勻速運動。",
+                question: "小明在無摩擦力的溜冰場滑行。停止用力後他會？\n(Xiao Ming skates on frictionless ice. After stopping pushing, he will?)",
+                options: ["立即停止 (Stop now)", "慢慢停下 (Stop slowly)", "勻速滑行 (Uniform motion)", "越滑越快 (Faster)"],
+                correctAnswer: "勻速滑行 (Uniform motion)",
+                explanation: "無摩擦力（合力 0），根據慣性，保持勻速運動。\n(No friction/net force 0. Maintains uniform motion due to inertia.)",
                 keywords: ["skater"],
                 similar: {
-                    question: "【基礎類似題】在外太空中，太空船關閉引擎後，若不考慮附近星球的引力，它會？",
-                    options: ["停下來", "保持原本速度直線飛行", "開始轉圈", "減速"],
-                    correctAnswer: "保持原本速度直線飛行",
-                    explanation: "太空中幾乎沒有阻力，一旦受力為零，物體將依慣性維持勻速直線運動。"
+                    question: "【基礎類似題】太空中，太空船關閉引擎後會？\n(Spaceship in space turns off engine. It will?)",
+                    options: ["停下來 (Stop)", "保持原速直線飛行 (Keep speed & straight line)", "轉圈 (Spin)", "減速 (Slow down)"],
+                    correctAnswer: "保持原速直線飛行 (Keep speed & straight line)",
+                    explanation: "太空中無阻力，慣性維持運動。\n(No resistance in space, inertia maintains motion.)"
                 }
             },
             {
                 id: 7,
-                question: "一輛汽車在高速公路上行駛。引擎提供向右 5000 N 的動力，空氣阻力和摩擦力總共向左 5000 N。請問汽車的儀表板速度針會如何變化？",
-                options: ["指針會向上轉（加速）", "指針會向下轉（減速）", "指針保持不變（勻速運動）", "指針會歸零（停止）"],
-                correctAnswer: "指針保持不變（勻速運動）",
-                explanation: "動力 5000N 與阻力 5000N 抵銷，合力為 0（平衡力）。汽車不會加速也不會減速，而是維持目前的時速行駛，所以速度針不動。",
+                question: "汽車在公路行駛。引擎動力 5000N 向右，阻力 5000N 向左。速度針會？\n(Car on highway. Power 5000N right, Resistance 5000N left. Speedometer?)",
+                options: ["向上轉/加速 (Up/Accelerate)", "向下轉/減速 (Down/Decelerate)", "保持不變/勻速 (Unchanged/Uniform)", "歸零/停止 (Zero/Stop)"],
+                correctAnswer: "保持不變/勻速 (Unchanged/Uniform)",
+                explanation: "動力與阻力抵銷，合力為 0，維持勻速。\n(Forces cancel out, net force 0, maintains uniform speed.)",
                 keywords: ["car", "force"],
                 similar: {
-                    question: "【基礎類似題】跳傘員打開降落傘後，當空氣阻力等於他的重量時，他會呈現什麼狀態？",
-                    options: ["靜止在空中", "向上飛", "以終端速度做勻速下降", "繼續加速下降"],
-                    correctAnswer: "以終端速度做勻速下降",
-                    explanation: "向下重力等於向上阻力時，合力為零，加速度為零，故維持固定速度（終端速度）下降。"
+                    question: "【基礎類似題】跳傘員打開傘後，當阻力等於重量時？\n(Skydiver: Air resistance equals weight. State?)",
+                    options: ["靜止 (Stationary)", "向上飛 (Fly up)", "終端速度勻速下降 (Terminal velocity)", "加速下降 (Accelerate down)"],
+                    correctAnswer: "終端速度勻速下降 (Terminal velocity)",
+                    explanation: "合力為零，加速度為零。\n(Net force 0, acceleration 0.)"
                 }
             },
             {
                 id: 8,
-                question: "(情境題) 參考課堂例子：星如向右推車，朗軒向左推車。如果星如的力比朗軒的大，手推車會呈現什麼運動狀態？",
-                options: ["保持靜止", "勻速運動", "非勻速運動 (向右加速)", "非勻速運動 (向左加速)"],
-                correctAnswer: "非勻速運動 (向右加速)",
-                explanation: "星如（向右）的力 > 朗軒（向左）的力，合力不為 0 且方向向右。受不平衡力作用，物體會向合力方向加速，即向右做非勻速運動。",
+                question: "星如向右推車，朗軒向左推車。星如力氣較大，車子會？\n(Xingru pushes right, Langxuan pushes left. Xingru is stronger. Cart moves?)",
+                options: ["保持靜止 (Rest)", "勻速運動 (Uniform)", "非勻速 (向右加速) (Accelerate Right)", "非勻速 (向左加速) (Accelerate Left)"],
+                correctAnswer: "非勻速 (向右加速) (Accelerate Right)",
+                explanation: "合力向右（不為 0），物體向合力方向加速。\n(Net force is to the right, causing acceleration to the right.)",
                 keywords: ["cart", "force"],
                 similar: {
-                    question: "【基礎類似題】拔河比賽中，甲隊拉力大於乙隊拉力。繩子中心點會？",
-                    options: ["靜止", "向甲隊方向加速移動", "向乙隊方向加速移動", "勻速移動"],
-                    correctAnswer: "向甲隊方向加速移動",
-                    explanation: "合力方向指向力大的一方（甲隊），故物體會向該方向產生加速度。"
+                    question: "【基礎類似題】拔河比賽甲隊力大於乙隊。繩子中心會？\n(Tug of war: Team A stronger than Team B. Rope center?)",
+                    options: ["靜止 (Rest)", "向甲隊加速 (Accelerate to A)", "向乙隊加速 (Accelerate to B)", "勻速 (Uniform)"],
+                    correctAnswer: "向甲隊加速 (Accelerate to A)",
+                    explanation: "合力指向力大的一方。\n(Net force points to stronger side.)"
                 }
             },
             {
                 id: 9,
-                question: "一個蘋果放在桌面上。下圖是它的孤立物體圖 (Free-body diagram)。請問圖中向上的箭頭 (A) 和向下的箭頭 (B) 分別代表什麼力？",
-                options: ["A是重力，B是支撐力", "A是支撐力 (Supporting force)，B是重力 (Gravity)", "A是摩擦力，B是重力", "A是支撐力，B是摩擦力"],
-                correctAnswer: "A是支撐力 (Supporting force)，B是重力 (Gravity)",
-                explanation: "蘋果受地心引力（重力）向下，所以 B 是重力。桌子給蘋果一個向上的支撐力（或稱正向力）抵抗重力，所以 A 是支撐力。",
+                question: "蘋果在桌上。孤立物體圖中，向上箭頭(A)和向下箭頭(B)代表？\n(Apple on table. Free-body diagram: Up arrow (A) & Down arrow (B) represent?)",
+                options: ["A重力 B支撐力 (A:Gravity B:Support)", "A支撐力 B重力 (A:Support B:Gravity)", "A摩擦力 B重力 (A:Friction B:Gravity)", "A支撐力 B摩擦力 (A:Support B:Friction)"],
+                correctAnswer: "A支撐力 B重力 (A:Support B:Gravity)",
+                explanation: "B是地心引力（重力），A是桌子的支撐力。\n(B is Gravity downwards, A is Support force upwards.)",
                 keywords: ["apple", "arrow"],
                 similar: {
-                    question: "【基礎類似題】一個人站在地面上，關於他受力的描述，哪組是作用力與反作用力？",
-                    options: ["人的重力與地面給人的支撐力", "腳踩地的力與地面推腳的力", "人的重力與人對地球的引力", "以上皆非"],
-                    correctAnswer: "人的重力與人對地球的引力",
-                    explanation: "這是觀念延伸題。在本題情境圖中，向上箭頭是地面給人的支撐力，向下是人的重力，這兩者是平衡力。"
+                    question: "【基礎類似題】人站地面，哪組是作用力與反作用力？\n(Person on ground. Action-Reaction pair?)",
+                    options: ["重力與支撐力 (Gravity & Support)", "腳踩地與地推腳 (Foot on ground & Ground on foot)", "重力與人吸地球 (Gravity & Person pulls Earth)", "以上皆非 (None)"],
+                    correctAnswer: "人的重力與人對地球的引力 (Gravity & Person pulls Earth)",
+                    explanation: "這是觀念延伸題。\n(Conceptual extension.)"
                 }
             },
             {
                 id: 10,
-                question: "在繪畫孤立物體圖 (Free-body diagram) 時，我們用箭頭的長度來代表什麼？",
-                options: ["物體移動的速度", "力的大小 (Magnitude of force)", "物體的重量", "力的種類"],
-                correctAnswer: "力的大小 (Magnitude of force)",
-                explanation: "在力圖中，箭頭的方向代表力的方向，而箭頭的長度則代表力的大小（Magnitude）。力越大，箭頭畫得越長。",
+                question: "繪畫孤立物體圖時，箭頭長度代表？\n(In Free-body diagram, arrow length represents?)",
+                options: ["速度 (Speed)", "力的大小 (Magnitude)", "重量 (Weight)", "種類 (Type)"],
+                correctAnswer: "力的大小 (Magnitude)",
+                explanation: "箭頭方向代表力的方向，長度代表力的大小。\n(Direction shows force direction, length shows magnitude.)",
                 keywords: ["arrow", "force"],
                 similar: {
-                    question: "【基礎類似題】在力圖中，若畫了兩個箭頭，箭頭 A 比箭頭 B 長兩倍，這代表？",
-                    options: ["力 A 的作用時間較長", "力 A 的大小是力 B 的兩倍", "力 A 的速度較快", "物體 A 比較重"],
-                    correctAnswer: "力 A 的大小是力 B 的兩倍",
-                    explanation: "箭頭長度與力的大小成正比。"
+                    question: "【基礎類似題】力圖中，箭頭A比箭頭B長兩倍，代表？\n(Arrow A is twice as long as Arrow B. Meaning?)",
+                    options: ["作用時間長 (Longer time)", "力A是力B兩倍大 (Force A is 2x Force B)", "速度快 (Faster)", "較重 (Heavier)"],
+                    correctAnswer: "力A是力B兩倍大 (Force A is 2x Force B)",
+                    explanation: "長度與力的大小成正比。\n(Length proportional to magnitude.)"
                 }
             }
         ];
@@ -341,8 +339,8 @@
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 shadow-sm relative overflow-hidden">
                     <div className="flex justify-between items-center mb-2">
                         <div className="flex items-center gap-2">
-                            <span className="font-bold text-amber-800 text-lg">{className || "全班"} 金庫</span>
-                            <span className="text-xs text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">每 {POINTS_PER_COIN} 分 +1</span>
+                            <span className="font-bold text-amber-800 text-lg">{className || "全班 All Classes"} 金庫</span>
+                            <span className="text-xs text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">每 {POINTS_PER_COIN} 分 +1 / per {POINTS_PER_COIN} pts +1</span>
                         </div>
                         <div className="flex items-center gap-1">
                             <div className="text-2xl font-black text-amber-500 drop-shadow-sm flex items-center gap-1">
@@ -354,7 +352,7 @@
                     <div className="relative pt-1">
                         <div className="flex mb-1 items-center justify-between">
                             <div className="text-xs font-semibold text-amber-600">
-                                下一枚金幣進度: {Math.round(progress)}%
+                                下一枚金幣進度 / Next Coin: {Math.round(progress)}%
                             </div>
                             <div className="text-xs font-bold text-amber-600">
                                 {totalScore % POINTS_PER_COIN} / {POINTS_PER_COIN}
@@ -362,6 +360,50 @@
                         </div>
                         <div className="overflow-hidden h-3 mb-1 text-xs flex rounded-full bg-amber-200">
                             <div style={{ width: `${progress}%` }} className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-amber-500 progress-bar-striped animate-pulse"></div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function DeleteModal({ isOpen, onClose, onConfirm }) {
+            const [password, setPassword] = useState("");
+
+            if (!isOpen) return null;
+
+            const handleConfirm = () => {
+                if (password === "96084601") {
+                    onConfirm();
+                    setPassword(""); 
+                } else {
+                    alert("密碼錯誤 / Incorrect Password");
+                }
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-float-up">
+                        <h3 className="text-xl font-bold text-red-600 mb-2 flex items-center gap-2">
+                            <Icons.Trash size={24} /> 警告 Warning
+                        </h3>
+                        <p className="text-slate-600 mb-4 text-sm">
+                            確定要刪除所有資料嗎？此動作無法復原。<br/>
+                            Are you sure to delete ALL data? Irreversible.
+                        </p>
+                        <input 
+                            type="password" 
+                            placeholder="輸入密碼 Enter Password" 
+                            className="w-full border rounded-lg p-3 mb-4 font-mono"
+                            value={password}
+                            onChange={e => setPassword(e.target.value)}
+                        />
+                        <div className="flex gap-2">
+                            <button onClick={onClose} className="flex-1 py-3 rounded-lg border font-bold hover:bg-slate-50">
+                                取消 Cancel
+                            </button>
+                            <button onClick={handleConfirm} className="flex-1 py-3 rounded-lg bg-red-600 text-white font-bold hover:bg-red-700">
+                                確認刪除 Delete
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -382,13 +424,12 @@
             const [errorMsg, setErrorMsg] = useState("");
             const [isOnline, setIsOnline] = useState(navigator.onLine);
             
-            // 教師端狀態
             const [teacherClassFilter, setTeacherClassFilter] = useState("ALL"); 
             const [isDeleting, setIsDeleting] = useState(false);
             const [showTeacherSuggestions, setShowTeacherSuggestions] = useState(false); 
             const [passThreshold, setPassThreshold] = useState(60); 
+            const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
-            // 狀態管理
             const [practiceMode, setPracticeMode] = useState(false); 
             const [challengeMode, setChallengeMode] = useState(false); 
             const [quizQuestions, setQuizQuestions] = useState([]);
@@ -453,10 +494,8 @@
                     .reduce((acc, curr) => acc + (curr.score || 0), 0);
             }, [leaderboard, studentClass]);
 
-            // --- 邏輯 ---
-
             const startQuiz = () => {
-                if (!studentName) return alert("請輸入姓名");
+                if (!studentName) return alert("請輸入姓名 / Please enter name");
                 setScore(0);
                 setCurrentQuestionIndex(0);
                 setPracticeMode(false);
@@ -518,20 +557,20 @@
             };
 
             const generateAIPractice = async () => {
-                if (!AI_PROXY_URL) { alert("請先設定 AI URL"); return; }
+                if (!AI_PROXY_URL) { alert("請先設定 AI URL / Please set AI URL"); return; }
                 setIsGenerating(true);
                 try {
-                    const systemPrompt = `你是一位物理老師。請根據用戶提供的題目，生成一題「觀念相似但更加淺顯易懂 (Easier/Simpler Level)」的單選題，適合補救教學。
+                    const systemPrompt = `你是一位雙語物理老師 (Bilingual Physics Teacher)。請根據用戶提供的題目，生成一題「觀念相似但更加淺顯易懂 (Easier/Simpler Level)」的單選題，適合補救教學。
                     格式必須是純 JSON，包含：
-                    - question (字串)
-                    - options (字串陣列, 不含 A. B. C. D. 編號)
-                    - correctAnswer (字串, 對應 options 其中的一項內容)
-                    - explanation (字串)
-                    - hint (字串, 給學生的解題提示，引導思考)
+                    - question (字串, 必須中英對照)
+                    - options (字串陣列, 不含 A. B. C. D. 編號, 必須中英對照)
+                    - correctAnswer (字串, 對應 options 其中的一項內容, 必須中英對照)
+                    - explanation (字串, 必須中英對照)
+                    - hint (字串, 給學生的解題提示，引導思考, 必須中英對照)
                     
                     嚴格遵守 JSON 格式，不要 Markdown。`;
                     
-                    const userPrompt = `原題目：${currentQuestionData.question}。正確答案：${currentQuestionData.correctAnswer}。請生成一題更淺的練習題，附帶提示。`;
+                    const userPrompt = `原題目：${currentQuestionData.question}。正確答案：${currentQuestionData.correctAnswer}。請生成一題更淺的練習題，附帶提示，並提供中英對照。`;
                     
                     const result = await callDeepSeek(systemPrompt, userPrompt, { AI_PROXY_URL, AI_AUTH_KEY });
                     const cleanJson = result.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -555,10 +594,10 @@
                 } catch (e) {
                     console.error(e);
                     if (e.message === "CORS_BLOCK") {
-                        alert("⚠️ AI 連線受限 (CORS)，切換至預設練習。");
+                        alert("⚠️ AI 連線受限 (CORS)，切換至預設練習。/ AI Connection Restricted (CORS), switching to default practice.");
                         startPrebuiltPractice();
                     } else {
-                        alert("AI 生成失敗，切換至預設練習。");
+                        alert("AI 生成失敗，切換至預設練習。/ AI Generation Failed, switching to default practice.");
                         startPrebuiltPractice();
                     }
                 }
@@ -568,10 +607,10 @@
             const startChallenge = async () => {
                 setIsGenerating(true);
                 try {
-                    const systemPrompt = `你是一位嚴格的物理教練。請生成 2 題關於「平衡力與牛頓定律」的高難度、挑戰性單選題，適合程度好的國中生。
-                    格式必須是純 JSON Array，每個物件包含 question, options (Array, 不含 A. B. 編號), correctAnswer, explanation。`;
+                    const systemPrompt = `你是一位嚴格的雙語物理教練 (Strict Bilingual Physics Coach)。請生成 2 題關於「平衡力與牛頓定律」的高難度、挑戰性單選題，適合程度好的國中生。
+                    格式必須是純 JSON Array，每個物件包含 question (中英對照), options (Array, 不含 A. B. 編號, 中英對照), correctAnswer (中英對照), explanation (中英對照)。`;
                     
-                    const result = await callDeepSeek(systemPrompt, "請給我 2 題挑戰題。", { AI_PROXY_URL, AI_AUTH_KEY });
+                    const result = await callDeepSeek(systemPrompt, "請給我 2 題挑戰題，中英對照。", { AI_PROXY_URL, AI_AUTH_KEY });
                     const cleanJson = result.replace(/```json/g, '').replace(/```/g, '').trim();
                     const challengeQs = JSON.parse(cleanJson);
 
@@ -591,9 +630,9 @@
                 } catch (e) {
                     console.error(e);
                     if (e.message === "CORS_BLOCK") {
-                        alert("⚠️ 無法開啟挑戰模式 (CORS 限制)。");
+                        alert("⚠️ 無法開啟挑戰模式 (CORS 限制)。/ Cannot start challenge mode (CORS restricted).");
                     } else {
-                        alert("挑戰題生成失敗，請稍後再試。");
+                        alert("挑戰題生成失敗，請稍後再試。/ Challenge generation failed, please try again later.");
                     }
                 }
                 setIsGenerating(false);
@@ -601,22 +640,22 @@
 
             const analyzeWeakness = async () => {
                 if (wrongAnswers.current.length === 0) {
-                    setAiAnalysisResult("恭喜！你全對了，沒有顯著的弱點。保持下去！");
+                    setAiAnalysisResult("恭喜！你全對了，沒有顯著的弱點。保持下去！\nCongratulations! You got everything right, no significant weaknesses. Keep it up!");
                     return;
                 }
 
                 setIsAnalyzing(true);
                 try {
                     const wrongSummary = wrongAnswers.current.map(w => `題目：${w.question} (關鍵字:${w.keywords})`).join("\n");
-                    const systemPrompt = `你是一位學習分析師。請根據學生答錯的題目，用繁體中文總結他的弱點，並給出一句具體的學習建議。字數 100 字以內。`;
+                    const systemPrompt = `你是一位雙語學習分析師。請根據學生答錯的題目，用繁體中文和英文總結他的弱點（例如：分不清平衡力與作用力反作用力），並給出一句具體的學習建議。字數 200 字以內。`;
                     const result = await callDeepSeek(systemPrompt, wrongSummary, { AI_PROXY_URL, AI_AUTH_KEY });
                     setAiAnalysisResult(result);
                 } catch (e) {
                     console.error(e);
                     if (e.message === "CORS_BLOCK") {
-                        setAiAnalysisResult("⚠️ 分析失敗：瀏覽器連線被阻擋 (CORS)。");
+                        setAiAnalysisResult("⚠️ 分析失敗：瀏覽器連線被阻擋 (CORS)。/ Analysis failed: Browser connection blocked (CORS).");
                     } else {
-                        setAiAnalysisResult("分析連線失敗，請稍後再試。");
+                        setAiAnalysisResult("分析連線失敗，請稍後再試。/ Analysis connection failed, please try again later.");
                     }
                 }
                 setIsAnalyzing(false);
@@ -627,12 +666,11 @@
                 if (teacherClassFilter !== "ALL") {
                     targetStudents = leaderboard.filter(s => s.classId === teacherClassFilter);
                 } else {
-                    // 排除 TEST 班
                     targetStudents = leaderboard.filter(s => s.classId !== "TEST");
                 }
 
                 if (targetStudents.length === 0) {
-                    setTeacherAnalysis({ main: `目前 ${teacherClassFilter === "ALL" ? "全校" : teacherClassFilter} 沒有足夠的數據可供分析。`, suggestions: "" });
+                    setTeacherAnalysis({ main: `目前 ${teacherClassFilter === "ALL" ? "全校" : teacherClassFilter} 沒有足夠的數據可供分析。/ Currently no enough data for ${teacherClassFilter === "ALL" ? "all classes" : teacherClassFilter} to analyze.`, suggestions: "" });
                     return;
                 }
                 
@@ -649,7 +687,7 @@
                     });
 
                     if (allWrongQs.length === 0) {
-                        setTeacherAnalysis({ main: "恭喜！選定範圍內的學生沒有錯題紀錄。", suggestions: "" });
+                        setTeacherAnalysis({ main: "恭喜！選定範圍內的學生沒有錯題紀錄。/ Congratulations! No wrong answers recorded for the selected scope.", suggestions: "" });
                         setIsAnalyzing(false);
                         return;
                     }
@@ -657,14 +695,14 @@
                     const sampleData = allWrongQs.slice(0, 50).join("\n");
                     const scopeText = teacherClassFilter === "ALL" ? "全級 S.2" : `${teacherClassFilter} 班`;
 
-                    const systemPrompt = `你是一位資深物理教師。這是 ${scopeText} 學生的錯題紀錄摘要。請進行兩部分分析，並用 "|||SEPARATOR|||" 分隔這兩部分。
+                    const systemPrompt = `你是一位資深雙語物理教師。這是 ${scopeText} 學生的錯題紀錄摘要。請進行兩部分分析，並用 "|||SEPARATOR|||" 分隔這兩部分，內容必須包含中文和英文。
                     第一部分（直接顯示給老師）：
-                    1. ❌ 學生常見錯誤：具體指出學生最常錯的概念。
-                    2. ✅ 觀念指正範例：舉一個具體的物理例子來說明正確觀念，糾正上述錯誤。
+                    1. ❌ 學生常見錯誤 (Common Mistakes)：具體指出學生最常錯的概念。
+                    2. ✅ 觀念指正範例 (Correction Example)：舉一個具體的物理例子來說明正確觀念，糾正上述錯誤。
                     請保持簡潔、條理分明，適合快速閱讀。
                     |||SEPARATOR|||
-                    第二部分（教學加強建議）：
-                    針對上述錯誤，給老師的具體教學活動或解說策略建議。`;
+                    第二部分（教學加強建議 / Teaching Suggestions）：
+                    針對上述錯誤，給老師的具體教學活動或解說策略建議 (中英對照)。`;
                     
                     const rawResult = await callDeepSeek(systemPrompt, sampleData, { AI_PROXY_URL, AI_AUTH_KEY });
                     
@@ -678,31 +716,26 @@
                 } catch (e) {
                     console.error(e);
                     if (e.message === "CORS_BLOCK") {
-                        setTeacherAnalysis({ main: "⚠️ 分析失敗：API 連線被瀏覽器阻擋 (CORS)。", suggestions: "" });
+                        setTeacherAnalysis({ main: "⚠️ 分析失敗：API 連線被瀏覽器阻擋 (CORS)。/ Analysis failed: API connection blocked by browser (CORS).", suggestions: "" });
                     } else {
-                        setTeacherAnalysis({ main: "分析失敗，請稍後再試。", suggestions: "" });
+                        setTeacherAnalysis({ main: "分析失敗，請稍後再試。/ Analysis failed, please try again later.", suggestions: "" });
                     }
                 }
                 setIsAnalyzing(false);
             }
 
-            const resetDatabase = async () => {
-                if (!window.confirm("⚠️ 危險操作！\n\n確定要刪除「所有」學生的成績紀錄嗎？\n此操作無法復原！")) {
-                    return;
-                }
-                const confirm2 = prompt("請輸入 'DELETE' 以確認刪除：");
-                if (confirm2 !== "DELETE") return;
-
+            const handleDeleteConfirm = async () => {
+                setIsDeleteModalOpen(false);
                 setIsDeleting(true);
                 try {
                     const querySnapshot = await getDocs(collection(db, "class_scores"));
                     const deletePromises = querySnapshot.docs.map((d) => deleteDoc(doc(db, "class_scores", d.id)));
                     await Promise.all(deletePromises);
-                    alert("✅ 資料庫已清空。");
+                    alert("✅ 資料庫已清空 / Database cleared.");
                     setLeaderboard([]); 
                 } catch (e) {
                     console.error(e);
-                    alert("刪除失敗：" + e.message);
+                    alert("刪除失敗 / Delete failed: " + e.message);
                 }
                 setIsDeleting(false);
             };
@@ -782,7 +815,7 @@
                 })).sort((a, b) => b.total - a.total);
             };
 
-            if (loading) return <div className="flex h-screen items-center justify-center text-blue-600 font-bold">載入中...</div>;
+            if (loading) return <div className="flex h-screen items-center justify-center text-blue-600 font-bold">載入中... / Loading...</div>;
 
             return (
                 <div className="min-h-screen bg-slate-100 font-sans text-slate-800 flex justify-center p-4">
@@ -790,9 +823,9 @@
                         
                         <header className="mb-6 text-center mt-4">
                             <h1 className="text-2xl font-bold text-slate-900 flex items-center justify-center gap-2">
-                                <span className="text-3xl">🛡️</span> S.2 班際保衛戰
+                                <span className="text-3xl">🛡️</span> S.2 班際保衛戰 / Class Battle
                             </h1>
-                            <p className="text-slate-500 text-sm">單元 11.3 平衡力與運動</p>
+                            <p className="text-slate-500 text-sm">單元 11.3 平衡力與運動 / Unit 11.3 Balanced Forces and Motion</p>
                         </header>
 
                         {errorMsg && (
@@ -808,11 +841,10 @@
                                         <div className="mx-auto mb-2 w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 shadow-inner">
                                             <Icons.Atom />
                                         </div>
-                                        <h2 className="text-xl font-bold text-slate-800">準備好了嗎？</h2>
-                                        <p className="text-slate-500 text-sm">為你的班級贏取 HOYU COINS！</p>
+                                        <h2 className="text-xl font-bold text-slate-800">準備好了嗎？/ Ready?</h2>
+                                        <p className="text-slate-500 text-sm">為你的班級贏取 HOYU COINS！/ Earn HOYU COINS for your class!</p>
                                     </div>
                                     
-                                    {/* 顯示當前選中班級的彩池狀況 */}
                                     <ClassCoinWidget className={studentClass} totalScore={currentClassTotalScore} />
 
                                     <div className="grid grid-cols-3 gap-2">
@@ -826,7 +858,7 @@
                                         <input 
                                             type="text" 
                                             className="col-span-2 border-2 border-slate-200 rounded-xl p-3 focus:border-blue-500 focus:ring-blue-500" 
-                                            placeholder="輸入你的名字" 
+                                            placeholder="輸入你的名字 / Enter your name" 
                                             value={studentName} 
                                             onChange={e => setStudentName(e.target.value)}
                                         />
@@ -836,15 +868,15 @@
                                         onClick={startQuiz}
                                         className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg shadow-blue-200 hover:bg-blue-700 transform transition active:scale-95"
                                     >
-                                        🚀 開始挑戰
+                                        🚀 開始挑戰 / Start Challenge
                                     </button>
                                     <button onClick={() => setAppState('leaderboard')} className="w-full text-sm font-bold text-slate-500 hover:text-blue-600">
-                                        🏆 查看各班戰況
+                                        🏆 查看各班戰況 / View Leaderboard
                                     </button>
 
                                     <div className="pt-6 border-t mt-4">
                                         <button onClick={() => setAppState('teacher')} className="text-xs text-slate-300 hover:text-slate-500 flex items-center gap-1 mx-auto">
-                                            <Icons.Teacher /> 👨‍🏫 教師專區
+                                            <Icons.Teacher /> 👨‍🏫 教師專區 / Teacher Zone
                                         </button>
                                     </div>
                                 </div>
@@ -853,13 +885,13 @@
                             {appState === 'teacher' && (
                                 <div className="p-8">
                                     <div className="flex justify-between items-center mb-6">
-                                        <h2 className="text-xl font-bold flex items-center gap-2"><Icons.Teacher /> 教師後台</h2>
-                                        <button onClick={() => setAppState('login')} className="text-sm text-blue-600 font-bold">回首頁</button>
+                                        <h2 className="text-xl font-bold flex items-center gap-2"><Icons.Teacher /> 教師後台 / Dashboard</h2>
+                                        <button onClick={() => setAppState('login')} className="text-sm text-blue-600 font-bold">回首頁 / Home</button>
                                     </div>
 
                                     <div className="space-y-6">
                                         <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                                            <h3 className="font-bold text-slate-700 mb-3 flex items-center gap-2"><Icons.Chart /> 班級戰況總覽</h3>
+                                            <h3 className="font-bold text-slate-700 mb-3 flex items-center gap-2"><Icons.Chart /> 班級戰況總覽 / Class Overview</h3>
                                             <div className="space-y-3">
                                                 {getClassStats().map(c => (
                                                     <div key={c.classId} className="flex justify-between items-center bg-white p-2 rounded border border-slate-100">
@@ -874,9 +906,9 @@
                                         </div>
 
                                         <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
-                                            <h3 className="font-bold text-blue-800 mb-2 flex items-center gap-2"><Icons.Bot /> AI 數據分析</h3>
+                                            <h3 className="font-bold text-blue-800 mb-2 flex items-center gap-2"><Icons.Bot /> AI 數據分析 / AI Analysis</h3>
                                             <div className="flex items-center gap-2 mb-3">
-                                                <span className="text-sm text-slate-600">目標：</span>
+                                                <span className="text-sm text-slate-600">目標 / Target：</span>
                                                 <select 
                                                     value={teacherClassFilter} 
                                                     onChange={(e) => setTeacherClassFilter(e.target.value)}
@@ -891,13 +923,13 @@
                                                 disabled={isAnalyzing} 
                                                 className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-bold hover:bg-indigo-700 shadow-md transition flex items-center justify-center gap-2 text-sm"
                                             >
-                                                {isAnalyzing ? "AI 分析中..." : `生成 ${teacherClassFilter === 'ALL' ? '全級' : teacherClassFilter} 弱點報告`}
+                                                {isAnalyzing ? "AI 分析中... / Analyzing..." : `生成 ${teacherClassFilter === 'ALL' ? '全級' : teacherClassFilter} 弱點報告 / Generate Report`}
                                             </button>
                                         </div>
 
                                         {teacherAnalysis.main && (
                                             <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm animate-in fade-in slide-in-from-top-2">
-                                                <h4 className="font-bold text-indigo-800 mb-3 pb-2 border-b">🎓 診斷報告</h4>
+                                                <h4 className="font-bold text-indigo-800 mb-3 pb-2 border-b">🎓 診斷報告 / Diagnostic Report</h4>
                                                 <div className="prose prose-sm text-slate-700 whitespace-pre-wrap leading-relaxed mb-4">
                                                     {teacherAnalysis.main}
                                                 </div>
@@ -908,7 +940,7 @@
                                                             className="flex items-center gap-2 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition"
                                                         >
                                                             <Icons.Bulb /> 
-                                                            {showTeacherSuggestions ? "隱藏建議" : "顯示教學建議"}
+                                                            {showTeacherSuggestions ? "隱藏建議 / Hide Suggestions" : "顯示教學建議 / Show Teaching Suggestions"}
                                                             {showTeacherSuggestions ? <Icons.ChevronUp /> : <Icons.ChevronDown />}
                                                         </button>
                                                         {showTeacherSuggestions && (
@@ -921,13 +953,12 @@
                                             </div>
                                         )}
 
-                                        {/* 新增：學生由績列表 (修復崩潰問題) */}
                                         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm mt-6">
                                             <h3 className="font-bold text-slate-700 mb-4 flex items-center justify-between">
-                                                <span className="flex items-center gap-2"><Icons.Users /> 學生由績列表</span>
+                                                <span className="flex items-center gap-2"><Icons.Users /> 學生成績列表 / Student List</span>
                                                 
                                                 <div className="flex items-center gap-2 text-sm font-normal">
-                                                    <label className="text-slate-500">合格分數:</label>
+                                                    <label className="text-slate-500">合格分數 / Pass Mark:</label>
                                                     <input 
                                                         type="number" 
                                                         value={passThreshold} 
@@ -941,16 +972,15 @@
                                                 <table className="w-full text-sm text-left">
                                                     <thead className="bg-slate-50 text-slate-500 font-bold border-b">
                                                         <tr>
-                                                            <th className="p-3">班別</th>
-                                                            <th className="p-3">姓名</th>
-                                                            <th className="p-3 text-right">分數</th>
-                                                            <th className="p-3 text-center">狀態</th>
+                                                            <th className="p-3">Class</th>
+                                                            <th className="p-3">Name</th>
+                                                            <th className="p-3 text-right">Score</th>
+                                                            <th className="p-3 text-center">Status</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody className="divide-y divide-slate-100">
                                                         {leaderboard
                                                             .filter(s => teacherClassFilter === "ALL" || s.classId === teacherClassFilter)
-                                                            // 這裡使用了 String() 轉換，防止 undefined 造成崩潰
                                                             .sort((a, b) => {
                                                                 const classA = a.classId ? String(a.classId) : "";
                                                                 const classB = b.classId ? String(b.classId) : "";
@@ -968,11 +998,11 @@
                                                                         <td className="p-3 text-center">
                                                                             {isFail ? 
                                                                                 <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-red-100 text-red-600 text-xs font-bold">
-                                                                                    <Icons.X size={12}/> 未達標
+                                                                                    <Icons.X size={12}/> Fail
                                                                                 </span> 
                                                                                 : 
                                                                                 <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-green-100 text-green-600 text-xs font-bold">
-                                                                                    <Icons.Check size={12}/> 合格
+                                                                                    <Icons.Check size={12}/> Pass
                                                                                 </span>
                                                                             }
                                                                         </td>
@@ -982,18 +1012,18 @@
                                                     </tbody>
                                                 </table>
                                                 {leaderboard.filter(s => teacherClassFilter === "ALL" || s.classId === teacherClassFilter).length === 0 && (
-                                                    <div className="p-4 text-center text-slate-400 text-xs">暫無資料</div>
+                                                    <div className="p-4 text-center text-slate-400 text-xs">暫無資料 / No Data</div>
                                                 )}
                                             </div>
                                         </div>
 
                                         <div className="border-t pt-6 mt-4">
                                             <button 
-                                                onClick={resetDatabase}
+                                                onClick={() => setIsDeleteModalOpen(true)}
                                                 disabled={isDeleting}
                                                 className="w-full border-2 border-red-100 bg-red-50 text-red-600 py-3 rounded-xl text-sm font-bold hover:bg-red-100 hover:border-red-200 flex items-center justify-center gap-2 transition"
                                             >
-                                                {isDeleting ? "清理中..." : <><Icons.Trash /> ⚠️ 清空所有資料 (重置彩池)</>}
+                                                {isDeleting ? "清理中... / Cleaning..." : <><Icons.Trash /> ⚠️ 清空所有資料 (Clear All Data)</>}
                                             </button>
                                         </div>
                                     </div>
@@ -1004,14 +1034,14 @@
                                 <div className="p-8">
                                     <div className="flex justify-between mb-6 text-sm font-bold items-center">
                                         <span className={practiceMode ? "text-purple-600 bg-purple-50 px-2 py-1 rounded" : challengeMode ? "text-orange-600 bg-orange-50 px-2 py-1 rounded" : "text-slate-500"}>
-                                            {practiceMode ? "✨ 補救練習" : challengeMode ? `🔥 挑戰 ${currentQuestionIndex + 1}` : `第 ${currentQuestionIndex + 1} / ${QUESTIONS_DATA.length} 題`}
+                                            {practiceMode ? "✨ 補救練習 / Practice" : challengeMode ? `🔥 挑戰 / Challenge ${currentQuestionIndex + 1}` : `Q ${currentQuestionIndex + 1} / ${QUESTIONS_DATA.length}`}
                                         </span>
-                                        {!challengeMode && <span className="text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-100">得分: {score}</span>}
+                                        {!challengeMode && <span className="text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-100">Score: {score}</span>}
                                     </div>
 
                                     {!challengeMode && <SmartImage question={currentQuestionData} />}
 
-                                    <h2 className="text-xl font-bold mb-6 leading-relaxed text-slate-800">
+                                    <h2 className="text-xl font-bold mb-6 leading-relaxed text-slate-800 whitespace-pre-line">
                                         {currentQuestionData.question}
                                     </h2>
 
@@ -1056,11 +1086,11 @@
                                                             onClick={() => setShowHint(!showHint)}
                                                             className="text-amber-600 text-sm font-bold hover:text-amber-700 flex items-center gap-1 transition"
                                                         >
-                                                            <Icons.Bulb /> {showHint ? "隱藏提示" : "卡關了嗎？點我顯示提示"}
+                                                            <Icons.Bulb /> {showHint ? "隱藏提示 / Hide Hint" : "卡關了嗎？點我顯示提示 / Need a hint?"}
                                                         </button>
                                                         {showHint && (
-                                                            <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800 animate-in fade-in slide-in-from-top-1">
-                                                                💡 提示：{currentQuestionData.hint}
+                                                            <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800 animate-in fade-in slide-in-from-top-1 whitespace-pre-line">
+                                                                💡 提示 / Hint：{currentQuestionData.hint}
                                                             </div>
                                                         )}
                                                     </div>
@@ -1070,17 +1100,17 @@
                                                     disabled={!selectedOption} 
                                                     className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold disabled:opacity-50 hover:bg-slate-800 transition shadow-lg"
                                                 >
-                                                    送出答案
+                                                    送出答案 / Submit
                                                 </button>
                                             </>
                                         ) : (
                                             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                                                 <div className={`p-5 rounded-xl mb-4 border ${selectedOption === currentQuestionData.correctAnswer ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
                                                     <h3 className={`font-bold mb-2 flex items-center gap-2 ${selectedOption === currentQuestionData.correctAnswer ? 'text-green-800' : 'text-red-800'}`}>
-                                                        {selectedOption === currentQuestionData.correctAnswer ? '🎉 答對了！' : '💪 加油，再接再厲！'}
+                                                        {selectedOption === currentQuestionData.correctAnswer ? '🎉 答對了！ / Correct!' : '💪 加油！ / Incorrect'}
                                                     </h3>
-                                                    <p className="text-sm text-slate-700 leading-relaxed">
-                                                        <span className="font-bold">解析：</span>{currentQuestionData.explanation}
+                                                    <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">
+                                                        <span className="font-bold">解析 / Explanation：</span>{currentQuestionData.explanation}
                                                     </p>
                                                 </div>
 
@@ -1088,22 +1118,22 @@
                                                     <div className="flex flex-col gap-2 sm:flex-row">
                                                         {currentQuestionData.similar && (
                                                             <button onClick={startPrebuiltPractice} className="flex-1 bg-purple-100 text-purple-700 py-3 rounded-xl font-bold hover:bg-purple-200 border border-purple-200 transition">
-                                                                📝 基礎練習 (預設)
+                                                                📝 基礎練習 / Basic Practice
                                                             </button>
                                                         )}
                                                         
                                                         <button onClick={generateAIPractice} disabled={isGenerating} className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 text-white py-3 rounded-xl font-bold hover:opacity-90 shadow-lg shadow-purple-200 transition flex items-center justify-center gap-2">
                                                             {isGenerating ? <span className="animate-spin">🧠</span> : <Icons.Bot />} 
-                                                            {isGenerating ? "AI 思考中..." : "AI 生成淺白練習 (+提示)"}
+                                                            {isGenerating ? "AI 思考中... / Thinking..." : "AI 生成淺白練習 / AI Practice"}
                                                         </button>
 
                                                         <button onClick={next} className="px-6 py-3 border-2 border-slate-200 rounded-xl font-bold text-slate-500 hover:bg-slate-50 hover:text-slate-700">
-                                                            跳過 &rarr;
+                                                            跳過 / Skip &rarr;
                                                         </button>
                                                     </div>
                                                 ) : (
                                                     <button onClick={next} className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition transform active:scale-95">
-                                                        {currentQuestionIndex < quizQuestions.length - 1 || practiceMode || (challengeMode && currentQuestionIndex < currentQuestionData.totalChallenge - 1) ? '下一題 &rarr;' : '查看成績 🏆'}
+                                                        {currentQuestionIndex < quizQuestions.length - 1 || practiceMode || (challengeMode && currentQuestionIndex < currentQuestionData.totalChallenge - 1) ? '下一題 / Next &rarr;' : '查看成績 / View Results 🏆'}
                                                     </button>
                                                 )}
                                             </div>
@@ -1118,39 +1148,39 @@
                                         <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
                                     </div>
                                     
-                                    <h2 className="text-3xl font-black text-slate-900 mb-1">測驗結束！</h2>
+                                    <h2 className="text-3xl font-black text-slate-900 mb-1">測驗結束！/ Finished!</h2>
                                     <p className="text-slate-500 mb-6">
                                         <span className="font-bold bg-slate-100 px-2 py-1 rounded">{studentClass}</span> {studentName}
                                     </p>
 
                                     <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl p-6 text-white shadow-lg mb-6 transform hover:scale-105 transition duration-300">
-                                        <div className="text-sm opacity-80 mb-1">個人得分</div>
+                                        <div className="text-sm opacity-80 mb-1">個人得分 / Score</div>
                                         <div className="text-6xl font-black mb-2">{score}</div>
                                         <div className="border-t border-white/20 pt-2 mt-2 flex items-center justify-center gap-2 text-sm font-bold shine-text">
-                                            <Icons.Coin /> 已為班級貢獻 {score} 積分！
+                                            <Icons.Coin /> 已為班級貢獻 {score} 積分！/ Contributed {score} pts!
                                         </div>
                                     </div>
                                     
                                     <div className="space-y-3">
                                         {score >= 80 && !challengeMode && (
                                             <button onClick={startChallenge} disabled={isGenerating} className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white py-4 rounded-xl font-bold shadow-lg hover:from-orange-600 hover:to-red-600 animate-pulse flex items-center justify-center gap-2">
-                                                {isGenerating ? "準備題目中..." : <><Icons.Flame /> 挑戰高難度題目 (+加分)</>}
+                                                {isGenerating ? "準備題目中... / Preparing..." : <><Icons.Flame /> 挑戰高難度題目 (+加分) / Challenge Mode</>}
                                             </button>
                                         )}
 
                                         {!aiAnalysisResult ? (
                                             <button onClick={analyzeWeakness} disabled={isAnalyzing} className="w-full bg-white border-2 border-blue-100 text-blue-600 py-3 rounded-xl font-bold hover:bg-blue-50 flex items-center justify-center gap-2">
-                                                {isAnalyzing ? "🤖 AI 分析中..." : "🤖 AI 錯題診斷"}
+                                                {isAnalyzing ? "🤖 AI 分析中... / Analyzing..." : "🤖 AI 錯題診斷 / AI Diagnosis"}
                                             </button>
                                         ) : (
                                             <div className="bg-blue-50 p-4 rounded-xl text-left border border-blue-100">
-                                                <h4 className="font-bold text-blue-800 mb-1 flex items-center gap-2"><Icons.Bot /> 診斷報告：</h4>
+                                                <h4 className="font-bold text-blue-800 mb-1 flex items-center gap-2"><Icons.Bot /> 診斷報告 / Report：</h4>
                                                 <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{aiAnalysisResult}</p>
                                             </div>
                                         )}
 
-                                        <button onClick={() => setAppState('leaderboard')} className="w-full bg-slate-800 text-white py-3 rounded-xl font-bold hover:bg-slate-900">查看全校戰況</button>
-                                        <button onClick={() => setAppState('login')} className="w-full border border-slate-300 py-3 rounded-xl font-bold hover:bg-slate-50 text-slate-600">回首頁</button>
+                                        <button onClick={() => setAppState('leaderboard')} className="w-full bg-slate-800 text-white py-3 rounded-xl font-bold hover:bg-slate-900">查看全校戰況 / View Leaderboard</button>
+                                        <button onClick={() => setAppState('login')} className="w-full border border-slate-300 py-3 rounded-xl font-bold hover:bg-slate-50 text-slate-600">回首頁 / Home</button>
                                     </div>
                                 </div>
                             )}
@@ -1158,8 +1188,8 @@
                             {appState === 'leaderboard' && (
                                 <div className="flex flex-col h-[500px]">
                                     <div className="p-4 border-b bg-slate-50 flex justify-between items-center">
-                                        <h3 className="font-bold flex gap-2 text-slate-800 items-center text-lg">🏆 榮譽榜</h3>
-                                        <button onClick={() => setAppState('login')} className="text-sm text-blue-600 font-bold hover:underline">關閉</button>
+                                        <h3 className="font-bold flex gap-2 text-slate-800 items-center text-lg">🏆 榮譽榜 / Leaderboard</h3>
+                                        <button onClick={() => setAppState('login')} className="text-sm text-blue-600 font-bold hover:underline">關閉 / Close</button>
                                     </div>
                                     
                                     <div className="flex p-2 bg-slate-50 gap-2">
@@ -1167,13 +1197,13 @@
                                             onClick={() => setLeaderboardTab('student')}
                                             className={`flex-1 py-2 rounded-lg text-sm font-bold transition ${leaderboardTab === 'student' ? 'bg-white text-blue-600 shadow-sm ring-1 ring-slate-200' : 'text-slate-400 hover:bg-slate-100'}`}
                                         >
-                                            個人排名
+                                            個人排名 / Students
                                         </button>
                                         <button 
                                             onClick={() => setLeaderboardTab('class')}
                                             className={`flex-1 py-2 rounded-lg text-sm font-bold transition ${leaderboardTab === 'class' ? 'bg-white text-amber-600 shadow-sm ring-1 ring-slate-200' : 'text-slate-400 hover:bg-slate-100'}`}
                                         >
-                                            班際爭霸 (金幣)
+                                            班際爭霸 / Classes
                                         </button>
                                     </div>
 
@@ -1181,7 +1211,7 @@
                                         {leaderboardTab === 'student' ? (
                                             <table className="w-full text-left text-sm">
                                                 <thead className="bg-slate-50 text-slate-500 sticky top-0 z-10 shadow-sm">
-                                                    <tr><th className="p-4">排名</th><th className="p-4">姓名</th><th className="p-4 text-right">得分</th></tr>
+                                                    <tr><th className="p-4">Rank</th><th className="p-4">Name</th><th className="p-4 text-right">Score</th></tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-slate-100">
                                                     {leaderboard.map((r, i) => (
@@ -1202,12 +1232,12 @@
                                             <div className="p-4 space-y-4">
                                                 {getClassStats().map((c, i) => (
                                                     <div key={c.classId} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm relative overflow-hidden">
-                                                        {i === 0 && <div className="absolute top-0 right-0 bg-yellow-400 text-white text-xs font-bold px-2 py-1 rounded-bl-lg">👑 目前領先</div>}
+                                                        {i === 0 && <div className="absolute top-0 right-0 bg-yellow-400 text-white text-xs font-bold px-2 py-1 rounded-bl-lg">👑 Leader</div>}
                                                         
                                                         <div className="flex justify-between items-center mb-3">
                                                             <div>
                                                                 <div className="text-lg font-black text-slate-800">{c.classId}</div>
-                                                                <div className="text-xs text-slate-400">參與人數: {c.count} | 平均分: {c.avg}</div>
+                                                                <div className="text-xs text-slate-400">Students: {c.count} | Avg: {c.avg}</div>
                                                             </div>
                                                             <div className="text-right">
                                                                 <div className="text-2xl font-black text-amber-500 flex items-center justify-end gap-1 drop-shadow-sm">
@@ -1224,15 +1254,15 @@
                                                             ></div>
                                                         </div>
                                                         <div className="flex justify-between mt-1 text-xs text-slate-400">
-                                                            <span>下一枚進度: {Math.round(c.progress)}%</span>
-                                                            <span>{Math.round(c.total % POINTS_PER_COIN)} / {POINTS_PER_COIN} 分</span>
+                                                            <span>Next Coin: {Math.round(c.progress)}%</span>
+                                                            <span>{Math.round(c.total % POINTS_PER_COIN)} / {POINTS_PER_COIN} pts</span>
                                                         </div>
                                                     </div>
                                                 ))}
                                                 
                                                 <div className="text-center p-4 text-slate-400 text-xs">
-                                                    每累積 800 分 = 1 枚金幣<br/>
-                                                    全班一起加油！
+                                                    {POINTS_PER_COIN} pts = 1 Coin<br/>
+                                                    Keep fighting!
                                                 </div>
                                             </div>
                                         )}
@@ -1243,12 +1273,17 @@
                         <div className="fixed bottom-2 right-2 z-50">
                             <div className={`px-3 py-1 rounded-full text-xs font-bold shadow-md flex items-center gap-1 ${isOnline ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                                 {isOnline ? <Icons.Wifi className="w-3 h-3" /> : <Icons.WifiOff className="w-3 h-3" />}
-                                {isOnline ? '連線正常' : '離線模式 (資料暫存中)'}
+                                {isOnline ? 'Online' : 'Offline'}
                             </div>
                         </div>
                         <div className="text-center mt-6 text-xs text-slate-400">
                             S.2 Science | AI-Powered Learning
                         </div>
+                        <DeleteModal 
+                            isOpen={isDeleteModalOpen} 
+                            onClose={() => setIsDeleteModalOpen(false)} 
+                            onConfirm={handleDeleteConfirm}
+                        />
                     </div>
                 </div>
             );
