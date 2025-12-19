@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>元旦粵遊自駕行 2025</title>
+    
+    <!-- 引入 React 和 ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- 引入 Babel 用於解析 JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 自定義樣式 -->
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: #f9fafb; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .animate-fadeIn { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .map-container iframe { filter: grayscale(0%); transition: filter 0.3s; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // --- 圖標組件 (內嵌 SVG) ---
+        const Icon = ({ path, size = 24, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                {path}
+            </svg>
+        );
+
+        const Icons = {
+            MapPin: (props) => <Icon {...props} path={<><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></>} />,
+            Car: (props) => <Icon {...props} path={<><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H7.7c-.7 0-1.3.3-1.8.7C5 8.6 3.7 10 3.7 10s-2.7.6-3.5 1.1c-.8.2-1.5 1-1.5 1.9v3c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M5 17h14"/></>} />,
+            Utensils: (props) => <Icon {...props} path={<><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></>} />,
+            Hotel: (props) => <Icon {...props} path={<><path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></>} />,
+            Baby: (props) => <Icon {...props} path={<><path d="M9 12h.01"/><path d="M15 12h.01"/><path d="M10 16c.5.3 1.2.5 2 .5s1.5-.2 2-.5"/><path d="M19 6.3a9 9 0 0 1 1.8 3.9 2 2 0 0 1 0 3.6 9 9 0 0 1-17.6 0 2 2 0 0 1 0-3.6A9 9 0 0 1 12 3c2 0 3.5 1.1 3.5 2.5s-.9 2.5-2 2.5c-.8 0-1.5-.4-1.5-1"/></>} />,
+            Navigation: (props) => <Icon {...props} path={<><polygon points="3 11 22 2 13 21 11 13 3 11"/></>} />,
+            Sun: (props) => <Icon {...props} path={<><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></>} />,
+            Moon: (props) => <Icon {...props} path={<><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></>} />,
+            MapIcon: (props) => <Icon {...props} path={<><polygon points="3 6 9 3 15 6 21 3 21 21 15 18 9 21 3 18 3 6"/><line x1="9" x2="9" y1="3" y2="21"/><line x1="15" x2="15" y1="6" y2="18"/></>} />,
+            ChevronDown: (props) => <Icon {...props} path={<><path d="m6 9 6 6 6-6"/></>} />,
+            ChevronUp: (props) => <Icon {...props} path={<><path d="m18 15-6-6-6 6"/></>} />,
+            ShoppingCart: (props) => <Icon {...props} path={<><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></>} />,
+            Zap: (props) => <Icon {...props} path={<><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></>} />,
+            BatteryCharging: (props) => <Icon {...props} path={<><path d="M15 7h1a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2"/><path d="M6 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h1"/><path d="m11 7-3 5h4l-3 5"/><line x1="22" x2="22" y1="11" y2="13"/></>} />,
+            ImageIcon: (props) => <Icon {...props} path={<><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></>} />,
+            X: (props) => <Icon {...props} path={<><path d="M18 6 6 18"/><path d="m6 6 12 12"/></>} />,
+            ExternalLink: (props) => <Icon {...props} path={<><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" x2="21" y1="14" y2="3"/></>} />
+        };
+
+        // --- 主應用程序 ---
+        const TripItinerary = () => {
+            const [activeTab, setActiveTab] = useState(0);
+            const [showMap, setShowMap] = useState(true);
+            const [showParkMap, setShowParkMap] = useState(false);
+            const [expandedDetails, setExpandedDetails] = useState({});
+            
+            // 圖片彈窗狀態
+            const [modalImage, setModalImage] = useState(null);
+            const [modalTitle, setModalTitle] = useState("");
+
+            const toggleDetail = (index) => {
+                setExpandedDetails(prev => ({
+                    ...prev,
+                    [`${activeTab}-${index}`]: !prev[`${activeTab}-${index}`]
+                }));
+            };
+
+            const openImageModal = (title, keyword) => {
+                const imageMap = {
+                    // 中山 (New Day 0)
+                    "xiaolan": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Zhongshan_Xiaolan.jpg/1200px-Zhongshan_Xiaolan.jpg",
+                    "pigeon": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/Roasted_Pigeon.jpg/1200px-Roasted_Pigeon.jpg",
+                    "fishball": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8d/Fried_Dace_Balls.jpg/1200px-Fried_Dace_Balls.jpg",
+                    "mall": "https://images.unsplash.com/photo-1519567241046-7f570eee3c9f?auto=format&fit=crop&w=1200&q=80",
+
+                    // 廣州
+                    "railway": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Guangzhou_Railway_Museum_20220617.jpg/1200px-Guangzhou_Railway_Museum_20220617.jpg",
+                    "tower": "https://images.unsplash.com/photo-1599464672667-68c17300c025?auto=format&fit=crop&w=1200&q=80",
+                    "tram": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Guangzhou_Tram_Haizhu_Line.jpg/1200px-Guangzhou_Tram_Haizhu_Line.jpg",
+                    "robotaxi": "https://www.weride.ai/images/products/robobus-banner.jpg",
+                    
+                    // 清遠長隆
+                    "giraffe_hotel": "https://p3-qhc.byteimg.com/tos-cn-i-qvj2lq49k0/2a3a5a7a7a7a4a7a7a7a7a7a7a7a7a7a~tplv-qvj2lq49k0-original.jpeg",
+                    "giraffe": "https://images.unsplash.com/photo-1547721064-da6cfb341d50?auto=format&fit=crop&w=1200&q=80",
+                    "safari": "https://images.unsplash.com/photo-1534177616072-ef7dc12044f9?auto=format&fit=crop&w=1200&q=80",
+                    "panda_food": "https://images.unsplash.com/photo-1564349683136-77e08dba1ef7?auto=format&fit=crop&w=1200&q=80",
+                    
+                    // 大角禾場
+                    "dajiao": "https://images.unsplash.com/photo-1593365942698-3f404494c6ef?auto=format&fit=crop&w=1200&q=80",
+                    "bonfire": "https://images.unsplash.com/photo-1510525009512-ad7fc13eefab?auto=format&fit=crop&w=1200&q=80",
+                    "alpaca": "https://images.unsplash.com/photo-1548681528-6a5c45b66b42?auto=format&fit=crop&w=1200&q=80",
+                    
+                    // 英德
+                    "peak_forest": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1a/Yangshuo_Landscape.jpg/1200px-Yangshuo_Landscape.jpg",
+                    "tofu": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Stinky_Tofu_Changsha.jpg/1200px-Stinky_Tofu_Changsha.jpg",
+                    
+                    // 佛山
+                    "qiandenghu": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d4/Qiandeng_Lake_Park.jpg/1200px-Qiandeng_Lake_Park.jpg",
+                    "lingnan": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5a/Foshan_Ancestral_Temple.jpg/1200px-Foshan_Ancestral_Temple.jpg",
+                    "shunde_food": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/94/Shunde_Sashimi.jpg/1200px-Shunde_Sashimi.jpg",
+                    
+                    // 通用
+                    "dimsum": "https://images.unsplash.com/photo-1496116218417-1a781b1c423c?auto=format&fit=crop&w=1200&q=80",
+                    "sams": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/Sam%27s_Club_store_interior.jpg/1200px-Sam%27s_Club_store_interior.jpg",
+                    "bridge": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/30/HZMB_Hong_Kong_Link_Road_2018.jpg/1200px-HZMB_Hong_Kong_Link_Road_2018.jpg",
+                    "pool": "https://images.unsplash.com/photo-1576013551627-0cc20b96c2a7?auto=format&fit=crop&w=1200&q=80",
+                    "farm": "https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1200&q=80",
+                    "bbq": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=1200&q=80",
+                    "flower": "https://images.unsplash.com/photo-1469334031218-e382a71b716b?auto=format&fit=crop&w=1200&q=80",
+                    "night": "https://images.unsplash.com/photo-1569336415962-a4bd9f69cd83?auto=format&fit=crop&w=1200&q=80",
+                    "shopping": "https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?auto=format&fit=crop&w=1200&q=80",
+                    "chicken": "https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?auto=format&fit=crop&w=800&q=80",
+                    "default": "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=1200&q=80"
+                };
+
+                setModalTitle(title);
+                setModalImage(imageMap[keyword] || imageMap['default']);
+            };
+
+            const mapLocations = {
+                hk: { x: 80, y: 85, name: "香港" },
+                zs: { x: 60, y: 70, name: "中山" }, // 新增中山小欖
+                gz: { x: 55, y: 55, name: "廣州" },
+                fs: { x: 45, y: 65, name: "佛山" },
+                qy: { x: 45, y: 30, name: "清遠" }, 
+                dj: { x: 35, y: 35, name: "三坑" }, 
+                yd: { x: 50, y: 15, name: "英德" }  
+            };
+
+            const itinerary = [
+                {
+                    date: "12/26 (五)",
+                    title: "深中通道初體驗：閒遊小欖",
+                    location: "香港 → 中山小欖",
+                    mapQuery: "中山市小欖鎮大信新都匯", 
+                    stay: "全季酒店 (中山小欖大信新都匯店)",
+                    tags: ["港珠澳大橋", "小欖美食", "輕鬆遊"],
+                    evPlan: {
+                        status: "good",
+                        level: "剩餘約 70%",
+                        action: "【無需充電】",
+                        desc: "香港至中山小欖約 140km。抵達時電量充足。全季酒店所在的大信新都匯通常有充電樁，如想確保明天滿電出發，晚餐時可順便補電。"
+                    },
+                    schedule: [
+                        { time: "12:00", activity: "香港出發", type: "transport", imgKey: "bridge", detail: "經港珠澳大橋前往中山。車程約 2 小時。沿途欣賞大橋海景，輕鬆避開早高峰。" },
+                        { time: "14:30", activity: "抵達中山小欖，入住酒店", type: "stay", imgKey: "hotel", detail: "📍 全季酒店 (小欖大信新都匯店)\n位於小欖核心商圈，樓下就是大型商場，吃喝玩樂一應俱全。先辦理入住，放下行李。" },
+                        { time: "15:30", activity: "小欖龍山公園 / 商場休閒", type: "play", imgKey: "xiaolan", detail: "不想走遠可以在「大信新都匯」逛街，有兒童樂園。或者去附近的「龍山公園」散步，感受小欖菊城氛圍。" },
+                        { time: "18:00", activity: "晚餐：中山特色美食", type: "food", imgKey: "pigeon", detail: "第一晚輕鬆吃，品嚐中山地道風味。", foodRecommendations: [ { name: "小欖人家酒樓", type: "地道粵菜", rating: "4.5★", desc: "必點傳統炸鯪魚球、菊花宴，環境大氣，適合家庭聚餐。" }, { name: "石岐佬中山菜館", type: "招牌乳鴿", rating: "4.7★", desc: "雖然不在小欖核心，但如果有車值得一去，乳鴿皮脆肉嫩，全中山最出名。" }, { name: "大信新都匯美食街", type: "各式選擇", rating: "4.3★", desc: "樓下商場選擇多，有探魚、海底撈等連鎖店，方便快捷。" }, { name: "紅燒乳鴿", type: "本地風味", rating: "4.6★", desc: "隨便找家農莊吃乳鴿通常都不會踩雷。" } ] }
+                    ],
+                    tips: "今日主打「不趕路」，養精蓄銳準備明天的廣州行。"
+                },
+                {
+                    date: "12/27 (六)",
+                    title: "北上廣州：鐵路與科技",
+                    location: "中山小欖 → 廣州琶洲",
+                    mapQuery: "廣州市海珠區星辰酒店", 
+                    stay: "廣州星辰花園酒店 (琶洲會展中心店)",
+                    tags: ["APM線", "無人駕駛", "鐵路博物館"],
+                    evPlan: {
+                        status: "charging",
+                        level: "剩餘約 60%",
+                        action: "【建議充電】今晚使用酒店 7kW 慢充至 100%。",
+                        desc: "中山小欖至廣州琶洲僅約 70km。抵達廣州後電量依然充裕，但建議今晚在星辰花園酒店充滿，應對明天去清遠的行程。"
+                    },
+                    schedule: [
+                        { time: "10:00", activity: "中山早茶 & 出發", type: "food", imgKey: "dimsum", detail: "睡個懶覺，在小欖吃個正宗廣式早茶再出發。推薦：小欖公飯店。", foodRecommendations: [ { name: "小欖公飯店", type: "傳統早茶", rating: "4.6★", desc: "傳統點心，價格實惠，深受本地人喜愛。" } ]},
+                        { time: "12:00", activity: "驅車前往廣州琶洲", type: "transport", imgKey: "default", detail: "車程約 1 - 1.5 小時 (70km)。路況通常良好。" },
+                        { time: "13:30", activity: "廣州鐵路博物館", type: "play", imgKey: "railway", detail: "📍 荔灣區黃沙大道\n戶外有巨大的蒸汽火車頭，室內有高鐵模擬駕駛。小朋友的交通天堂。\n\n💡 停車提示：直接導航至「領展購物廣場(原西城都薈)」，步行約10分鐘。",
+                          foodRecommendations: [ { name: "點都德 (荔灣店)", type: "早茶/下午茶", rating: "4.6★", desc: "就在博物館附近，逛累了可以去喝下午茶，紅米腸必點。" }, { name: "西城都薈美食", type: "商場餐飲", rating: "4.4★", desc: "商場內選擇多，有大家樂、麥當勞等小朋友喜歡的快餐。" } ] 
+                        },
+                        { time: "16:30", activity: "入住酒店 + APM 線體驗", type: "play", imgKey: "tower", detail: "前往「廣州塔站」乘坐 APM 線至「海心沙站」，搶佔車頭第一排看時光隧道。" },
+                        { time: "18:30", activity: "晚餐 + Robotaxi 體驗", type: "food", imgKey: "robotaxi", detail: "晚餐後，在閱江路體驗 WeRide 無人駕駛小巴。", foodRecommendations: [ { name: "炳勝品味 (琶洲店)", type: "精緻粵菜", rating: "4.8★", desc: "黑叉燒是招牌，環境好，適合家庭聚餐。" }, { name: "琶醍精釀餐吧", type: "江景西餐", rating: "4.6★", desc: "在江邊吹風吃漢堡、披薩，氛圍感滿分。" } ] }
+                    ],
+                    tips: "從中山過來車程很短，行程非常輕鬆，可以多留時間在鐵路博物館拍照。"
+                },
+                {
+                    date: "12/28 (日)",
+                    title: "入住長頸鹿城堡",
+                    location: "廣州 → 清遠",
+                    mapQuery: "清遠長隆長頸鹿城堡酒店",
+                    stay: "清遠長隆長頸鹿城堡酒店",
+                    tags: ["長頸鹿互動", "神樹樂園"],
+                    evPlan: { status: "good", level: "剩餘約 85%", action: "【無需充電】", desc: "廣州至清遠約 85km。長頸鹿酒店停車場有充電樁，若有強迫症可補電。" },
+                    schedule: [
+                        { time: "10:30", activity: "自駕前往清遠", type: "transport", imgKey: "default", detail: "車程約 1.5 小時。途經廣清高速，路況良好。" },
+                        { time: "12:30", activity: "午餐：清遠地道風味", type: "food", imgKey: "dimsum", detail: "抵達清遠，先吃飽再進酒店。", foodRecommendations: [ { name: "清遠雞村 (清城店)", type: "必吃雞煲", rating: "4.7★", desc: "來清遠怎能不吃雞？白切、清水浸做法最考驗雞質，皮爽肉滑。" }, { name: "大自然農莊", type: "農家菜", rating: "4.6★", desc: "離長隆15分鐘車程。碌鵝和山坑魚是招牌，分量大，性價比高。" }, { name: "得味農莊", type: "竹筒飯", rating: "4.5★", desc: "環境開揚，竹筒飯和蒸魚很有特色，適合小朋友口味。" }, { name: "鵬記燒肉", type: "燒臘", rating: "4.4★", desc: "本地人推薦的脆皮燒肉，可以買一點打包回酒店晚上加餐。" } ] },
+                        { time: "15:00", activity: "入住長頸鹿城堡酒店", type: "stay", imgKey: "giraffe_hotel", detail: "🦒 **酒店探索攻略**：\n1. **大堂互動**：一進門就能看到巨大的動雕長頸鹿，還有定時的迎賓表演。\n2. **陽台觀獸**：如果是景觀房，陽台直接能看到樓下的長頸鹿、斑馬在散步。\n3. **神樹樂園**：位於酒店內的室內遊樂場，有滑梯、波波池，是小朋友放電的好地方。\n\n💡 記得在前台預約明早的「長頸鹿共進早餐」（位置搶手）！" },
+                        { time: "18:00", activity: "城堡餐廳自助晚餐", type: "food", imgKey: "giraffe", detail: "不用出酒店！就在酒店內的「城堡餐廳」享用。\n\n🎉 **亮點**：\n- **長頸鹿奇幻劇場**：用餐過程中有動雕表演，講述長頸鹿家族的故事。\n- **豐富菜品**：海鮮、牛排、朱古力噴泉，小朋友最愛。\n- **便利**：吃完直接回房休息，為明天的樂園日儲備體力。" }
+                    ],
+                    tips: "長頸鹿酒店是親子熱門，辦理入住可能需要排隊，建議爸爸去停車，媽媽先去排隊。"
+                },
+                {
+                    date: "12/29 (一)",
+                    title: "長隆全日：自駕Safari",
+                    location: "清遠長隆",
+                    mapQuery: "清遠長隆旅遊度假區",
+                    stay: "清遠長隆長頸鹿城堡酒店",
+                    tags: ["自駕入園", "機動遊戲", "午餐後步行"],
+                    parkMap: "https://www.runhotel.hk/bayarea/wp-content/uploads/2025/01/%E6%B8%85%E9%81%A0%E9%95%B7%E9%9A%86%E5%9C%92%E5%8D%80%E5%9C%B0%E5%9C%96.png",
+                    evPlan: { status: "good", level: "剩餘約 80%", action: "【無需充電】", desc: "今日主要在園區內活動，里程消耗極低。" },
+                    schedule: [
+                        { time: "10:00", activity: "睡飽飽，自駕入園 (Safari)", type: "transport", imgKey: "safari", detail: "🚗 **最酷體驗**：直接開自己的車進入自駕區！\n- **近距離**：斑馬、羚羊就在車窗邊走過，可以慢慢開，隨停隨拍。\n- **舒適**：不用擠園區小火車，小朋友累了可以在車上吹冷氣、喝水。\n(註：如遇政策調整不可自駕，則改乘園區小火車)" },
+                        { time: "12:00", activity: "園區午餐 (Safari後)", type: "food", imgKey: "panda_food", foodRecommendations: [ { name: "熊貓餐廳 (園區內)", type: "親子快餐", rating: "4.3★", desc: "有熊貓公仔陪吃，提供可愛造型的兒童套餐，環境舒適。" }, { name: "獅王餐廳", type: "觀景餐廳", rating: "4.4★", desc: "可以一邊吃飯一邊透過玻璃看獅子，非常震撼。" }, { name: "長隆美食廣場", type: "小吃快餐", rating: "4.0★", desc: "選擇多樣，有麵食、漢堡，出餐快。" }, { name: "自備乾糧", type: "野餐", rating: "推薦", desc: "園區允許帶少量密封食物，可以找個陰涼處簡單解決。" } ] },
+                        { time: "13:30", activity: "步行遊覽親子路線", type: "play", imgKey: "giraffe", detail: "吃飽喝足後開始步行遊覽：\n1. 🦕 **森林秘境**：看會動的恐龍模型，還有科普講解。\n2. 🦒 **長頸鹿廣場**：買樹葉餵長頸鹿（必玩！），記得拍照。\n3. 🐨 **考拉園**：尋找睡覺的考拉。\n4. 🎡 **機動遊戲**：家庭過山車、旋轉木馬（適合幼兒）。" },
+                        { time: "18:00", activity: "晚餐：周邊覓食", type: "food", imgKey: "dimsum", foodRecommendations: [ { name: "天橋底雞煲", type: "特色炭爐", rating: "4.6★", desc: "充滿煙火氣的炭爐雞煲，雞肉嫩滑，湯底濃郁，適合大人宵夜。" }, { name: "順德人家 (清遠店)", type: "精緻粵菜", rating: "4.5★", desc: "環境較好，如果想吃點心或小炒，這家是不錯的選擇。" }, { name: "北江河鮮宴", type: "河鮮", rating: "4.4★", desc: "清遠北江的河鮮很出名，清蒸河蝦、黃骨魚，鮮甜不腥。" }, { name: "大排檔", type: "隨心選", rating: "-", desc: "長隆大道沿路有很多大排檔，看到人多的通常都不錯。" } ] }
+                    ],
+                    tips: "自駕區不可下車，入園前記得讓小朋友上洗手間。準備動物兒歌車上聽，氣氛更好！"
+                },
+                {
+                    date: "12/30 (二)",
+                    title: "轉戰大角禾場：親親動物",
+                    location: "清遠長隆 → 清新三坑",
+                    mapQuery: "清遠市清新區三坑鎮崩坑村",
+                    stay: "清遠大角禾場生態度假村",
+                    tags: ["私家溫泉", "餵動物", "星空房"],
+                    evPlan: { status: "good", level: "剩餘約 70%", action: "【無需充電】", desc: "距離僅約 50km (1小時車程)。抵達後電量充足。度假村通常可停車，但充電設施建議先問前台，或在附近三坑鎮補充。" },
+                    schedule: [
+                        { time: "09:30", activity: "酒店「森林泉區」玩水", type: "play", imgKey: "pool", detail: "不用急著退房！早上人少，去酒店的「森林泉區」玩水。有恆溫池和兒童玩水設施，非常放電。" },
+                        { time: "12:30", activity: "退房午餐", type: "food", imgKey: "chicken", foodRecommendations: [ { name: "酒店周邊農莊", type: "就近用餐", rating: "4.2★", desc: "在長隆附近隨便吃點，節省時間。" }, { name: "三坑燒雞", type: "地道美食", rating: "4.5★", desc: "三坑鎮的燒雞和清平雞非常出名，到達度假村前可以先吃。" }, { name: "麥當勞/KFC", type: "快餐", rating: "-", desc: "如果趕時間，可以在高速服務區解決。" }, { name: "自備零食", type: "車上吃", rating: "-", desc: "車程僅1小時，也可以到度假村再吃。" } ] },
+                        { time: "14:00", activity: "開車前往大角禾場", type: "transport", imgKey: "default", detail: "車程約 1 小時 (50km)。前往清新區三坑鎮（溫泉之鄉）。" },
+                        { time: "15:30", activity: "抵達大角禾場，Check-in", type: "stay", imgKey: "dajiao", detail: "📍 清新區三坑鎮\n這是一個被大自然包圍的網紅民宿。房間通常自帶私家泡池（溫泉），非常私密舒適。園區內有大草坪、小溪。" },
+                        { time: "16:30", activity: "萌寵餵食 & 兒童越野", type: "play", imgKey: "alpaca", detail: "園區內有許多小動物：羊駝、梅花鹿、黑天鵝、孔雀等，小朋友可以近距離餵食（前台可買飼料）。還有兒童越野車可以體驗。" },
+                        { time: "18:00", activity: "度假村晚餐", type: "food", imgKey: "farm", detail: "晚餐在度假村餐廳享用農家菜，食材多為自家種植，健康新鮮。推薦：清遠雞湯、山水豆腐。" }
+                    ],
+                    tips: "三坑鎮是溫泉區，民宿房間通常都有泡池，記得帶多幾套泳衣或玩水裝備。"
+                },
+                {
+                    date: "12/31 (三)",
+                    title: "大角禾場：跨年篝火夜",
+                    location: "清遠大角禾場",
+                    mapQuery: "清遠市清新區三坑鎮崩坑村",
+                    stay: "清遠大角禾場生態度假村",
+                    tags: ["田園採摘", "篝火晚會", "跨年"],
+                    evPlan: { status: "good", level: "剩餘約 65%", action: "【無需充電】", desc: "今日在度假村內活動，不消耗里程。安心享受假期。" },
+                    schedule: [
+                        { time: "Morning", activity: "田園採摘 & 手工", type: "play", imgKey: "farm", detail: "度假村內有菜園，可以帶小朋友體驗拔蘿蔔、摘菜的樂趣。或者參加手工坊活動（如畫畫、做植物標本）。" },
+                        { time: "Noon", activity: "周邊農家樂", type: "food", imgKey: "chicken", foodRecommendations: [ { name: "竹林農莊", type: "環境好", rating: "4.4★", desc: "在竹林裡吃飯，空氣清新，白切雞和蒸魚不錯。" }, { name: "三坑河鮮", type: "河鮮", rating: "4.3★", desc: "附近的北江支流河鮮，清甜。" }, { name: "度假村餐廳", type: "方便", rating: "4.2★", desc: "懶得出門繼續在度假村吃，試試不同的菜式。" }, { name: "鎮上小炒", type: "便宜", rating: "4.0★", desc: "三坑鎮上有很多平價小炒店。" } ] },
+                        { time: "Afternoon", activity: "私家溫泉 & 休息", type: "play", imgKey: "pool", detail: "下午在房間內泡私家溫泉，讓小朋友午睡，為晚上的跨年儲備精力。" },
+                        { time: "20:00", activity: "篝火晚會 & 煙花", type: "play", imgKey: "bonfire", detail: "🔥 **跨年重頭戲**：度假村通常會舉辦篝火晚會，大家圍在一起唱歌跳舞。運氣好的話能看到煙花（或自己玩仙女棒）。" }
+                    ],
+                    tips: "跨年夜戶外較冷，記得給小朋友穿厚外套。如果不提供煙花，可提前在鎮上小店買一點仙女棒。"
+                },
+                {
+                    date: "1/1 (四)",
+                    title: "峰林奇觀與重返城市",
+                    location: "清新 → 英德 → 佛山",
+                    mapQuery: "佛山市南海區安瑾酒店",
+                    stay: "佛山安瑾酒店 (桂城怡海旗艦店)",
+                    tags: ["峰林曉鎮", "千燈湖"],
+                    evPlan: { status: "charging", level: "剩餘約 30-40%", action: "【關鍵充電】", desc: "大角禾場 -> 英德峰林 (60km) -> 佛山 (100km)。總里程約 160km。抵達佛山安瑾酒店時電量約 35%，建議今晚在酒店充滿。" },
+                    schedule: [
+                        { time: "10:30", activity: "退房，前往英德峰林曉鎮", type: "transport", imgKey: "default", detail: "車程約 1 小時 (60km)。雖然往北走一點，但「廣東小桂林」的景色絕對值得。" },
+                        { time: "11:30", activity: "英德峰林曉鎮", type: "play", imgKey: "peak_forest", detail: "📍 九龍鎮\n這裡有壯觀的喀斯特地貌。必坐**網紅小火車**穿越花海，路況平坦，推嬰兒車也很方便。" },
+                        { time: "13:30", activity: "午餐：九龍豆腐宴", type: "food", imgKey: "tofu", foodRecommendations: [ { name: "九龍豆腐人家", type: "特色菜", rating: "4.5★", desc: "專做豆腐宴，豆腐嫩滑豆香濃，各種做法都有。" }, { name: "峰林農莊", type: "景觀餐廳", rating: "4.3★", desc: "對著峰林吃飯，環境一流，白切雞也不錯。" }, { name: "荷香居", type: "農家菜", rating: "4.4★", desc: "在荷花池旁，環境清幽，食材新鮮。" }, { name: "鎮上小吃", type: "隨意吃", rating: "-", desc: "鎮上有很多賣豆腐花的小攤，可以試試。" } ] },
+                        { time: "15:00", activity: "驅車前往佛山", type: "transport", imgKey: "default", detail: "車程約 1.5 - 2 小時 (100km)。這段路可以讓小朋友再睡一覺。" },
+                        { time: "19:00", activity: "千燈湖公園散步 & 晚餐", type: "play", imgKey: "qiandenghu", detail: "亞洲最佳景觀獎，夜景極美。晚餐在周邊商場解決。", foodRecommendations: [ { name: "順德公 (保利水城店)", type: "順德菜", rating: "4.7★", desc: "就在千燈湖旁，一魚多吃，拆魚羹適合小朋友，環境好。" }, { name: "豬肉婆私房菜 (千燈湖)", type: "高端粵菜", rating: "4.8★", desc: "《尋味順德》名店，銀杏豬肚湯一絕，價格稍貴但物有所值。" }, { name: "漁意坊", type: "無骨魚", rating: "5.0★", desc: "千層無骨魚，完全不怕魚刺卡喉，非常適合幼兒和老人。" }, { name: "大粵團圓·順德宴", type: "豪華粵菜", rating: "4.6★", desc: "裝修豪華，有燈光秀，適合新年第一頓正式晚餐。" } ] }
+                    ],
+                    tips: "佛山安瑾酒店位於市中心，外賣非常方便，如果晚上累了也可以叫外賣在酒店吃。"
+                },
+                {
+                    date: "1/2 (五)",
+                    title: "嶺南文化與山姆掃貨",
+                    location: "佛山 → 香港",
+                    mapQuery: "佛山嶺南天地",
+                    stay: "溫暖的家",
+                    tags: ["嶺南天地", "山姆會員店"],
+                    evPlan: { status: "good", level: "滿電出發", action: "【返程無憂】", desc: "昨晚已充滿電。佛山回香港約 170km，抵達香港預計還剩 50%+ 電量。" },
+                    schedule: [
+                        { time: "10:00", activity: "漫步「嶺南天地」", type: "play", imgKey: "lingnan", detail: "保留了完好的古建築群，非常適合拍照。可以去 Hello Kitty Cafe 打卡，或者買點佛山盲公餅做手信。" },
+                        { time: "12:00", activity: "午餐：嶺南風味", type: "food", imgKey: "shunde_food", foodRecommendations: [ { name: "味稻粥城 (嶺南天地)", type: "粥底火鍋", rating: "4.6★", desc: "毋米粥湯底燙肉非常嫩，不熱氣，幼兒最愛。" }, { name: "民信老鋪", type: "甜品", rating: "4.5★", desc: "雙皮奶、姜撞奶，佛山必吃甜品老字號。" }, { name: "黃但記", type: "陳村粉", rating: "4.4★", desc: "始創於1927年，陳村粉薄、爽、滑，咖哩蟹配粉一絕。" }, { name: "行運樓", type: "粵菜", rating: "4.5★", desc: "環境古色古香，點心精緻，就在嶺南天地內。" } ] },
+                        { time: "14:00", activity: "山姆會員商店 (南海店)", type: "play", imgKey: "sams", detail: "最後衝刺！停車免費。推薦買：MM豆（特大裝）、瑞士卷、烤雞、迪士尼聯名童裝。記得帶保溫袋。" },
+                        { time: "17:00", activity: "啟程返港", type: "transport", imgKey: "bridge", detail: "預計晚上 21:00-22:00 抵達香港。可以在深圳灣附近簡單吃個晚餐。", foodRecommendations: [ { name: "深圳灣萬象城", type: "商場", rating: "4.7★", desc: "過關前最後一站，餐廳選擇極多，環境好。" }, { name: "高速服務區", type: "快餐", rating: "-", desc: "如果趕時間，簡單解決。" }, { name: "八合里牛肉火鍋", type: "深圳", rating: "4.6★", desc: "如果時間充裕，在深圳吃頓正宗潮汕牛肉火鍋再過關。" }, { name: "回家再吃", type: "溫馨", rating: "❤️", desc: "滿載而歸，回家煮個麵也是一種幸福。" } ] }
+                    ],
+                    tips: "山姆冷氣大，備外套。買生鮮建議自備保溫箱。"
+                }
+            ];
+
+            const currentMapId = itinerary[activeTab].mapId;
+
+            return (
+                <div className="max-w-md mx-auto bg-gray-50 min-h-screen font-sans text-gray-800 pb-20 relative">
+                    <div className="bg-gradient-to-r from-orange-400 to-red-500 p-6 rounded-b-3xl shadow-lg text-white relative overflow-hidden">
+                        <div className="absolute top-0 right-0 opacity-20 transform translate-x-10 -translate-y-10">
+                            <Icons.Car size={120} />
+                        </div>
+                        <h1 className="text-2xl font-bold mb-1">元旦粵遊自駕行 🚗</h1>
+                        <p className="text-sm opacity-90">Happy New Year Trip 2025</p>
+                        <div className="flex items-center gap-2 mt-4 text-xs bg-white/20 w-fit px-3 py-1 rounded-full">
+                            <span>12/26 - 1/2</span><span>•</span><span>EV 520km版</span><span>•</span><span>4大2小</span>
+                        </div>
+                    </div>
+
+                    <div className="flex overflow-x-auto p-4 gap-3 no-scrollbar snap-x z-10 relative">
+                        {itinerary.map((day, index) => (
+                            <button key={index} onClick={() => setActiveTab(index)} className={`flex-shrink-0 snap-center px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 shadow-sm whitespace-nowrap ${activeTab === index ? 'bg-orange-500 text-white transform scale-105 ring-2 ring-orange-200' : 'bg-white text-gray-500 border border-gray-100'}`}>
+                                {day.date.split(' ')[0]}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="px-4">
+                        <div className="bg-white rounded-3xl shadow-md overflow-hidden animate-fadeIn">
+                            <div className="bg-slate-800 border-b border-slate-700 relative overflow-hidden map-container">
+                                <button onClick={() => setShowMap(!showMap)} className="w-full flex items-center justify-between p-3 text-xs font-bold text-slate-300 hover:bg-slate-700 transition-colors z-10 relative">
+                                    <div className="flex items-center gap-2"><Icons.MapIcon size={14} /><span>位置地圖：{itinerary[activeTab].mapQuery}</span></div>
+                                    {showMap ? <Icons.ChevronUp size={14} /> : <Icons.ChevronDown size={14} />}
+                                </button>
+                                {showMap && (
+                                    <div className="relative h-64 w-full transition-all duration-300">
+                                        <iframe 
+                                            width="100%" 
+                                            height="100%" 
+                                            frameBorder="0" 
+                                            scrolling="no" 
+                                            marginHeight="0" 
+                                            marginWidth="0" 
+                                            src={`https://maps.google.com/maps?q=${encodeURIComponent(itinerary[activeTab].mapQuery)}&t=&z=12&ie=UTF8&iwloc=&output=embed`}
+                                            title="Google Map"
+                                        ></iframe>
+                                        <div className="absolute bottom-2 right-2 flex gap-2">
+                                            <a 
+                                                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(itinerary[activeTab].mapQuery)}`}
+                                                target="_blank"
+                                                rel="noreferrer" 
+                                                className="bg-blue-600 hover:bg-blue-700 text-white text-[10px] px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1 transition-colors"
+                                            >
+                                                <Icons.Navigation size={12} />
+                                                開啟導航
+                                            </a>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="p-6">
+                                <div className="flex justify-between items-start mb-4">
+                                    <div>
+                                        <h2 className="text-xl font-bold text-gray-800">{itinerary[activeTab].title}</h2>
+                                        <div className="flex items-center text-gray-500 text-sm mt-1"><Icons.MapPin size={14} className="mr-1" />{itinerary[activeTab].location}</div>
+                                    </div>
+                                    <div className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg">Day {activeTab}</div>
+                                </div>
+
+                                <div className="flex flex-wrap gap-2 mb-6">
+                                    {itinerary[activeTab].tags.map((tag, i) => <span key={i} className="text-xs bg-orange-50 text-orange-600 px-2 py-1 rounded-md border border-orange-100">#{tag}</span>)}
+                                </div>
+
+                                {itinerary[activeTab].parkMap && (
+                                    <div className="mb-6">
+                                        <button onClick={() => setShowParkMap(!showParkMap)} className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-emerald-500 to-green-600 rounded-xl text-white shadow-md hover:opacity-90 transition-all">
+                                            <div className="flex items-center gap-2 font-bold"><Icons.ImageIcon size={20} /><span>🗺️ 查看清遠長隆園區地圖</span></div>
+                                            {showParkMap ? <Icons.ChevronUp size={20} /> : <Icons.ChevronDown size={20} />}
+                                        </button>
+                                        {showParkMap && (
+                                            <div className="mt-2 p-2 bg-white border border-gray-100 rounded-xl shadow-inner animate-fadeIn">
+                                                <div className="relative w-full bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center text-gray-400">
+                                                    <img src={itinerary[activeTab].parkMap} alt="園區地圖" className="w-full h-full object-contain bg-white" />
+                                                </div>
+                                                <div className="text-center mt-2"><a href={itinerary[activeTab].parkMap} target="_blank" rel="noreferrer" className="text-xs text-blue-500 underline">點擊查看高清大圖</a></div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                <div className="bg-indigo-50 p-4 rounded-xl mb-6 flex items-start gap-3 border border-indigo-100">
+                                    <Icons.Hotel className="text-indigo-500 flex-shrink-0 mt-1" size={18} />
+                                    <div><h3 className="text-sm font-bold text-indigo-900">住宿</h3><p className="text-sm text-indigo-700">{itinerary[activeTab].stay}</p></div>
+                                </div>
+
+                                <div className="space-y-8 relative mb-8">
+                                    <div className="absolute left-3 top-2 bottom-2 w-0.5 bg-gray-100"></div>
+                                    {itinerary[activeTab].schedule.map((item, idx) => {
+                                        const isItemExpanded = expandedDetails[`${activeTab}-${idx}`];
+                                        return (
+                                            <div key={idx} className="flex gap-4 relative group">
+                                                <div className={`w-7 h-7 rounded-full flex items-center justify-center z-10 flex-shrink-0 border-2 border-white shadow-sm ${item.type === 'food' ? 'bg-yellow-100 text-yellow-600' : item.type === 'play' ? 'bg-green-100 text-green-600' : item.type === 'rest' ? 'bg-purple-100 text-purple-600' : item.type === 'transport' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'}`}>
+                                                    {item.type === 'food' && <Icons.Utensils size={12} />}
+                                                    {item.type === 'play' && (item.activity.includes('山姆') ? <Icons.ShoppingCart size={12}/> : <Icons.Sun size={12} />)}
+                                                    {item.type === 'rest' && <Icons.Moon size={12} />}
+                                                    {item.type === 'transport' && <Icons.Car size={12} />}
+                                                    {item.type === 'stay' && <Icons.Hotel size={12} />}
+                                                    {item.type === 'home' && <Icons.Hotel size={12} />}
+                                                </div>
+                                                <div className="flex-1">
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="text-sm font-bold text-gray-800">{item.activity}</div>
+                                                            {item.imgKey && <button onClick={() => openImageModal(item.activity, item.imgKey)} className="text-gray-400 hover:text-blue-500 transition-colors p-1"><Icons.ImageIcon size={14} /></button>}
+                                                        </div>
+                                                        <div className="text-xs font-bold text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded">{item.time}</div>
+                                                    </div>
+                                                    {item.detail && (
+                                                        <div className="mb-3">
+                                                            <div className={`text-xs text-gray-600 leading-relaxed whitespace-pre-line ${!isItemExpanded && 'line-clamp-2'}`}>{item.detail}</div>
+                                                            {item.detail.length > 50 && <button onClick={() => toggleDetail(idx)} className="text-[10px] text-blue-500 font-medium mt-1 flex items-center gap-0.5">{isItemExpanded ? '收起' : '展開詳情'} {isItemExpanded ? <Icons.ChevronUp size={10}/> : <Icons.ChevronDown size={10}/>}</button>}
+                                                        </div>
+                                                    )}
+                                                    {item.foodRecommendations && (
+                                                        <div className="mt-3 bg-yellow-50/50 rounded-xl border border-yellow-100 overflow-hidden">
+                                                            <div className="bg-yellow-100/50 px-3 py-1.5 flex items-center gap-1.5 border-b border-yellow-100"><Icons.Utensils size={10} className="text-yellow-600"/><span className="text-[10px] font-bold text-yellow-800">精選美食 (4選1)</span></div>
+                                                            <div className="grid grid-cols-1 divide-y divide-yellow-100/50">
+                                                                {item.foodRecommendations.map((food, fIdx) => (
+                                                                    <div key={fIdx} className="p-2.5 hover:bg-yellow-50 transition-colors">
+                                                                        <div className="flex justify-between items-start">
+                                                                            <div><div className="text-xs font-bold text-gray-800">{food.name}</div><div className="text-[10px] text-yellow-600 mt-0.5">{food.type}</div></div>
+                                                                            <div className="text-[10px] font-bold text-white bg-yellow-400 px-1 rounded">{food.rating}</div>
+                                                                        </div>
+                                                                        <div className="text-[10px] text-gray-500 mt-1 leading-snug">{food.desc}</div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    {item.parking && <div className="mt-2 bg-gray-100 p-2 rounded-lg border border-gray-200 flex gap-2 items-start"><Icons.Navigation className="text-gray-500 mt-0.5 flex-shrink-0" size={12} /><div className="text-xs text-gray-700"><span className="font-bold">停車：</span>{item.parking}</div></div>}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+
+                                <div className="bg-green-50 p-4 rounded-xl border border-green-100 mb-6">
+                                    <div className="flex items-center gap-2 mb-2"><Icons.Baby className="text-green-600" size={16} /><h3 className="font-bold text-green-900 text-sm">帶娃錦囊</h3></div>
+                                    <p className="text-sm text-green-800 leading-relaxed">{itinerary[activeTab].tips}</p>
+                                </div>
+
+                                {itinerary[activeTab].evPlan && (
+                                    <div className={`p-4 rounded-xl border relative overflow-hidden ${itinerary[activeTab].evPlan.status === 'charging' ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-200' : 'bg-gradient-to-br from-gray-50 to-slate-50 border-gray-100'}`}>
+                                        <div className="absolute right-[-10px] bottom-[-10px] opacity-10"><Icons.Zap size={60} className={itinerary[activeTab].evPlan.status === 'charging' ? 'text-green-600' : 'text-gray-400'} /></div>
+                                        <div className="flex items-center gap-2 mb-3 relative z-10">
+                                            {itinerary[activeTab].evPlan.status === 'charging' ? <div className="bg-green-100 p-1.5 rounded-full"><Icons.Zap className="text-green-600 fill-green-600" size={16} /></div> : <div className="bg-gray-200 p-1.5 rounded-full"><Icons.BatteryCharging className="text-gray-500" size={16} /></div>}
+                                            <h3 className={`font-bold text-sm ${itinerary[activeTab].evPlan.status === 'charging' ? 'text-green-800' : 'text-gray-700'}`}>EV 充電管家</h3>
+                                            <span className="text-xs font-mono bg-white/50 px-2 py-0.5 rounded border border-black/5 ml-auto">{itinerary[activeTab].evPlan.level}</span>
+                                        </div>
+                                        <div className="relative z-10"><div className="text-sm font-bold text-gray-800 mb-1">{itinerary[activeTab].evPlan.action}</div><div className="text-xs text-gray-500 leading-relaxed">{itinerary[activeTab].evPlan.desc}</div></div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {modalImage && (
+                        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 animate-fadeIn" onClick={() => setModalImage(null)}>
+                            <div className="bg-white rounded-2xl overflow-hidden max-w-sm w-full relative" onClick={e => e.stopPropagation()}>
+                                <button onClick={() => setModalImage(null)} className="absolute top-2 right-2 bg-black/50 text-white rounded-full p-1 z-10 hover:bg-black/70"><Icons.X size={20} /></button>
+                                <div className="aspect-[4/3] bg-gray-100"><img src={modalImage} alt={modalTitle} className="w-full h-full object-cover" /></div>
+                                <div className="p-4 bg-white"><h3 className="font-bold text-gray-800 flex items-center gap-2"><Icons.ImageIcon size={16} className="text-blue-500" />{modalTitle}</h3><p className="text-xs text-gray-500 mt-1">示意圖片 (來自網絡)</p></div>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="text-center mt-6 text-gray-400 text-xs pb-10">© 2025 Family Trip Planner</div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<TripItinerary />);
+    </script>
+</body>
+</html>
