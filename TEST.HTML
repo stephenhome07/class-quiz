@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>綜合科學科 - 試卷分析及AI報告系統 (Pro v14)</title>
+    <title>綜合科學科 - 試卷分析及AI報告系統 (Pro v22)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -11,86 +11,59 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
-        body { font-family: 'Noto Sans TC', sans-serif; background-color: #e5e7eb; } /* Darker background for contrast */
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #e5e7eb; }
         .card { background: white; border-radius: 0.75rem; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1); padding: 1.5rem; }
         .table-header { @apply px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50; }
         .table-cell { @apply px-6 py-4 whitespace-nowrap text-sm text-gray-900; }
         
-        .nav-card { @apply flex flex-col items-center justify-center p-6 bg-white border-2 border-transparent rounded-xl shadow-sm cursor-pointer transition-all duration-200 hover:shadow-md hover:border-blue-200; }
+        .nav-card { @apply flex flex-col items-center justify-center p-4 bg-white border-2 border-transparent rounded-xl shadow-sm cursor-pointer transition-all duration-200 hover:shadow-md hover:border-blue-200; }
         .nav-card.active { @apply border-blue-600 bg-blue-50 text-blue-800 ring-2 ring-blue-200 ring-opacity-50; }
-        .nav-card i { @apply text-3xl mb-2 text-gray-400; }
+        .nav-card i { @apply text-2xl mb-2 text-gray-400; }
         .nav-card.active i { @apply text-blue-600; }
-        .nav-card h3 { @apply font-bold text-lg; }
-        .nav-card p { @apply text-xs text-gray-500 mt-1; }
+        .nav-card h3 { @apply font-bold text-base; }
+        .nav-card p { @apply text-xs text-gray-500 mt-1 text-center hidden md:block; }
 
         .heatmap-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.75rem; }
         .heatmap-item { @apply p-3 rounded-lg text-center shadow-sm border border-gray-100 flex flex-col justify-center h-24 transition hover:shadow-md transform hover:-translate-y-1; }
         
         /* Markdown */
-        .markdown-body h1 { font-size: 1.4em; font-weight: bold; margin-bottom: 0.5em; color: #1e3a8a; }
-        .markdown-body h2 { font-size: 1.2em; font-weight: bold; margin-top: 1em; margin-bottom: 0.5em; color: #2563eb; }
+        .markdown-body h1 { font-size: 1.4em; font-weight: bold; margin-bottom: 0.5em; color: #1e3a8a; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.3em; }
+        .markdown-body h2 { font-size: 1.2em; font-weight: bold; margin-top: 1.2em; margin-bottom: 0.5em; color: #2563eb; }
+        .markdown-body h3 { font-size: 1.1em; font-weight: bold; margin-top: 1em; color: #4b5563; }
         .markdown-body ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 1em; }
+        .markdown-body ol { list-style-type: decimal; padding-left: 1.5em; margin-bottom: 1em; }
         .markdown-body p { margin-bottom: 0.8em; line-height: 1.6; }
         .markdown-body blockquote { border-left: 4px solid #e5e7eb; padding-left: 1em; color: #4b5563; font-style: italic; background-color: #f9fafb; padding: 0.5rem; }
+        .markdown-body table { width: 100%; border-collapse: collapse; margin-bottom: 1em; }
+        .markdown-body th, .markdown-body td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 0.9em; }
+        .markdown-body th { background-color: #f3f4f6; }
 
-        /* --- REPORT PAGE STYLES (STRICT A4) --- */
         .report-page-style {
-            width: 210mm; 
-            min-height: 297mm; /* Exact A4 height */
-            padding: 20mm; 
-            background: white;
-            position: relative; 
-            overflow: hidden; 
-            font-size: 11pt; 
-            box-sizing: border-box;
+            width: 210mm; min-height: 297mm; padding: 20mm; background: white;
+            position: relative; overflow: hidden; font-size: 11pt; box-sizing: border-box;
         }
         .page-footer { margin-top: 40px; padding-top: 10px; border-top: 1px dashed #ccc; font-size: 10pt; color: #666; page-break-inside: avoid; }
 
-        /* Preview Mode (Screen) - Distinct Pages */
-        #report-preview-area { 
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            gap: 40px; /* Big gap between pages */
-            padding-bottom: 50px; 
-        }
+        #report-preview-area, #summary-preview-area { display: flex; flex-direction: column; align-items: center; gap: 40px; padding-bottom: 50px; }
         .preview-wrapper { 
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); 
             border: 1px solid #d1d5db; 
+            margin-bottom: 20px;
         }
 
-        /* Print Mode (Printer) - STRICT PAGINATION */
         #print-container { display: none; }
         @media print {
             @page { size: A4 portrait; margin: 0; }
             body { background: white; -webkit-print-color-adjust: exact; }
-            
             #app-container, nav, .no-print, #error-modal { display: none !important; }
-            
-            #print-container { 
-                display: block !important; 
-                position: absolute; 
-                top: 0; 
-                left: 0; 
-                width: 100%; 
-            }
-            
-            /* The Page Class in Print */
+            #print-container { display: block !important; position: absolute; top: 0; left: 0; width: 100%; }
             .report-page-style { 
-                height: 296mm; /* Force height */
-                width: 100%;
-                page-break-after: always; /* Force break after each div */
-                break-after: page; 
-                margin: 0; 
-                box-shadow: none; 
-                border: none; 
-                float: none;
+                height: 296mm; width: 100%; page-break-after: always; break-after: page; 
+                margin: 0; box-shadow: none; border: none; float: none; 
             }
-            
             .page-footer { position: absolute; bottom: 20mm; left: 20mm; right: 20mm; }
         }
 
-        /* Modal */
         #error-modal { background: rgba(0,0,0,0.5); }
     </style>
 </head>
@@ -119,7 +92,7 @@
                 <div class="flex items-center justify-between h-16">
                     <div class="flex items-center">
                         <i class="fas fa-microscope text-2xl mr-3"></i>
-                        <span class="font-bold text-xl ml-2">綜合科學科 - 試卷分析及AI報告系統 (Pro v14)</span>
+                        <span class="font-bold text-xl ml-2">綜合科學科 - 試卷分析及AI報告系統 (Pro v22)</span>
                     </div>
                 </div>
             </div>
@@ -144,27 +117,39 @@
             </div>
 
             <!-- TABS -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 hidden" id="main-tabs">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 hidden" id="main-tabs">
                 <div onclick="switchTab('analysis')" class="nav-card active" id="tab-analysis">
                     <i class="fas fa-chart-pie"></i>
                     <h3>全班數據分析</h3>
-                    <p>熱點圖、分數分佈、題項篩選</p>
+                    <p>熱點圖、分佈圖</p>
+                </div>
+                <div onclick="switchTab('summary')" class="nav-card" id="tab-summary">
+                    <i class="fas fa-file-alt"></i>
+                    <h3>綜合報告</h3>
+                    <p>給校長/科主任的報告</p>
                 </div>
                 <div onclick="switchTab('report')" class="nav-card" id="tab-report">
                     <i class="fas fa-user-graduate"></i>
                     <h3>學生 AI 報告</h3>
-                    <p>雙頁格式、批量生成、下載 HTML</p>
+                    <p>個別診斷、筆記</p>
+                </div>
+                <div onclick="switchTab('settings')" class="nav-card" id="tab-settings">
+                    <i class="fas fa-sliders-h"></i>
+                    <h3>設定</h3>
+                    <p>API & Prompt</p>
                 </div>
             </div>
 
-            <!-- ANALYSIS VIEW -->
+            <!-- VIEW 1: ANALYSIS -->
             <div id="view-analysis" class="hidden space-y-8">
+                <!-- Stats Cards -->
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div class="card border-t-4 border-blue-500"><div class="text-gray-500 text-sm">平均分</div><div class="text-3xl font-bold mt-1" id="stat-mean">--</div></div>
                     <div class="card border-t-4 border-green-500"><div class="text-gray-500 text-sm">及格率</div><div class="text-3xl font-bold mt-1" id="stat-pass">--%</div></div>
                     <div class="card border-t-4 border-yellow-500"><div class="text-gray-500 text-sm">最高/最低</div><div class="text-3xl font-bold mt-1"><span id="stat-max" class="text-green-600">--</span>/<span id="stat-min" class="text-red-600">--</span></div></div>
                     <div class="card border-t-4 border-purple-500"><div class="text-gray-500 text-sm">標準差</div><div class="text-3xl font-bold mt-1" id="stat-sd">--</div></div>
                 </div>
+                <!-- Charts -->
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     <div class="card flex flex-col h-full">
                         <h3 class="text-lg font-bold mb-4"><i class="fas fa-fire-alt text-red-500 mr-2"></i>強弱課題熱點圖</h3>
@@ -176,10 +161,7 @@
                         <div class="relative h-64 w-full"><canvas id="distChart"></canvas></div>
                     </div>
                 </div>
-                <div class="card">
-                     <h3 class="text-lg font-bold mb-4"><i class="fas fa-tachometer-alt text-yellow-500 mr-2"></i>難度表現分析</h3>
-                    <div class="relative h-48 w-full"><canvas id="difficultyChart"></canvas></div>
-                </div>
+                <!-- Item Table -->
                 <div class="card overflow-hidden">
                     <div class="flex justify-between items-center mb-4 border-b pb-4">
                         <h3 class="text-lg font-bold"><i class="fas fa-list-ol text-purple-500 mr-2"></i>題項分析</h3>
@@ -194,10 +176,68 @@
                 </div>
             </div>
 
-            <!-- REPORT VIEW -->
+            <!-- VIEW 2: SUMMARY REPORT (UPDATED WITH SUBJECT) -->
+            <div id="view-summary" class="hidden space-y-8">
+                <div class="card bg-orange-50 border-l-4 border-orange-500">
+                    <h2 class="text-lg font-bold text-gray-700 mb-2"><i class="fas fa-file-alt mr-2"></i>考試成績與教學檢討報告</h2>
+                    <p class="text-sm text-gray-600 mb-4">此功能會整合全班數據，為科主任/校長生成一份專業的教學評估與跟進報告。</p>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-600 mb-1">學校名稱</label>
+                            <input id="school-name" type="text" value="嗇色園主辦可譽中學暨小學" class="w-full p-2 border rounded text-sm bg-white">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-600 mb-1">科目</label>
+                            <input id="subject-name" type="text" value="綜合科學科" class="w-full p-2 border rounded text-sm bg-white">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-600 mb-1">考試年份及級別</label>
+                            <input id="exam-info" type="text" placeholder="e.g. 2025-2026 年度上學期 中二級" class="w-full p-2 border rounded text-sm bg-white">
+                        </div>
+                    </div>
+
+                    <div class="flex gap-4 justify-end">
+                        <button id="gen-summary-btn" class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-6 rounded shadow transition flex items-center">
+                            <i class="fas fa-magic mr-2"></i> 生成綜合報告
+                        </button>
+                        <button id="dl-summary-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded shadow transition disabled:opacity-50" disabled>
+                            <i class="fas fa-download mr-2"></i> 下載報告
+                        </button>
+                    </div>
+                </div>
+                <div id="summary-preview-area"></div>
+            </div>
+
+            <!-- VIEW 3: STUDENT AI REPORTS -->
             <div id="view-report" class="hidden space-y-8">
-                <div class="card bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-100">
-                    <h3 class="text-md font-bold text-indigo-800 mb-3"><i class="fas fa-robot mr-2"></i>AI 模型設定</h3>
+                <div class="card">
+                    <h2 class="text-lg font-bold mb-4 border-b pb-2"><i class="fas fa-user-graduate mr-2"></i>學生個別報告</h2>
+                    <div class="flex flex-col md:flex-row gap-4 items-end">
+                        <div class="w-full md:w-1/4">
+                            <label class="block text-sm font-medium mb-1">報告語言</label>
+                            <select id="report-language" class="w-full p-2 border rounded font-bold text-indigo-600">
+                                <option value="zh">繁體中文</option>
+                                <option value="en">English</option>
+                            </select>
+                        </div>
+                        <div class="flex-grow w-full">
+                            <label class="block text-sm font-medium mb-1">選擇學生</label>
+                            <select id="student-select" class="w-full p-2 border rounded"><option value="">請選擇...</option><option value="ALL">【 🚀 批量生成 】全班</option></select>
+                        </div>
+                        <button id="generate-btn" class="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded shadow"><i class="fas fa-play mr-2"></i>生成</button>
+                        <button onclick="window.print()" id="print-btn" class="w-full md:w-auto bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded shadow" disabled><i class="fas fa-print mr-2"></i>列印/PDF</button>
+                        <button id="download-btn" class="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded shadow" disabled><i class="fas fa-file-download mr-2"></i>下載HTML</button>
+                    </div>
+                    <div id="batch-progress" class="hidden mt-6 bg-gray-50 p-4 rounded border"><div class="flex justify-between text-xs font-bold mb-2"><span id="progress-text">生成中...</span><span id="progress-count">0/0</span></div><div class="w-full bg-gray-200 rounded-full h-3"><div id="progress-bar" class="bg-indigo-600 h-3 rounded-full" style="width:0%"></div></div></div>
+                </div>
+                <div id="report-preview-area" class="w-full"></div>
+            </div>
+
+            <!-- VIEW 4: SETTINGS -->
+            <div id="view-settings" class="hidden space-y-8">
+                <div class="card bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200 mb-6">
+                    <h3 class="text-md font-bold text-gray-800 mb-3"><i class="fas fa-robot mr-2"></i>API 設定</h3>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
                             <label class="block text-xs font-bold text-gray-600 mb-1">模型</label>
@@ -223,21 +263,15 @@
                     </div>
                 </div>
 
-                <div class="card">
-                    <h2 class="text-lg font-bold mb-4 border-b pb-2"><i class="fas fa-magic mr-2"></i>生成報告</h2>
-                    <div class="flex flex-col md:flex-row gap-4 items-end">
-                        <div class="flex-grow w-full">
-                            <label class="block text-sm font-medium mb-1">選擇模式</label>
-                            <select id="student-select" class="w-full p-2 border rounded"><option value="">請選擇...</option><option value="ALL">【 🚀 批量生成 】全班</option></select>
-                        </div>
-                        <button id="generate-btn" class="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded shadow"><i class="fas fa-play mr-2"></i>生成</button>
-                        <button onclick="window.print()" id="print-btn" class="w-full md:w-auto bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded shadow" disabled><i class="fas fa-print mr-2"></i>列印/PDF</button>
-                        <button id="download-btn" class="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded shadow" disabled><i class="fas fa-file-download mr-2"></i>下載HTML</button>
-                        <button id="clear-btn" class="w-full md:w-auto bg-red-100 hover:bg-red-200 text-red-700 font-bold py-2 px-4 rounded shadow"><i class="fas fa-trash"></i></button>
+                <div class="card border-l-4 border-purple-500">
+                    <h2 class="text-lg font-bold text-gray-700 mb-4 pb-2 border-b"><i class="fas fa-edit mr-2"></i>自訂學生報告指令 (System Prompt)</h2>
+                    <p class="text-sm text-gray-600 mb-2">保留 `{{student_name}}` 等變數。</p>
+                    <textarea id="prompt-template" class="w-full h-64 p-4 border border-gray-300 rounded font-mono text-sm bg-gray-50 focus:ring-2 focus:ring-purple-500" spellcheck="false"></textarea>
+                    <div class="flex justify-end gap-4 mt-4">
+                        <button onclick="resetPrompt()" class="text-gray-500 hover:text-gray-700 text-sm font-bold px-4 py-2">恢復預設</button>
+                        <button onclick="savePrompt()" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded shadow transition"><i class="fas fa-save mr-2"></i>儲存設定</button>
                     </div>
-                    <div id="batch-progress" class="hidden mt-6 bg-gray-50 p-4 rounded border"><div class="flex justify-between text-xs font-bold mb-2"><span id="progress-text">生成中...</span><span id="progress-count">0/0</span></div><div class="w-full bg-gray-200 rounded-full h-3"><div id="progress-bar" class="bg-indigo-600 h-3 rounded-full" style="width:0%"></div></div></div>
                 </div>
-                <div id="report-preview-area" class="w-full"></div>
             </div>
         </div>
     </div>
@@ -249,17 +283,94 @@
         renderer.image = function(href, title, text) { return `<span style="color:#999; font-size:0.8em; border:1px dashed #ccc; padding:2px 5px;">[圖片已移除]</span>`; };
         marked.setOptions({ renderer: renderer });
 
-        let marksheetData=[], mapData=[], questionMap={}, totalPaperMark=0, chartInstances={}, analysisCache=null;
+        let marksheetData=[], mapData=[], questionMap={}, totalPaperMark=0, chartInstances={}, analysisCache=null, colMap={name:'',class:'',no:''};
         
-        // CSV Header Mapping Helpers
-        let colMap = { name: '', class: '', no: '' };
+        // --- PROMPTS ---
+        const DEFAULT_PROMPT = `
+你是一位科學老師。請為學生 {{student_name}} 製作一份兩頁的學習報告。
+總分：{{total_score}} / {{full_mark}}。
+弱項：{{weaknesses}}。
+錯題概念：{{wrong_concepts}}。
+強項：{{strengths}}。
+
+{{language_instruction}}
+
+請嚴格按照以下格式輸出，必須包含分隔符號，絕對不要生成任何圖片：
+
+1. **{{section_1_title}}**
+   - 簡短鼓勵
+   - 點列指出強項
+   - 點列指出需改善之處
+   (文字簡要)
+
+2. **{{section_2_title}}**
+   (針對每一個「需改善的課題」，以「筆記形式」解釋重點概念。請務必使用生活比喻，簡易明白。例如：「摩擦力：就像地面有看不見的小手...」)
+
+---PAGE_BREAK---
+
+3. **{{section_3_title}}** (5 條選擇題，純文字)
+
+---ANSWERS---
+
+(答案及簡短解釋)
+`.trim();
+
+        const SUMMARY_PROMPT = `
+你是一位資深的 {{subject}} 科主任。請根據以下全班考試數據，為校長撰寫一份專業的「考試成績與教學檢討報告」。
+
+學校：{{school_name}}
+考試年份及級別：{{exam_info}}
+科目：{{subject}}
+平均分：{{mean}} / {{full_mark}}
+及格率：{{pass_rate}}
+最高/最低分：{{max}} / {{min}}
+標準差：{{sd}}
+
+【強項課題】：{{top_topics}}
+【弱項課題】：{{bottom_topics}}
+【需關注題目 (鑑別度低或過難)】：{{flagged_questions}}
+
+請用繁體中文，以專業公文語氣撰寫，格式如下（不要圖片）：
+
+# 考試成績與教學檢討報告
+
+**1. 考試成績摘要**
+(簡述整體表現，比較平均分與及格率是否理想)
+
+**2. 學生強弱項分析**
+* **強項**：(分析學生在哪些課題表現較好，顯示掌握了什麼概念)
+* **弱項**：(深入分析弱項課題，推測學生概念不清的原因，例如：混淆了...，未能掌握...)
+
+**3. 試題質素檢討**
+(針對「需關注題目」進行分析，例如題目是否設計有誤，或是否超出學生能力)
+
+**4. 學與教反思及跟進建議**
+(具體建議下學期或補課時如何改善。例如：增加實驗環節、加強關鍵字操練、針對弱項課題的具體重溫策略)
+
+`.trim();
+
+        let customPrompt = localStorage.getItem('science_exam_prompt') || DEFAULT_PROMPT;
+        const pt = document.getElementById('prompt-template'); if(pt) pt.value = customPrompt;
+
+        function savePrompt() {
+            customPrompt = document.getElementById('prompt-template').value;
+            localStorage.setItem('science_exam_prompt', customPrompt);
+            alert("✅ 設定已儲存");
+        }
+
+        function resetPrompt() {
+            if(confirm("確定要恢復預設指令嗎？")) {
+                customPrompt = DEFAULT_PROMPT;
+                document.getElementById('prompt-template').value = customPrompt;
+                localStorage.setItem('science_exam_prompt', customPrompt);
+            }
+        }
 
         function switchTab(tab) {
             document.querySelectorAll('.nav-card').forEach(b=>b.classList.remove('active'));
             document.getElementById(`tab-${tab}`).classList.add('active');
-            document.getElementById('view-analysis').classList.add('hidden');
-            document.getElementById('view-report').classList.add('hidden');
-            document.getElementById(`view-${tab}`).classList.remove('hidden');
+            ['view-analysis','view-summary','view-report','view-settings'].forEach(id => { const el = document.getElementById(id); if(el) el.classList.add('hidden'); });
+            const target = document.getElementById(`view-${tab}`); if(target) target.classList.remove('hidden');
         }
 
         document.getElementById('model-provider').addEventListener('change', (e)=>{
@@ -268,27 +379,29 @@
             document.getElementById('gemini-config').classList.toggle('hidden', isDeep);
         });
 
+        // --- SAFE LISTENER HELPER ---
+        const safeListen = (id, event, fn) => {
+            const el = document.getElementById(id);
+            if(el) el.addEventListener(event, fn);
+            else console.warn(`Element #${id} missing for event ${event}`);
+        };
+
         function handleFile(file, type) {
             if(!file) return;
             Papa.parse(file, {header:true, skipEmptyLines:true, complete:(res)=>{
-                if(type==='marksheet') {
-                    marksheetData=res.data;
-                    detectColumns(res.meta.fields);
-                } else {
-                    mapData=res.data;
-                }
+                if(type==='marksheet') { marksheetData=res.data; detectColumns(res.meta.fields); }
+                else { mapData=res.data; }
                 if(marksheetData.length && mapData.length) initSystem();
             }});
         }
-        document.getElementById('marksheet-upload').addEventListener('change', (e)=>handleFile(e.target.files[0],'marksheet'));
-        document.getElementById('map-upload').addEventListener('change', (e)=>handleFile(e.target.files[0],'map'));
+        safeListen('marksheet-upload', 'change', (e)=>handleFile(e.target.files[0],'marksheet'));
+        safeListen('map-upload', 'change', (e)=>handleFile(e.target.files[0],'map'));
 
         function detectColumns(fields) {
-            // Fuzzy search for columns
+            if(!fields) return;
             colMap.name = fields.find(f => f.trim().match(/^Name/i) || f.trim().match(/姓名/)) || 'Name';
             colMap.class = fields.find(f => f.trim().match(/^Class$/i) || f.trim().match(/班別/)) || 'Class';
             colMap.no = fields.find(f => f.trim().match(/Class.*No/i) || f.trim().match(/學號/)) || 'Class_No';
-            console.log("Detected Columns:", colMap);
         }
 
         function initSystem() {
@@ -296,15 +409,23 @@
             document.getElementById('main-tabs').classList.remove('hidden');
             questionMap={}; totalPaperMark=0;
             mapData.forEach(row=>{
-                if(row.Question_ID) { questionMap[row.Question_ID]={...row, fullMark:parseFloat(row.Full_Mark)||0}; totalPaperMark+=questionMap[row.Question_ID].fullMark; }
+                if(row.Question_ID) { 
+                    questionMap[row.Question_ID]={
+                        ...row, 
+                        fullMark:parseFloat(row.Full_Mark)||0,
+                        Concept_Detail: row.Concept_Detail || row.Topic_Name 
+                    }; 
+                    totalPaperMark+=questionMap[row.Question_ID].fullMark; 
+                }
             });
+            switchTab('analysis'); 
             generateAnalysis();
+            
             const sel=document.getElementById('student-select');
-            while(sel.options.length>2) sel.remove(2);
-            marksheetData.forEach((row,i)=>{ 
-                if(row[colMap.name]) sel.add(new Option(`${row[colMap.no]||''} ${row[colMap.name]}`, i)); 
-            });
-            switchTab('analysis');
+            if(sel) {
+                while(sel.options.length>2) sel.remove(2);
+                marksheetData.forEach((row,i)=>{ if(row[colMap.name]) sel.add(new Option(`${row[colMap.no]||''} ${row[colMap.name]}`, i)); });
+            }
         }
 
         function generateAnalysis() {
@@ -331,19 +452,29 @@
             document.getElementById('stat-max').textContent=Math.max(...scores); document.getElementById('stat-min').textContent=Math.min(...scores);
             document.getElementById('stat-sd').textContent=Math.sqrt(scores.reduce((a,b)=>a+Math.pow(b-mean,2),0)/scores.length).toFixed(1);
 
-            const hCont=document.getElementById('heatmap-container'); hCont.innerHTML='';
-            Object.values(topicAgg).sort((a,b)=>a.id.localeCompare(b.id)).forEach(t=>{
-                let pct=t.m?(t.e/t.m)*100:0, hue=Math.max(0,Math.min(120,pct*1.2));
-                hCont.innerHTML+=`<div class="heatmap-item" style="background:hsla(${hue},85%,90%,1);border-color:hsla(${hue},80%,40%,0.5)"><div class="text-xs font-bold opacity-70">${t.id}</div><div class="text-xs truncate px-1" title="${t.name}">${t.name}</div><div class="text-xl font-bold">${pct.toFixed(0)}%</div></div>`;
-            });
+            const hCont=document.getElementById('heatmap-container'); 
+            if(hCont) {
+                let hHTML = '';
+                Object.values(topicAgg).sort((a,b)=>a.id.localeCompare(b.id)).forEach(t=>{
+                    let pct=t.m?(t.e/t.m)*100:0, hue=Math.max(0,Math.min(120,pct*1.2));
+                    hHTML+=`<div class="heatmap-item" style="background:hsla(${hue},85%,90%,1);border-color:hsla(${hue},80%,40%,0.5)"><div class="text-xs font-bold opacity-70">${t.id}</div><div class="text-xs truncate px-1" title="${t.name}">${t.name}</div><div class="text-xl font-bold">${pct.toFixed(0)}%</div></div>`;
+                });
+                hCont.innerHTML = hHTML;
+            }
 
-            if(chartInstances.dist) chartInstances.dist.destroy();
-            let bins=new Array(10).fill(0); scores.forEach(s=>{let idx=Math.floor((s/totalPaperMark)*10);if(idx>=10)idx=9;bins[idx]++;});
-            chartInstances.dist=new Chart(document.getElementById('distChart'),{type:'bar',data:{labels:['0-10%','11-20%','21-30%','31-40%','41-50%','51-60%','61-70%','71-80%','81-90%','91-100%'],datasets:[{label:'人數',data:bins,backgroundColor:'#60a5fa',borderRadius:4}]},options:{maintainAspectRatio:false}});
+            const ctxDist = document.getElementById('distChart');
+            if (ctxDist) {
+                if(chartInstances.dist) chartInstances.dist.destroy();
+                let bins=new Array(10).fill(0); scores.forEach(s=>{let idx=Math.floor((s/totalPaperMark)*10);if(idx>=10)idx=9;bins[idx]++;});
+                chartInstances.dist=new Chart(ctxDist,{type:'bar',data:{labels:['0-10%','11-20%','21-30%','31-40%','41-50%','51-60%','61-70%','71-80%','81-90%','91-100%'],datasets:[{label:'人數',data:bins,backgroundColor:'#60a5fa',borderRadius:4}]},options:{maintainAspectRatio:false}});
+            }
 
-            if(chartInstances.diff) chartInstances.diff.destroy();
-            let dL=['Low','Medium','High'];
-            chartInstances.diff=new Chart(document.getElementById('difficultyChart'),{type:'bar',data:{labels:dL,datasets:[{label:'得分率%',data:dL.map(d=>diffAgg[d].m?(diffAgg[d].e/diffAgg[d].m)*100:0),backgroundColor:['#86efac','#fde047','#fca5a5'],borderRadius:4}]},options:{maintainAspectRatio:false,scales:{y:{max:100}}}});
+            const ctxDiff = document.getElementById('difficultyChart');
+            if (ctxDiff) {
+                if(chartInstances.diff) chartInstances.diff.destroy();
+                let dL=['Low','Medium','High'];
+                chartInstances.diff=new Chart(ctxDiff,{type:'bar',data:{labels:dL,datasets:[{label:'得分率%',data:dL.map(d=>diffAgg[d].m?(diffAgg[d].e/diffAgg[d].m)*100:0),backgroundColor:['#86efac','#fde047','#fca5a5'],borderRadius:4}]},options:{maintainAspectRatio:false,scales:{y:{max:100}}}});
+            }
 
             students.sort((a,b)=>b.total-a.total);
             let highG=students.slice(0,Math.ceil(students.length*0.27)), lowG=students.slice(students.length-Math.ceil(students.length*0.27));
@@ -357,30 +488,123 @@
         }
 
         function renderItemTable(f) {
-            const tb=document.getElementById('itemTableBody'); tb.innerHTML='';
+            const tb=document.getElementById('itemTableBody'); 
+            if(!tb) return;
+            tb.innerHTML='';
             analysisCache.forEach(i=>{
                 if((f==='D_LOW'&&i.d>=0.2)||(f==='P_LOW'&&i.p>=0.3)) return;
                 let b=i.Difficulty==='High'?'bg-red-100':(i.Difficulty==='Medium'?'bg-yellow-100':'bg-green-100');
+                
+                let dClass = 'text-gray-900';
+                if(i.d > 0.4) dClass = 'text-green-600 font-bold';
+                else if(i.d < 0.2) dClass = 'text-red-600 font-bold';
+
                 let ev=[]; if(i.p<0.3)ev.push("難"); if(i.d<0.2)ev.push("鑑別低");
-                tb.innerHTML+=`<tr class="hover:bg-gray-50"><td class="table-cell font-bold">${i.id}</td><td class="table-cell text-xs">${i.Topic_ID}</td><td class="table-cell"><span class="px-2 rounded text-xs ${b}">${i.Difficulty}</span></td><td class="table-cell">${(i.p*100).toFixed(0)}%</td><td class="table-cell">${i.d.toFixed(2)}</td><td class="table-cell text-xs">${ev.join(', ')}</td></tr>`;
+                
+                tb.innerHTML+=`<tr class="hover:bg-gray-50"><td class="table-cell font-bold">${i.id}</td><td class="table-cell text-xs">${i.Topic_ID}</td><td class="table-cell"><span class="px-2 rounded text-xs ${b}">${i.Difficulty}</span></td><td class="table-cell">${(i.p*100).toFixed(0)}%</td><td class="table-cell ${dClass}">${i.d.toFixed(2)}</td><td class="table-cell text-xs">${ev.join(', ')}</td></tr>`;
             });
         }
-        document.getElementById('item-filter').addEventListener('change',(e)=>renderItemTable(e.target.value));
+        safeListen('item-filter', 'change',(e)=>renderItemTable(e.target.value));
 
-        // --- REPORT GEN ---
-        document.getElementById('generate-btn').addEventListener('click', async()=>{
+        // --- SUMMARY REPORT GENERATION ---
+        safeListen('gen-summary-btn', 'click', async () => {
+            const schoolName = document.getElementById('school-name').value || "嗇色園主辦可譽中學暨小學";
+            const subjectName = document.getElementById('subject-name').value || "綜合科學科";
+            const examInfo = document.getElementById('exam-info').value || "（未填寫考試年份）";
+            
+            document.getElementById('summary-preview-area').innerHTML = `<div class="card p-6"><p class="animate-pulse text-gray-600"><i class="fas fa-spinner fa-spin mr-2"></i>AI 正在撰寫綜合報告...</p></div>`;
+            
+            const stats = {
+                school_name: schoolName,
+                subject: subjectName,
+                mean: document.getElementById('stat-mean').textContent,
+                pass_rate: document.getElementById('stat-pass').textContent,
+                max: document.getElementById('stat-max').textContent,
+                min: document.getElementById('stat-min').textContent,
+                sd: document.getElementById('stat-sd').textContent,
+                full_mark: totalPaperMark
+            };
+
+            if(!analysisCache) { alert("請先載入數據"); return; }
+            let tAgg = {};
+            marksheetData.forEach(row => {
+                if(!row[colMap.name]) return;
+                Object.keys(questionMap).forEach(qId => {
+                    if(row[qId]) {
+                        let sc = parseFloat(row[qId])||0, info=questionMap[qId];
+                        if(!tAgg[info.Topic_Name]) tAgg[info.Topic_Name] = {e:0, m:0};
+                        tAgg[info.Topic_Name].e+=sc; tAgg[info.Topic_Name].m+=info.fullMark;
+                    }
+                });
+            });
+            let sortedTopics = Object.keys(tAgg).map(k=>({name:k, pct: tAgg[k].m?tAgg[k].e/tAgg[k].m:0})).sort((a,b)=>b.pct-a.pct);
+            stats.top_topics = sortedTopics.slice(0,3).map(t=>`${t.name} (${(t.pct*100).toFixed(0)}%)`).join(', ');
+            stats.bottom_topics = sortedTopics.slice(-3).map(t=>`${t.name} (${(t.pct*100).toFixed(0)}%)`).join(', ');
+
+            let flagged = analysisCache.filter(i => i.d < 0.2 || i.p < 0.3).map(i => `${i.id} (P:${(i.p*100).toFixed(0)}%, D:${i.d.toFixed(2)})`).join(', ');
+            stats.flagged_questions = flagged || "無明顯異常題目";
+
+            let prompt = SUMMARY_PROMPT.replace('{{school_name}}', stats.school_name)
+                                       .replace('{{subject}}', stats.subject)
+                                       .replace(/{{subject}}/g, stats.subject) // Replace multiple occurrences
+                                       .replace('{{exam_info}}', examInfo)
+                                       .replace('{{mean}}', stats.mean).replace('{{full_mark}}', stats.full_mark)
+                                       .replace('{{pass_rate}}', stats.pass_rate)
+                                       .replace('{{max}}', stats.max).replace('{{min}}', stats.min).replace('{{sd}}', stats.sd)
+                                       .replace('{{top_topics}}', stats.top_topics)
+                                       .replace('{{bottom_topics}}', stats.bottom_topics)
+                                       .replace('{{flagged_questions}}', stats.flagged_questions);
+
+            try {
+                let md = await callAI(prompt);
+                let html = `
+                <div class="report-page-style preview-wrapper bg-white">
+                    <div class="text-center border-b-2 border-gray-800 pb-4 mb-6">
+                        <h1 class="text-3xl font-bold text-gray-900">${schoolName}</h1>
+                        <h2 class="text-xl text-gray-700 mt-2">考試成績與教學檢討報告</h2>
+                        <div class="text-sm text-gray-500 mt-2">
+                            <p><strong>科目：</strong>${subjectName}</p>
+                            <p><strong>考試年份及級別：</strong>${examInfo}</p>
+                            <p><strong>日期：</strong>${new Date().toLocaleDateString()}</p>
+                        </div>
+                    </div>
+                    <div class="markdown-body text-sm">${marked.parse(md)}</div>
+                    <div class="mt-12 flex justify-between px-10">
+                        <div>科主任簽署: _________________</div>
+                        <div>校長簽署: _________________</div>
+                    </div>
+                </div>`;
+                document.getElementById('summary-preview-area').innerHTML = html;
+                document.getElementById('dl-summary-btn').disabled = false;
+                document.getElementById('print-container').innerHTML = html;
+            } catch(e) {
+                console.error(e);
+                showErrorModal(e, 'summary-preview-area');
+            }
+        });
+
+        safeListen('dl-summary-btn', 'click', () => {
+            let c = document.getElementById('summary-preview-area').innerHTML;
+            const h=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Summary Report</title><script src="https://cdn.tailwindcss.com"><\/script><style>@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC&display=swap');body{font-family:'Noto Sans TC',sans-serif;padding:20px;background:#f3f4f6;}.report-page-style{width:210mm;min-height:297mm;padding:20mm;background:white;margin:0 auto;box-shadow:0 4px 6px rgba(0,0,0,0.1);}h1{font-size:1.8em;font-weight:bold;margin-bottom:0.5em;}h2{font-size:1.4em;font-weight:bold;margin-top:1em;color:#2563eb;}ul{padding-left:1.5em;list-style:disc;}p{margin-bottom:0.8em;line-height:1.6;}</style></head><body>${c}</body></html>`;
+            const b=new Blob([h],{type:'text/html'}), u=URL.createObjectURL(b), a=document.createElement('a');
+            a.href=u; a.download=`Summary_Report_${new Date().toISOString().slice(0,10)}.html`; document.body.appendChild(a); a.click();
+            setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(u);},100);
+        });
+
+        // --- STUDENT REPORT GEN ---
+        safeListen('generate-btn', 'click', async()=>{
             const v=document.getElementById('student-select').value;
             if(!v) return alert("請選擇");
             document.getElementById('print-container').innerHTML=''; document.getElementById('report-preview-area').innerHTML='';
             document.getElementById('print-btn').disabled=true; document.getElementById('download-btn').disabled=true;
             if(v==='ALL') await batchGen(); else await singleGen(parseInt(v));
         });
-        document.getElementById('clear-btn').addEventListener('click',()=>{
+        safeListen('clear-btn', 'click',()=>{
             document.getElementById('print-container').innerHTML=''; document.getElementById('report-preview-area').innerHTML='';
             document.getElementById('print-btn').disabled=true; document.getElementById('download-btn').disabled=true;
         });
 
-        document.getElementById('download-btn').addEventListener('click',()=>{
+        safeListen('download-btn', 'click',()=>{
             let c=document.getElementById('print-container').innerHTML;
             if(!c.trim()) return;
             c = c.replace(/<img[^>]*>/g, "");
@@ -393,10 +617,8 @@
         async function batchGen(){
             let validIndices = [];
             marksheetData.forEach((r, i) => { if(r[colMap.name]) validIndices.push(i); });
-            
             let pb=document.getElementById('progress-bar'), pc=document.getElementById('progress-count');
             document.getElementById('batch-progress').classList.remove('hidden'); document.getElementById('generate-btn').disabled=true;
-            
             for(let i=0; i<validIndices.length; i++){
                 let originalIndex = validIndices[i];
                 pb.style.width=Math.round(((i+1)/validIndices.length)*100)+'%'; 
@@ -411,24 +633,20 @@
 
         async function singleGen(idx,app=false){
             let row=marksheetData[idx], an=analyzeStudent(row), rid=`rep-${idx}-${Date.now()}`;
-            // Use resolved columns
             let sName = row[colMap.name] || "未知";
             let sClass = row[colMap.class] || "";
+            let selectedLang = document.getElementById('report-language').value;
             
             let ph=`<div id="${rid}" class="card mb-4 border-l-4 border-gray-400 p-4"><p class="animate-pulse">正在生成 ${sName}...</p></div>`;
             if(!app) document.getElementById('report-preview-area').innerHTML=ph; else document.getElementById('report-preview-area').insertAdjacentHTML('beforeend',ph);
             try {
-                let txt=await callAI(buildPrompt(sName,an));
-                // Fallback splitting logic
+                let txt=await callAI(buildPrompt(sName, an, selectedLang));
                 let p1, p2;
                 if(txt.includes('---PAGE_BREAK---')) {
-                    let parts = txt.split('---PAGE_BREAK---');
-                    p1 = parts[0]; p2 = parts[1];
-                } else if(txt.includes('3. 自我挑戰')) {
-                    let parts = txt.split('3. 自我挑戰');
-                    p1 = parts[0]; p2 = "### 3. 自我挑戰" + parts[1];
+                    let parts = txt.split('---PAGE_BREAK---'); p1 = parts[0]; p2 = parts[1];
+                } else if(txt.includes('3. ')) { 
+                    let parts = txt.split('3. '); p1 = parts[0]; p2 = "3. " + parts[1];
                 } else {
-                    // Force split by length if structure is missing
                     p1 = txt; p2 = "（AI 未產生第二頁內容，請重試）";
                 }
 
@@ -439,53 +657,48 @@
                     ex = p2; ans = "無答案";
                 }
                 
+                const L = {
+                    title: selectedLang==='en' ? 'Science Diagnostic Report' : '科學科診斷報告',
+                    good: selectedLang==='en' ? 'Strengths:' : '👍 較佳：',
+                    bad: selectedLang==='en' ? 'To Improve:' : '💪 需改善：',
+                    challenge: selectedLang==='en' ? 'Self-Challenge' : '🔥 自我挑戰',
+                    answers: selectedLang==='en' ? 'Answers:' : '參考答案:'
+                };
+
                 let h=`
-                <!-- PAGE 1 -->
                 <div class="report-page-style preview-wrapper bg-white">
                     <div class="border-b-2 border-gray-800 pb-4 mb-6 flex justify-between items-end">
-                        <div><h1 class="text-2xl font-bold">科學科診斷報告</h1></div>
-                        <div class="text-right">
-                            <div class="text-3xl font-bold text-blue-800">${an.totalScore} <span class="text-sm text-gray-500">/${totalPaperMark}</span></div>
-                            <div class="font-bold text-lg">${sName} (${sClass})</div>
-                        </div>
+                        <div><h1 class="text-2xl font-bold">${L.title}</h1></div>
+                        <div class="text-right"><div class="text-3xl font-bold text-blue-800">${an.totalScore} <span class="text-sm text-gray-500">/${totalPaperMark}</span></div><div class="font-bold text-lg">${sName} (${sClass})</div></div>
                     </div>
                     <div class="grid grid-cols-2 gap-4 mb-6 text-sm bg-gray-50 p-4 rounded">
-                        <div><span class="font-bold text-green-700">👍 較佳：</span> ${an.good.join(', ')||'-'}</div>
-                        <div><span class="font-bold text-red-700">💪 需改善：</span> ${an.bad.join(', ')||'-'}</div>
+                        <div><span class="font-bold text-green-700">${L.good}</span> ${an.good.join(', ')||'-'}</div>
+                        <div><span class="font-bold text-red-700">${L.bad}</span> ${an.bad.join(', ')||'-'}</div>
                     </div>
                     <div class="markdown-body text-sm">${marked.parse(p1)}</div>
                 </div>
                 
-                <!-- PAGE 2 -->
                 <div class="report-page-style preview-wrapper bg-white">
-                    <div class="border-b pb-2 mb-6"><h2 class="text-xl font-bold text-indigo-800">🔥 自我挑戰</h2></div>
+                    <div class="border-b pb-2 mb-6"><h2 class="text-xl font-bold text-indigo-800">${L.challenge}</h2></div>
                     <div class="markdown-body text-sm">${marked.parse(ex)}</div>
                     <div class="page-footer">
-                        <p class="font-bold mb-1">參考答案:</p>
+                        <p class="font-bold mb-1">${L.answers}</p>
                         <div class="text-xs bg-gray-100 p-2 rounded inline-block transform rotate-180 origin-center">${marked.parse(ans)}</div>
                     </div>
                 </div>`;
                 
-                // Direct Append to Print Container (No Wrapper)
-                let tempDiv = document.createElement('div');
-                tempDiv.innerHTML = h;
-                // Move children one by one to avoid wrapper div
-                while(tempDiv.firstChild) {
-                    document.getElementById('print-container').appendChild(tempDiv.firstChild);
-                }
+                let tempDiv = document.createElement('div'); tempDiv.innerHTML = h;
+                while(tempDiv.firstChild) { document.getElementById('print-container').appendChild(tempDiv.firstChild); }
 
-                // Update Preview (With Wrapper)
                 let w=document.createElement('div'); w.innerHTML=h; document.getElementById(rid).replaceWith(w);
-                
                 document.getElementById('print-btn').disabled=false; document.getElementById('download-btn').disabled=false;
             } catch(e) {
-                console.error(e);
-                showErrorModal(e, rid);
+                console.error(e); showErrorModal(e, rid);
                 let el = document.getElementById(rid); if(el) el.innerHTML = `<div class="text-red-500 p-2">生成失敗</div>`;
             }
         }
 
-        // --- NEW ERROR HANDLING MODAL ---
+        // --- MODAL ---
         function showErrorModal(e, id) {
             const modal = document.getElementById('error-modal');
             const content = document.getElementById('error-log-content');
@@ -501,17 +714,20 @@
 
         function analyzeStudent(r){
             let t=0,w=[],b={},g={};
-            Object.keys(questionMap).forEach(q=>{if(r[q]){let s=parseFloat(r[q])||0,i=questionMap[q];t+=s;if(s<i.fullMark*0.5){w.push(i.Topic_Name);b[i.Topic_Name]=(b[i.Topic_Name]||0)+1}else if(s===i.fullMark)g[i.Topic_Name]=(g[i.Topic_Name]||0)+1}});
+            Object.keys(questionMap).forEach(q=>{if(r[q]){let s=parseFloat(r[q])||0,i=questionMap[q];t+=s;if(s<i.fullMark*0.5){w.push(i.Concept_Detail || i.Topic_Name);b[i.Topic_Name]=(b[i.Topic_Name]||0)+1}else if(s===i.fullMark)g[i.Topic_Name]=(g[i.Topic_Name]||0)+1}});
             return {totalScore:t,wrong:[...new Set(w)].slice(0,8),bad:Object.keys(b).sort((x,y)=>b[y]-b[x]).slice(0,3),good:Object.keys(g).sort((x,y)=>g[y]-g[x]).slice(0,3)};
         }
 
-        function buildPrompt(n,d){
-            return `你是科學老師。為學生 ${n} 寫兩頁報告。弱項：${d.bad.join(', ')}。錯題概念：${d.wrong.join(', ')}。請輸出：
-            1. **整體回顧** 2. **概念重溫** (解釋2個概念,用比喻,嚴禁圖片)
-            ---PAGE_BREAK---
-            3. **自我挑戰** (3條選擇題,純文字,嚴禁圖片)
-            ---ANSWERS---
-            (答案)`;
+        function buildPrompt(n,d, lang) {
+            let tpl = document.getElementById('prompt-template').value;
+            const L = {
+                zh: { inst: "請用繁體中文撰寫。", sec1: "整體表現回顧", sec2: "重點概念重溫", sec3: "自我挑戰" },
+                en: { inst: "Please write in English.", sec1: "Overall Performance Review", sec2: "Key Concept Review", sec3: "Self-Challenge" }
+            };
+            const LC = L[lang] || L['zh'];
+            return tpl.replace('{{student_name}}', n).replace('{{total_score}}', d.totalScore).replace('{{full_mark}}', totalPaperMark)
+                      .replace('{{weaknesses}}', d.bad.join(', ')).replace('{{wrong_concepts}}', d.wrong.join(', ')).replace('{{strengths}}', d.good.join(', '))
+                      .replace('{{language_instruction}}', LC.inst).replace('{{section_1_title}}', LC.sec1).replace('{{section_2_title}}', LC.sec2).replace('{{section_3_title}}', LC.sec3);
         }
 
         async function callAI(p){
@@ -523,7 +739,6 @@
                 let d=await r.json(); return d.candidates[0].content.parts[0].text;
             }else{
                 let u=document.getElementById('ds-url').value.replace(/\/$/,""), k=document.getElementById('ds-key').value, m=document.getElementById('ds-model').value, auto=document.getElementById('ds-auto-path').checked;
-                
                 const doFetch = async (url) => {
                     console.log("Attempting:", url);
                     return fetch(url, {
@@ -532,7 +747,6 @@
                         body: JSON.stringify({ model: m, messages: [{ role: "user", content: p }], temperature: 0.7 })
                     });
                 };
-
                 let urlRaw = u;
                 let urlStandard = u.includes('/chat/completions') ? u : u + '/chat/completions';
                 let firstUrl = auto ? urlStandard : urlRaw;
@@ -542,19 +756,14 @@
                 try {
                     let res = await doFetch(firstUrl);
                     if (res.ok) { let d = await res.json(); return d.choices[0].message.content; }
-                    
                     if (res.status === 404 && secondUrl) {
-                        console.log("404 on first, trying:", secondUrl);
                         let res2 = await doFetch(secondUrl);
                         if (res2.ok) { let d = await res2.json(); return d.choices[0].message.content; }
                     }
-                    
                     let txt = await res.text().catch(()=>"");
                     throw new Error(`API Error ${res.status}: ${txt}`);
-
                 } catch (e) {
                     if ((e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) && secondUrl) {
-                        console.log("Network Error on first, trying:", secondUrl);
                         try {
                             let res2 = await doFetch(secondUrl);
                             if (res2.ok) { let d = await res2.json(); return d.choices[0].message.content; }
