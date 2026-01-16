@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>綜合科學科 - 試卷分析及AI報告系統 (Pro v12)</title>
+    <title>綜合科學科 - 試卷分析及AI報告系統 (Pro v13)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -33,21 +33,56 @@
         .markdown-body p { margin-bottom: 0.8em; line-height: 1.6; }
         .markdown-body blockquote { border-left: 4px solid #e5e7eb; padding-left: 1em; color: #4b5563; font-style: italic; background-color: #f9fafb; padding: 0.5rem; }
 
-        /* Report & Print */
+        /* Report Styles (Shared) */
         .report-page-style {
-            width: 210mm; min-height: 296mm; padding: 20mm; background: white;
-            position: relative; overflow: hidden; font-size: 11pt; margin: 0 auto; box-sizing: border-box;
+            width: 210mm; 
+            min-height: 296mm; 
+            padding: 20mm; 
+            background: white;
+            position: relative; 
+            overflow: hidden; 
+            font-size: 11pt; 
+            margin: 0 auto; 
+            box-sizing: border-box;
         }
         .page-footer { margin-top: 40px; padding-top: 10px; border-top: 1px dashed #ccc; font-size: 10pt; color: #666; page-break-inside: avoid; }
-        #report-preview-area { display: flex; flex-direction: column; align-items: center; gap: 30px; padding-bottom: 50px; }
-        .preview-wrapper { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); border: 1px solid #e5e7eb; }
+
+        /* Preview Mode (Screen) */
+        #report-preview-area { display: flex; flex-direction: column; align-items: center; gap: 40px; padding-bottom: 50px; }
+        .preview-wrapper { 
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); 
+            border: 1px solid #e5e7eb; 
+            margin-bottom: 20px; /* Visual separation in preview */
+        }
+
+        /* Print Mode (Printer) - STRICT PAGINATION */
         #print-container { display: none; }
         @media print {
             @page { size: A4 portrait; margin: 0; }
             body { background: white; -webkit-print-color-adjust: exact; }
+            
             #app-container, nav, .no-print, #error-modal { display: none !important; }
-            #print-container { display: block !important; position: absolute; top: 0; left: 0; width: 100%; }
-            .report-page-style { height: 296mm; page-break-after: always; margin: 0; box-shadow: none; border: none; }
+            
+            #print-container { 
+                display: block !important; 
+                position: absolute; 
+                top: 0; 
+                left: 0; 
+                width: 100%; 
+            }
+            
+            .report-page-style { 
+                height: 296mm; /* Force A4 Height */
+                width: 210mm;
+                page-break-after: always; /* Legacy */
+                break-after: page; /* Modern */
+                margin: 0; 
+                box-shadow: none; 
+                border: none; 
+                overflow: hidden;
+            }
+            
+            /* Ensure the footer sticks to bottom of the printable area */
             .page-footer { position: absolute; bottom: 20mm; left: 20mm; right: 20mm; }
         }
 
@@ -63,18 +98,10 @@
             <button onclick="closeModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><i class="fas fa-times text-xl"></i></button>
             <h3 class="text-xl font-bold text-red-600 mb-2"><i class="fas fa-bug mr-2"></i>生成失敗 (Error Report)</h3>
             
-            <div class="bg-gray-100 p-3 rounded text-xs font-mono text-gray-800 overflow-auto max-h-60 mb-4 border border-gray-300" id="error-log-content">
-                Waiting for error...
-            </div>
+            <div class="bg-gray-100 p-3 rounded text-xs font-mono text-gray-800 overflow-auto max-h-60 mb-4 border border-gray-300" id="error-log-content">Waiting...</div>
 
             <div id="cors-advice" class="hidden mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
-                <strong>💡 連線診斷：</strong><br>
-                系統已嘗試了「含 chat/completions」和「原始網址」兩種路徑，但都被拒絕。<br>
-                這通常是因為 <strong>Proxy 不支援瀏覽器直接連線 (CORS)</strong>。<br>
-                建議：<br>
-                1. 檢查 API URL 是否有誤。<br>
-                2. 嘗試使用 Chrome 擴充功能 (如 Allow CORS) 臨時解決。<br>
-                3. 使用官方 Google Gemini Key (最穩定)。
+                <strong>💡 連線診斷：</strong><br>Proxy 連線被拒。建議使用官方 Key 或檢查網址。
             </div>
 
             <button onclick="copyErrorLog()" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded shadow transition flex items-center justify-center">
@@ -91,7 +118,7 @@
                 <div class="flex items-center justify-between h-16">
                     <div class="flex items-center">
                         <i class="fas fa-microscope text-2xl mr-3"></i>
-                        <span class="font-bold text-xl">綜合科學科 - 試卷分析及AI報告系統 (Pro v12)</span>
+                        <span class="font-bold text-xl">綜合科學科 - 試卷分析及AI報告系統 (Pro v13)</span>
                     </div>
                 </div>
             </div>
@@ -217,12 +244,10 @@
     <div id="print-container"></div>
 
     <script>
-        // --- SETUP MARKED TO BLOCK IMAGES ---
         const renderer = new marked.Renderer();
         renderer.image = function(href, title, text) { return `<span style="color:#999; font-size:0.8em; border:1px dashed #ccc; padding:2px 5px;">[圖片已移除]</span>`; };
         marked.setOptions({ renderer: renderer });
 
-        // --- GLOBAL VARIABLES ---
         let marksheetData=[], mapData=[], questionMap={}, totalPaperMark=0, chartInstances={}, analysisCache=null;
 
         function switchTab(tab) {
@@ -339,20 +364,29 @@
         document.getElementById('download-btn').addEventListener('click',()=>{
             let c=document.getElementById('print-container').innerHTML;
             if(!c.trim()) return;
-            // Remove img tags to prevent offline errors
             c = c.replace(/<img[^>]*>/g, "");
-            const h=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Report</title><script src="https://cdn.tailwindcss.com"><\/script><style>@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC&display=swap');body{font-family:'Noto Sans TC',sans-serif;background:#f3f4f6;padding:20px;}.report-page-style{width:210mm;min-height:296mm;padding:20mm;background:white;margin:0 auto 30px;position:relative;overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.1);border:1px solid #ddd;}.page-footer{margin-top:40px;padding-top:10px;border-top:1px dashed #ccc;color:#666;font-size:10pt;}@media print{body{background:white;padding:0;}.report-page-style{width:100%;height:296mm;margin:0;box-shadow:none;border:none;page-break-after:always;}}h1{font-size:1.6em;color:#1e3a8a;border-bottom:2px solid #ddd;padding-bottom:10px;}h2{font-size:1.3em;color:#2563eb;margin-top:1em;}ul{padding-left:1.5em;list-style:disc;}blockquote{border-left:4px solid #e5e7eb;padding-left:1em;background:#f9fafb;padding:0.5rem;margin:10px 0;}</style></head><body>${c}</body></html>`;
+            const h=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Report</title><script src="https://cdn.tailwindcss.com"><\/script><style>@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC&display=swap');body{font-family:'Noto Sans TC',sans-serif;background:#f3f4f6;padding:20px;}.report-page-style{width:210mm;min-height:296mm;padding:20mm;background:white;margin:0 auto 30px;position:relative;overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.1);border:1px solid #ddd;}.page-footer{margin-top:40px;padding-top:10px;border-top:1px dashed #ccc;color:#666;font-size:10pt;}@media print{body{background:white;padding:0;}.report-page-style{width:210mm;height:296mm;margin:0;box-shadow:none;border:none;break-after:page;page-break-after:always;overflow:hidden;}}h1{font-size:1.6em;color:#1e3a8a;border-bottom:2px solid #ddd;padding-bottom:10px;}h2{font-size:1.3em;color:#2563eb;margin-top:1em;}ul{padding-left:1.5em;list-style:disc;}blockquote{border-left:4px solid #e5e7eb;padding-left:1em;background:#f9fafb;padding:0.5rem;margin:10px 0;}</style></head><body>${c}</body></html>`;
             const b=new Blob([h],{type:'text/html'}), u=URL.createObjectURL(b), a=document.createElement('a');
             a.href=u; a.download=`Reports_${new Date().toISOString().slice(0,10)}.html`; document.body.appendChild(a); a.click();
             setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(u);},100);
         });
 
         async function batchGen(){
-            let l=marksheetData.filter(r=>r.Name), pb=document.getElementById('progress-bar'), pc=document.getElementById('progress-count');
+            // Fix: Use a snapshot of indices to ensure data integrity
+            // Filter only valid students first
+            let validIndices = [];
+            marksheetData.forEach((r, i) => { if(r['Name']) validIndices.push(i); });
+            
+            let pb=document.getElementById('progress-bar'), pc=document.getElementById('progress-count');
             document.getElementById('batch-progress').classList.remove('hidden'); document.getElementById('generate-btn').disabled=true;
-            for(let i=0;i<l.length;i++){
-                pb.style.width=Math.round(((i+1)/l.length)*100)+'%'; pc.textContent=`${i+1}/${l.length}`;
-                await singleGen(marksheetData.indexOf(l[i]),true); await new Promise(r=>setTimeout(r,2000));
+            
+            for(let i=0; i<validIndices.length; i++){
+                let originalIndex = validIndices[i];
+                pb.style.width=Math.round(((i+1)/validIndices.length)*100)+'%'; 
+                pc.textContent=`${i+1}/${validIndices.length}`;
+                // Pass true for append
+                await singleGen(originalIndex, true); 
+                await new Promise(r=>setTimeout(r,2000));
             }
             document.getElementById('batch-progress').classList.add('hidden'); document.getElementById('generate-btn').disabled=false;
             document.getElementById('print-btn').disabled=false; document.getElementById('download-btn').disabled=false;
@@ -361,24 +395,54 @@
 
         async function singleGen(idx,app=false){
             let row=marksheetData[idx], an=analyzeStudent(row), rid=`rep-${idx}-${Date.now()}`;
-            let ph=`<div id="${rid}" class="card mb-4 border-l-4 border-gray-400 p-4"><p class="animate-pulse">正在生成 ${row.Name}...</p></div>`;
+            // Use bracket notation to safely access keys from CSV (Name, Class)
+            let sName = row['Name'] || "未知姓名";
+            let sClass = row['Class'] || "";
+            
+            let ph=`<div id="${rid}" class="card mb-4 border-l-4 border-gray-400 p-4"><p class="animate-pulse">正在生成 ${sName}...</p></div>`;
             if(!app) document.getElementById('report-preview-area').innerHTML=ph; else document.getElementById('report-preview-area').insertAdjacentHTML('beforeend',ph);
             try {
-                let txt=await callAI(buildPrompt(row.Name,an));
+                let txt=await callAI(buildPrompt(sName,an));
                 let p1=txt.split('---PAGE_BREAK---')[0], p2=txt.split('---PAGE_BREAK---')[1]||"", ex=p2.split('---ANSWERS---')[0]||"", ans=p2.split('---ANSWERS---')[1]||"";
-                let h=`<div class="report-page-style preview-wrapper bg-white"><div class="border-b-2 border-gray-800 pb-4 mb-6 flex justify-between items-end"><div><h1 class="text-2xl font-bold">科學科診斷報告</h1></div><div class="text-right"><div class="text-3xl font-bold text-blue-800">${an.totalScore} <span class="text-sm text-gray-500">/${totalPaperMark}</span></div><div class="font-bold">${row.Name}</div></div></div><div class="grid grid-cols-2 gap-4 mb-6 text-sm bg-gray-50 p-4 rounded"><div><span class="font-bold text-green-700">👍 較佳：</span> ${an.good.join(', ')||'-'}</div><div><span class="font-bold text-red-700">💪 需改善：</span> ${an.bad.join(', ')||'-'}</div></div><div class="markdown-body text-sm">${marked.parse(p1)}</div></div>
-                <div class="report-page-style preview-wrapper bg-white"><div class="border-b pb-2 mb-6"><h2 class="text-xl font-bold text-indigo-800">🔥 自我挑戰</h2></div><div class="markdown-body text-sm">${marked.parse(ex)}</div><div class="page-footer"><p class="font-bold mb-1">參考答案:</p><div class="text-xs bg-gray-100 p-2 rounded inline-block transform rotate-180">${marked.parse(ans)}</div></div></div>`;
+                
+                let h=`
+                <!-- PAGE 1 -->
+                <div class="report-page-style preview-wrapper bg-white">
+                    <div class="border-b-2 border-gray-800 pb-4 mb-6 flex justify-between items-end">
+                        <div><h1 class="text-2xl font-bold">科學科診斷報告</h1></div>
+                        <div class="text-right">
+                            <div class="text-3xl font-bold text-blue-800">${an.totalScore} <span class="text-sm text-gray-500">/${totalPaperMark}</span></div>
+                            <div class="font-bold text-lg">${sName} (${sClass})</div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4 mb-6 text-sm bg-gray-50 p-4 rounded">
+                        <div><span class="font-bold text-green-700">👍 較佳：</span> ${an.good.join(', ')||'-'}</div>
+                        <div><span class="font-bold text-red-700">💪 需改善：</span> ${an.bad.join(', ')||'-'}</div>
+                    </div>
+                    <div class="markdown-body text-sm">${marked.parse(p1)}</div>
+                </div>
+                
+                <!-- PAGE 2 -->
+                <div class="report-page-style preview-wrapper bg-white">
+                    <div class="border-b pb-2 mb-6"><h2 class="text-xl font-bold text-indigo-800">🔥 自我挑戰</h2></div>
+                    <div class="markdown-body text-sm">${marked.parse(ex)}</div>
+                    <div class="page-footer">
+                        <p class="font-bold mb-1">參考答案:</p>
+                        <div class="text-xs bg-gray-100 p-2 rounded inline-block transform rotate-180 origin-center">${marked.parse(ans)}</div>
+                    </div>
+                </div>`;
+                
+                // Add to Print Container
                 let d=document.createElement('div'); d.innerHTML=h; document.getElementById('print-container').appendChild(d);
+                // Update Preview
                 let w=document.createElement('div'); w.innerHTML=h; document.getElementById(rid).replaceWith(w);
+                
                 document.getElementById('print-btn').disabled=false; document.getElementById('download-btn').disabled=false;
             } catch(e) {
                 console.error(e);
-                // Remove placeholder
-                let el = document.getElementById(rid);
-                if(el) el.remove();
-                
-                // Show Global Modal
                 showErrorModal(e, rid);
+                // Remove placeholder on error so it doesn't stuck
+                let el = document.getElementById(rid); if(el) el.innerHTML = `<div class="text-red-500 p-2">生成失敗</div>`;
             }
         }
 
@@ -394,27 +458,12 @@
                 logText += `Status: ${e.data.status}\n`;
                 logText += `Response: ${e.data.msg}\n`;
             }
-            
             content.textContent = logText;
-            
-            // Check for Network Error (CORS)
-            if(e.message.includes('Network Error') || e.message.includes('Failed to fetch')) {
-                corsAdvice.classList.remove('hidden');
-            } else {
-                corsAdvice.classList.add('hidden');
-            }
-            
+            if(e.message.includes('Network Error') || e.message.includes('Failed to fetch')) { corsAdvice.classList.remove('hidden'); } else { corsAdvice.classList.add('hidden'); }
             modal.classList.remove('hidden');
         }
-
-        function closeModal() {
-            document.getElementById('error-modal').classList.add('hidden');
-        }
-
-        function copyErrorLog() {
-            const text = document.getElementById('error-log-content').textContent;
-            navigator.clipboard.writeText(text).then(() => alert("已複製到剪貼簿"));
-        }
+        function closeModal() { document.getElementById('error-modal').classList.add('hidden'); }
+        function copyErrorLog() { navigator.clipboard.writeText(document.getElementById('error-log-content').textContent).then(() => alert("已複製")); }
 
         function analyzeStudent(r){
             let t=0,w=[],b={},g={};
@@ -441,7 +490,6 @@
             }else{
                 let u=document.getElementById('ds-url').value.replace(/\/$/,""), k=document.getElementById('ds-key').value, m=document.getElementById('ds-model').value, auto=document.getElementById('ds-auto-path').checked;
                 
-                // Smart Helper to fetch
                 const doFetch = async (url) => {
                     console.log("Attempting:", url);
                     return fetch(url, {
@@ -451,61 +499,40 @@
                     });
                 };
 
-                // Define candidate URLs
-                // 1. Raw URL provided by user
                 let urlRaw = u;
-                // 2. Standard OpenAI format
                 let urlStandard = u.includes('/chat/completions') ? u : u + '/chat/completions';
-
-                // Decide order based on checkbox
                 let firstUrl = auto ? urlStandard : urlRaw;
                 let secondUrl = auto ? urlRaw : urlStandard;
-                
-                // If they are identical (user typed full path and checked auto), just try once
                 if(urlRaw === urlStandard) secondUrl = null;
-
-                let lastError = null;
 
                 try {
                     let res = await doFetch(firstUrl);
                     if (res.ok) { let d = await res.json(); return d.choices[0].message.content; }
                     
-                    // If 404, try second
                     if (res.status === 404 && secondUrl) {
                         console.log("404 on first, trying:", secondUrl);
                         let res2 = await doFetch(secondUrl);
                         if (res2.ok) { let d = await res2.json(); return d.choices[0].message.content; }
                     }
                     
-                    // If we are here, main failed. Throw.
                     let txt = await res.text().catch(()=>"");
                     throw new Error(`API Error ${res.status}: ${txt}`);
 
                 } catch (e) {
-                    lastError = e;
-                    // If Network Error (Failed to fetch), try second URL if available
                     if ((e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) && secondUrl) {
                         console.log("Network Error on first, trying:", secondUrl);
                         try {
                             let res2 = await doFetch(secondUrl);
                             if (res2.ok) { let d = await res2.json(); return d.choices[0].message.content; }
-                            
-                            // If second also fails with status
                             let txt = await res2.text().catch(()=>"");
                             throw new Error(`API Error ${res2.status}: ${txt}`);
                         } catch (e2) {
-                            // Both failed. Throw original or consolidated error.
-                            // Attach data for the modal
                             let finalErr = new Error(`連線失敗 (雙重路徑測試無效)。\n主要錯誤: ${e.message}`);
                             finalErr.data = { url: firstUrl + " & " + secondUrl, status: "Network Error", msg: e.message + " / " + e2.message };
                             throw finalErr;
                         }
                     }
-                    
-                    // Attach data for modal if missing
-                    if(!e.data) {
-                        e.data = { url: firstUrl, status: "Network Error", msg: e.message };
-                    }
+                    if(!e.data) { e.data = { url: firstUrl, status: "Network Error", msg: e.message }; }
                     throw e;
                 }
             }
