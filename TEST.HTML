@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>綜合科學科 - 試卷分析及AI報告系統 (Pro v12)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f3f4f6; }
+        .card { background: white; border-radius: 0.75rem; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1); padding: 1.5rem; }
+        .table-header { @apply px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50; }
+        .table-cell { @apply px-6 py-4 whitespace-nowrap text-sm text-gray-900; }
+        
+        .nav-card { @apply flex flex-col items-center justify-center p-6 bg-white border-2 border-transparent rounded-xl shadow-sm cursor-pointer transition-all duration-200 hover:shadow-md hover:border-blue-200; }
+        .nav-card.active { @apply border-blue-600 bg-blue-50 text-blue-800 ring-2 ring-blue-200 ring-opacity-50; }
+        .nav-card i { @apply text-3xl mb-2 text-gray-400; }
+        .nav-card.active i { @apply text-blue-600; }
+        .nav-card h3 { @apply font-bold text-lg; }
+        .nav-card p { @apply text-xs text-gray-500 mt-1; }
+
+        .heatmap-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.75rem; }
+        .heatmap-item { @apply p-3 rounded-lg text-center shadow-sm border border-gray-100 flex flex-col justify-center h-24 transition hover:shadow-md transform hover:-translate-y-1; }
+        
+        /* Markdown */
+        .markdown-body h1 { font-size: 1.4em; font-weight: bold; margin-bottom: 0.5em; color: #1e3a8a; }
+        .markdown-body h2 { font-size: 1.2em; font-weight: bold; margin-top: 1em; margin-bottom: 0.5em; color: #2563eb; }
+        .markdown-body ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 1em; }
+        .markdown-body p { margin-bottom: 0.8em; line-height: 1.6; }
+        .markdown-body blockquote { border-left: 4px solid #e5e7eb; padding-left: 1em; color: #4b5563; font-style: italic; background-color: #f9fafb; padding: 0.5rem; }
+
+        /* Report & Print */
+        .report-page-style {
+            width: 210mm; min-height: 296mm; padding: 20mm; background: white;
+            position: relative; overflow: hidden; font-size: 11pt; margin: 0 auto; box-sizing: border-box;
+        }
+        .page-footer { margin-top: 40px; padding-top: 10px; border-top: 1px dashed #ccc; font-size: 10pt; color: #666; page-break-inside: avoid; }
+        #report-preview-area { display: flex; flex-direction: column; align-items: center; gap: 30px; padding-bottom: 50px; }
+        .preview-wrapper { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); border: 1px solid #e5e7eb; }
+        #print-container { display: none; }
+        @media print {
+            @page { size: A4 portrait; margin: 0; }
+            body { background: white; -webkit-print-color-adjust: exact; }
+            #app-container, nav, .no-print, #error-modal { display: none !important; }
+            #print-container { display: block !important; position: absolute; top: 0; left: 0; width: 100%; }
+            .report-page-style { height: 296mm; page-break-after: always; margin: 0; box-shadow: none; border: none; }
+            .page-footer { position: absolute; bottom: 20mm; left: 20mm; right: 20mm; }
+        }
+
+        /* Modal */
+        #error-modal { background: rgba(0,0,0,0.5); }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <!-- Error Modal -->
+    <div id="error-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center">
+        <div class="bg-white rounded-lg shadow-2xl p-6 max-w-lg w-full mx-4 border-l-4 border-red-500 relative animate-fade-in-up">
+            <button onclick="closeModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><i class="fas fa-times text-xl"></i></button>
+            <h3 class="text-xl font-bold text-red-600 mb-2"><i class="fas fa-bug mr-2"></i>生成失敗 (Error Report)</h3>
+            
+            <div class="bg-gray-100 p-3 rounded text-xs font-mono text-gray-800 overflow-auto max-h-60 mb-4 border border-gray-300" id="error-log-content">
+                Waiting for error...
+            </div>
+
+            <div id="cors-advice" class="hidden mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
+                <strong>💡 連線診斷：</strong><br>
+                系統已嘗試了「含 chat/completions」和「原始網址」兩種路徑，但都被拒絕。<br>
+                這通常是因為 <strong>Proxy 不支援瀏覽器直接連線 (CORS)</strong>。<br>
+                建議：<br>
+                1. 檢查 API URL 是否有誤。<br>
+                2. 嘗試使用 Chrome 擴充功能 (如 Allow CORS) 臨時解決。<br>
+                3. 使用官方 Google Gemini Key (最穩定)。
+            </div>
+
+            <button onclick="copyErrorLog()" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded shadow transition flex items-center justify-center">
+                <i class="fas fa-copy mr-2"></i> 複製完整錯誤報告
+            </button>
+        </div>
+    </div>
+
+    <!-- WRAPPER -->
+    <div id="app-container">
+        <!-- Navbar -->
+        <nav class="bg-blue-700 text-white shadow-lg">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-16">
+                    <div class="flex items-center">
+                        <i class="fas fa-microscope text-2xl mr-3"></i>
+                        <span class="font-bold text-xl">綜合科學科 - 試卷分析及AI報告系統 (Pro v12)</span>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            
+            <!-- File Upload -->
+            <div class="card mb-8 animate-fade-in-up border-l-4 border-blue-500">
+                <h2 class="text-lg font-bold text-gray-700 mb-4 pb-2 border-b"><i class="fas fa-file-upload mr-2"></i>1. 資料匯入 (請先上傳 CSV)</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">上傳分數表 (MARKSHEET.csv)</label>
+                        <input id="marksheet-upload" type="file" accept=".csv" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">上傳題目參數表 (MAP.csv)</label>
+                        <input id="map-upload" type="file" accept=".csv" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"/>
+                    </div>
+                </div>
+                <div id="file-status" class="mt-2 text-sm text-gray-400 text-right italic">等待檔案...</div>
+            </div>
+
+            <!-- TABS -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 hidden" id="main-tabs">
+                <div onclick="switchTab('analysis')" class="nav-card active" id="tab-analysis">
+                    <i class="fas fa-chart-pie"></i>
+                    <h3>全班數據分析</h3>
+                    <p>熱點圖、分數分佈、題項篩選</p>
+                </div>
+                <div onclick="switchTab('report')" class="nav-card" id="tab-report">
+                    <i class="fas fa-user-graduate"></i>
+                    <h3>學生 AI 報告</h3>
+                    <p>雙頁格式、批量生成、下載 HTML</p>
+                </div>
+            </div>
+
+            <!-- ANALYSIS VIEW -->
+            <div id="view-analysis" class="hidden space-y-8">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div class="card border-t-4 border-blue-500"><div class="text-gray-500 text-sm">平均分</div><div class="text-3xl font-bold mt-1" id="stat-mean">--</div></div>
+                    <div class="card border-t-4 border-green-500"><div class="text-gray-500 text-sm">及格率</div><div class="text-3xl font-bold mt-1" id="stat-pass">--%</div></div>
+                    <div class="card border-t-4 border-yellow-500"><div class="text-gray-500 text-sm">最高/最低</div><div class="text-3xl font-bold mt-1"><span id="stat-max" class="text-green-600">--</span>/<span id="stat-min" class="text-red-600">--</span></div></div>
+                    <div class="card border-t-4 border-purple-500"><div class="text-gray-500 text-sm">標準差</div><div class="text-3xl font-bold mt-1" id="stat-sd">--</div></div>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div class="card flex flex-col h-full">
+                        <h3 class="text-lg font-bold mb-4"><i class="fas fa-fire-alt text-red-500 mr-2"></i>強弱課題熱點圖</h3>
+                        <div class="flex justify-between text-xs mb-2"><span><span class="w-3 h-3 bg-red-200 inline-block mr-1"></span>弱</span><span><span class="w-3 h-3 bg-green-200 inline-block mr-1"></span>強</span></div>
+                        <div id="heatmap-container" class="heatmap-grid overflow-y-auto max-h-64 p-1 flex-grow"></div>
+                    </div>
+                    <div class="card flex flex-col h-full">
+                        <h3 class="text-lg font-bold mb-4"><i class="fas fa-chart-bar text-blue-500 mr-2"></i>成績分佈</h3>
+                        <div class="relative h-64 w-full"><canvas id="distChart"></canvas></div>
+                    </div>
+                </div>
+                <div class="card">
+                     <h3 class="text-lg font-bold mb-4"><i class="fas fa-tachometer-alt text-yellow-500 mr-2"></i>難度表現分析</h3>
+                    <div class="relative h-48 w-full"><canvas id="difficultyChart"></canvas></div>
+                </div>
+                <div class="card overflow-hidden">
+                    <div class="flex justify-between items-center mb-4 border-b pb-4">
+                        <h3 class="text-lg font-bold"><i class="fas fa-list-ol text-purple-500 mr-2"></i>題項分析</h3>
+                        <select id="item-filter" class="p-1 border rounded text-sm"><option value="ALL">全部</option><option value="D_LOW">鑑別度低</option><option value="P_LOW">題目過難</option></select>
+                    </div>
+                    <div class="overflow-x-auto max-h-96 border rounded-lg">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50"><tr><th class="table-header">題號</th><th class="table-header">課題</th><th class="table-header">難度</th><th class="table-header">P</th><th class="table-header">D</th><th class="table-header">評價</th></tr></thead>
+                            <tbody class="bg-white divide-y divide-gray-200" id="itemTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- REPORT VIEW -->
+            <div id="view-report" class="hidden space-y-8">
+                <div class="card bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-100">
+                    <h3 class="text-md font-bold text-indigo-800 mb-3"><i class="fas fa-robot mr-2"></i>AI 模型設定</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-600 mb-1">模型</label>
+                            <select id="model-provider" class="w-full text-sm border p-2 rounded">
+                                <option value="gemini">Google Gemini</option>
+                                <option value="deepseek" selected>DeepSeek / OpenAI Compatible</option>
+                            </select>
+                        </div>
+                        <div class="md:col-span-2 hidden" id="ds-config">
+                            <div class="grid grid-cols-2 gap-2">
+                                <input id="ds-url" type="text" value="https://apiproxy.k12gpt.ai/NPcj-7_" class="text-xs p-2 border rounded" placeholder="API URL">
+                                <input id="ds-model" type="text" value="deepseek-chat" class="text-xs p-2 border rounded" placeholder="Model">
+                            </div>
+                            <div class="mt-2 flex items-center bg-white p-2 rounded border border-gray-200">
+                                <input type="checkbox" id="ds-auto-path" class="mr-2" checked>
+                                <label for="ds-auto-path" class="text-xs font-bold cursor-pointer select-none">自動補全 /chat/completions (含智能雙重路徑測試)</label>
+                            </div>
+                            <div class="mt-2"><input id="ds-key" type="password" placeholder="API Key (Optional)" class="w-full text-xs p-2 border rounded"></div>
+                        </div>
+                        <div class="md:col-span-2 hidden" id="gemini-config">
+                            <input id="gemini-key" type="password" placeholder="Gemini API Key" class="w-full text-xs p-2 border rounded">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2 class="text-lg font-bold mb-4 border-b pb-2"><i class="fas fa-magic mr-2"></i>生成報告</h2>
+                    <div class="flex flex-col md:flex-row gap-4 items-end">
+                        <div class="flex-grow w-full">
+                            <label class="block text-sm font-medium mb-1">選擇模式</label>
+                            <select id="student-select" class="w-full p-2 border rounded"><option value="">請選擇...</option><option value="ALL">【 🚀 批量生成 】全班</option></select>
+                        </div>
+                        <button id="generate-btn" class="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded shadow"><i class="fas fa-play mr-2"></i>生成</button>
+                        <button onclick="window.print()" id="print-btn" class="w-full md:w-auto bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded shadow" disabled><i class="fas fa-print mr-2"></i>列印/PDF</button>
+                        <button id="download-btn" class="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded shadow" disabled><i class="fas fa-file-download mr-2"></i>下載HTML</button>
+                        <button id="clear-btn" class="w-full md:w-auto bg-red-100 hover:bg-red-200 text-red-700 font-bold py-2 px-4 rounded shadow"><i class="fas fa-trash"></i></button>
+                    </div>
+                    <div id="batch-progress" class="hidden mt-6 bg-gray-50 p-4 rounded border"><div class="flex justify-between text-xs font-bold mb-2"><span id="progress-text">生成中...</span><span id="progress-count">0/0</span></div><div class="w-full bg-gray-200 rounded-full h-3"><div id="progress-bar" class="bg-indigo-600 h-3 rounded-full" style="width:0%"></div></div></div>
+                </div>
+                <div id="report-preview-area" class="w-full"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="print-container"></div>
+
+    <script>
+        // --- SETUP MARKED TO BLOCK IMAGES ---
+        const renderer = new marked.Renderer();
+        renderer.image = function(href, title, text) { return `<span style="color:#999; font-size:0.8em; border:1px dashed #ccc; padding:2px 5px;">[圖片已移除]</span>`; };
+        marked.setOptions({ renderer: renderer });
+
+        // --- GLOBAL VARIABLES ---
+        let marksheetData=[], mapData=[], questionMap={}, totalPaperMark=0, chartInstances={}, analysisCache=null;
+
+        function switchTab(tab) {
+            document.querySelectorAll('.nav-card').forEach(b=>b.classList.remove('active'));
+            document.getElementById(`tab-${tab}`).classList.add('active');
+            document.getElementById('view-analysis').classList.add('hidden');
+            document.getElementById('view-report').classList.add('hidden');
+            document.getElementById(`view-${tab}`).classList.remove('hidden');
+        }
+
+        document.getElementById('model-provider').addEventListener('change', (e)=>{
+            const isDeep = e.target.value === 'deepseek';
+            document.getElementById('ds-config').classList.toggle('hidden', !isDeep);
+            document.getElementById('gemini-config').classList.toggle('hidden', isDeep);
+        });
+
+        function handleFile(file, type) {
+            if(!file) return;
+            Papa.parse(file, {header:true, skipEmptyLines:true, complete:(res)=>{
+                if(type==='marksheet') marksheetData=res.data; else mapData=res.data;
+                if(marksheetData.length && mapData.length) initSystem();
+            }});
+        }
+        document.getElementById('marksheet-upload').addEventListener('change', (e)=>handleFile(e.target.files[0],'marksheet'));
+        document.getElementById('map-upload').addEventListener('change', (e)=>handleFile(e.target.files[0],'map'));
+
+        function initSystem() {
+            document.getElementById('file-status').textContent="✅ 檔案已載入";
+            document.getElementById('main-tabs').classList.remove('hidden');
+            questionMap={}; totalPaperMark=0;
+            mapData.forEach(row=>{
+                if(row.Question_ID) { questionMap[row.Question_ID]={...row, fullMark:parseFloat(row.Full_Mark)||0}; totalPaperMark+=questionMap[row.Question_ID].fullMark; }
+            });
+            generateAnalysis();
+            const sel=document.getElementById('student-select');
+            while(sel.options.length>2) sel.remove(2);
+            marksheetData.forEach((row,i)=>{ if(row.Name) sel.add(new Option(`${row.Class_No||''} ${row.Name}`, i)); });
+            switchTab('analysis');
+        }
+
+        function generateAnalysis() {
+            let students=[], qStats={}, topicAgg={}, diffAgg={Low:{e:0,m:0},Medium:{e:0,m:0},High:{e:0,m:0}};
+            Object.keys(questionMap).forEach(q=>qStats[q]={sum:0,count:0,scores:[]});
+            marksheetData.forEach(row=>{
+                if(!row.Name) return;
+                let sTotal=0, sRow={raw:row};
+                Object.keys(questionMap).forEach(qId=>{
+                    if(row.hasOwnProperty(qId)) {
+                        let sc=parseFloat(row[qId])||0, info=questionMap[qId];
+                        sTotal+=sc; qStats[qId].sum+=sc; qStats[qId].count++;
+                        if(!topicAgg[info.Topic_ID]) topicAgg[info.Topic_ID]={e:0,m:0,name:info.Topic_Name,id:info.Topic_ID};
+                        topicAgg[info.Topic_ID].e+=sc; topicAgg[info.Topic_ID].m+=info.fullMark;
+                        if(diffAgg[info.Difficulty]) { diffAgg[info.Difficulty].e+=sc; diffAgg[info.Difficulty].m+=info.fullMark; }
+                    }
+                });
+                sRow.total=sTotal; students.push(sRow);
+            });
+
+            const scores=students.map(s=>s.total), mean=scores.reduce((a,b)=>a+b,0)/scores.length;
+            document.getElementById('stat-mean').textContent=mean.toFixed(1);
+            document.getElementById('stat-pass').textContent=((scores.filter(s=>s/totalPaperMark>=0.5).length/scores.length)*100).toFixed(1)+"%";
+            document.getElementById('stat-max').textContent=Math.max(...scores); document.getElementById('stat-min').textContent=Math.min(...scores);
+            document.getElementById('stat-sd').textContent=Math.sqrt(scores.reduce((a,b)=>a+Math.pow(b-mean,2),0)/scores.length).toFixed(1);
+
+            const hCont=document.getElementById('heatmap-container'); hCont.innerHTML='';
+            Object.values(topicAgg).sort((a,b)=>a.id.localeCompare(b.id)).forEach(t=>{
+                let pct=t.m?(t.e/t.m)*100:0, hue=Math.max(0,Math.min(120,pct*1.2));
+                hCont.innerHTML+=`<div class="heatmap-item" style="background:hsla(${hue},85%,90%,1);border-color:hsla(${hue},80%,40%,0.5)"><div class="text-xs font-bold opacity-70">${t.id}</div><div class="text-xs truncate px-1" title="${t.name}">${t.name}</div><div class="text-xl font-bold">${pct.toFixed(0)}%</div></div>`;
+            });
+
+            if(chartInstances.dist) chartInstances.dist.destroy();
+            let bins=new Array(10).fill(0); scores.forEach(s=>{let idx=Math.floor((s/totalPaperMark)*10);if(idx>=10)idx=9;bins[idx]++;});
+            chartInstances.dist=new Chart(document.getElementById('distChart'),{type:'bar',data:{labels:['0-10%','11-20%','21-30%','31-40%','41-50%','51-60%','61-70%','71-80%','81-90%','91-100%'],datasets:[{label:'人數',data:bins,backgroundColor:'#60a5fa',borderRadius:4}]},options:{maintainAspectRatio:false}});
+
+            if(chartInstances.diff) chartInstances.diff.destroy();
+            let dL=['Low','Medium','High'];
+            chartInstances.diff=new Chart(document.getElementById('difficultyChart'),{type:'bar',data:{labels:dL,datasets:[{label:'得分率%',data:dL.map(d=>diffAgg[d].m?(diffAgg[d].e/diffAgg[d].m)*100:0),backgroundColor:['#86efac','#fde047','#fca5a5'],borderRadius:4}]},options:{maintainAspectRatio:false,scales:{y:{max:100}}}});
+
+            students.sort((a,b)=>b.total-a.total);
+            let highG=students.slice(0,Math.ceil(students.length*0.27)), lowG=students.slice(students.length-Math.ceil(students.length*0.27));
+            let items=[];
+            Object.keys(questionMap).forEach(qId=>{
+                let info=questionMap[qId], p=(qStats[qId].sum/qStats[qId].count)/info.fullMark;
+                let d=(highG.reduce((s,x)=>s+(parseFloat(x.raw[qId])||0),0)/highG.length - lowG.reduce((s,x)=>s+(parseFloat(x.raw[qId])||0),0)/lowG.length)/info.fullMark;
+                items.push({id:qId,...info,p,d});
+            });
+            analysisCache=items; renderItemTable('ALL');
+        }
+
+        function renderItemTable(f) {
+            const tb=document.getElementById('itemTableBody'); tb.innerHTML='';
+            analysisCache.forEach(i=>{
+                if((f==='D_LOW'&&i.d>=0.2)||(f==='P_LOW'&&i.p>=0.3)) return;
+                let b=i.Difficulty==='High'?'bg-red-100':(i.Difficulty==='Medium'?'bg-yellow-100':'bg-green-100');
+                let ev=[]; if(i.p<0.3)ev.push("難"); if(i.d<0.2)ev.push("鑑別低");
+                tb.innerHTML+=`<tr class="hover:bg-gray-50"><td class="table-cell font-bold">${i.id}</td><td class="table-cell text-xs">${i.Topic_ID}</td><td class="table-cell"><span class="px-2 rounded text-xs ${b}">${i.Difficulty}</span></td><td class="table-cell">${(i.p*100).toFixed(0)}%</td><td class="table-cell">${i.d.toFixed(2)}</td><td class="table-cell text-xs">${ev.join(', ')}</td></tr>`;
+            });
+        }
+        document.getElementById('item-filter').addEventListener('change',(e)=>renderItemTable(e.target.value));
+
+        // --- REPORT GEN ---
+        document.getElementById('generate-btn').addEventListener('click', async()=>{
+            const v=document.getElementById('student-select').value;
+            if(!v) return alert("請選擇");
+            document.getElementById('print-container').innerHTML=''; document.getElementById('report-preview-area').innerHTML='';
+            document.getElementById('print-btn').disabled=true; document.getElementById('download-btn').disabled=true;
+            if(v==='ALL') await batchGen(); else await singleGen(parseInt(v));
+        });
+        document.getElementById('clear-btn').addEventListener('click',()=>{
+            document.getElementById('print-container').innerHTML=''; document.getElementById('report-preview-area').innerHTML='';
+            document.getElementById('print-btn').disabled=true; document.getElementById('download-btn').disabled=true;
+        });
+
+        document.getElementById('download-btn').addEventListener('click',()=>{
+            let c=document.getElementById('print-container').innerHTML;
+            if(!c.trim()) return;
+            // Remove img tags to prevent offline errors
+            c = c.replace(/<img[^>]*>/g, "");
+            const h=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Report</title><script src="https://cdn.tailwindcss.com"><\/script><style>@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC&display=swap');body{font-family:'Noto Sans TC',sans-serif;background:#f3f4f6;padding:20px;}.report-page-style{width:210mm;min-height:296mm;padding:20mm;background:white;margin:0 auto 30px;position:relative;overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.1);border:1px solid #ddd;}.page-footer{margin-top:40px;padding-top:10px;border-top:1px dashed #ccc;color:#666;font-size:10pt;}@media print{body{background:white;padding:0;}.report-page-style{width:100%;height:296mm;margin:0;box-shadow:none;border:none;page-break-after:always;}}h1{font-size:1.6em;color:#1e3a8a;border-bottom:2px solid #ddd;padding-bottom:10px;}h2{font-size:1.3em;color:#2563eb;margin-top:1em;}ul{padding-left:1.5em;list-style:disc;}blockquote{border-left:4px solid #e5e7eb;padding-left:1em;background:#f9fafb;padding:0.5rem;margin:10px 0;}</style></head><body>${c}</body></html>`;
+            const b=new Blob([h],{type:'text/html'}), u=URL.createObjectURL(b), a=document.createElement('a');
+            a.href=u; a.download=`Reports_${new Date().toISOString().slice(0,10)}.html`; document.body.appendChild(a); a.click();
+            setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(u);},100);
+        });
+
+        async function batchGen(){
+            let l=marksheetData.filter(r=>r.Name), pb=document.getElementById('progress-bar'), pc=document.getElementById('progress-count');
+            document.getElementById('batch-progress').classList.remove('hidden'); document.getElementById('generate-btn').disabled=true;
+            for(let i=0;i<l.length;i++){
+                pb.style.width=Math.round(((i+1)/l.length)*100)+'%'; pc.textContent=`${i+1}/${l.length}`;
+                await singleGen(marksheetData.indexOf(l[i]),true); await new Promise(r=>setTimeout(r,2000));
+            }
+            document.getElementById('batch-progress').classList.add('hidden'); document.getElementById('generate-btn').disabled=false;
+            document.getElementById('print-btn').disabled=false; document.getElementById('download-btn').disabled=false;
+            alert("完成！");
+        }
+
+        async function singleGen(idx,app=false){
+            let row=marksheetData[idx], an=analyzeStudent(row), rid=`rep-${idx}-${Date.now()}`;
+            let ph=`<div id="${rid}" class="card mb-4 border-l-4 border-gray-400 p-4"><p class="animate-pulse">正在生成 ${row.Name}...</p></div>`;
+            if(!app) document.getElementById('report-preview-area').innerHTML=ph; else document.getElementById('report-preview-area').insertAdjacentHTML('beforeend',ph);
+            try {
+                let txt=await callAI(buildPrompt(row.Name,an));
+                let p1=txt.split('---PAGE_BREAK---')[0], p2=txt.split('---PAGE_BREAK---')[1]||"", ex=p2.split('---ANSWERS---')[0]||"", ans=p2.split('---ANSWERS---')[1]||"";
+                let h=`<div class="report-page-style preview-wrapper bg-white"><div class="border-b-2 border-gray-800 pb-4 mb-6 flex justify-between items-end"><div><h1 class="text-2xl font-bold">科學科診斷報告</h1></div><div class="text-right"><div class="text-3xl font-bold text-blue-800">${an.totalScore} <span class="text-sm text-gray-500">/${totalPaperMark}</span></div><div class="font-bold">${row.Name}</div></div></div><div class="grid grid-cols-2 gap-4 mb-6 text-sm bg-gray-50 p-4 rounded"><div><span class="font-bold text-green-700">👍 較佳：</span> ${an.good.join(', ')||'-'}</div><div><span class="font-bold text-red-700">💪 需改善：</span> ${an.bad.join(', ')||'-'}</div></div><div class="markdown-body text-sm">${marked.parse(p1)}</div></div>
+                <div class="report-page-style preview-wrapper bg-white"><div class="border-b pb-2 mb-6"><h2 class="text-xl font-bold text-indigo-800">🔥 自我挑戰</h2></div><div class="markdown-body text-sm">${marked.parse(ex)}</div><div class="page-footer"><p class="font-bold mb-1">參考答案:</p><div class="text-xs bg-gray-100 p-2 rounded inline-block transform rotate-180">${marked.parse(ans)}</div></div></div>`;
+                let d=document.createElement('div'); d.innerHTML=h; document.getElementById('print-container').appendChild(d);
+                let w=document.createElement('div'); w.innerHTML=h; document.getElementById(rid).replaceWith(w);
+                document.getElementById('print-btn').disabled=false; document.getElementById('download-btn').disabled=false;
+            } catch(e) {
+                console.error(e);
+                // Remove placeholder
+                let el = document.getElementById(rid);
+                if(el) el.remove();
+                
+                // Show Global Modal
+                showErrorModal(e, rid);
+            }
+        }
+
+        // --- NEW ERROR HANDLING MODAL ---
+        function showErrorModal(e, id) {
+            const modal = document.getElementById('error-modal');
+            const content = document.getElementById('error-log-content');
+            const corsAdvice = document.getElementById('cors-advice');
+            
+            let logText = `Error: ${e.message}\n`;
+            if(e.data) {
+                logText += `URL: ${e.data.url}\n`;
+                logText += `Status: ${e.data.status}\n`;
+                logText += `Response: ${e.data.msg}\n`;
+            }
+            
+            content.textContent = logText;
+            
+            // Check for Network Error (CORS)
+            if(e.message.includes('Network Error') || e.message.includes('Failed to fetch')) {
+                corsAdvice.classList.remove('hidden');
+            } else {
+                corsAdvice.classList.add('hidden');
+            }
+            
+            modal.classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('error-modal').classList.add('hidden');
+        }
+
+        function copyErrorLog() {
+            const text = document.getElementById('error-log-content').textContent;
+            navigator.clipboard.writeText(text).then(() => alert("已複製到剪貼簿"));
+        }
+
+        function analyzeStudent(r){
+            let t=0,w=[],b={},g={};
+            Object.keys(questionMap).forEach(q=>{if(r[q]){let s=parseFloat(r[q])||0,i=questionMap[q];t+=s;if(s<i.fullMark*0.5){w.push(i.Topic_Name);b[i.Topic_Name]=(b[i.Topic_Name]||0)+1}else if(s===i.fullMark)g[i.Topic_Name]=(g[i.Topic_Name]||0)+1}});
+            return {totalScore:t,wrong:[...new Set(w)].slice(0,8),bad:Object.keys(b).sort((x,y)=>b[y]-b[x]).slice(0,3),good:Object.keys(g).sort((x,y)=>g[y]-g[x]).slice(0,3)};
+        }
+
+        function buildPrompt(n,d){
+            return `你是科學老師。為學生 ${n} 寫兩頁報告。弱項：${d.bad.join(', ')}。錯題概念：${d.wrong.join(', ')}。請輸出：
+            1. **整體回顧** 2. **概念重溫** (解釋2個概念,用比喻,嚴禁圖片)
+            ---PAGE_BREAK---
+            3. **自我挑戰** (3條選擇題,純文字,嚴禁圖片)
+            ---ANSWERS---
+            (答案)`;
+        }
+
+        async function callAI(p){
+            const prov=document.getElementById('model-provider').value;
+            if(prov==='gemini'){
+                const k=document.getElementById('gemini-key').value; if(!k)throw new Error("無 API Key");
+                let r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${k}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:p}]}]})});
+                if(!r.ok) { let txt=await r.text(); let err=new Error(`Gemini Error: ${r.status}`); err.data={url:r.url, status:r.status, msg:txt}; throw err; }
+                let d=await r.json(); return d.candidates[0].content.parts[0].text;
+            }else{
+                let u=document.getElementById('ds-url').value.replace(/\/$/,""), k=document.getElementById('ds-key').value, m=document.getElementById('ds-model').value, auto=document.getElementById('ds-auto-path').checked;
+                
+                // Smart Helper to fetch
+                const doFetch = async (url) => {
+                    console.log("Attempting:", url);
+                    return fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', ...(k ? { 'Authorization': `Bearer ${k}` } : {}) },
+                        body: JSON.stringify({ model: m, messages: [{ role: "user", content: p }], temperature: 0.7 })
+                    });
+                };
+
+                // Define candidate URLs
+                // 1. Raw URL provided by user
+                let urlRaw = u;
+                // 2. Standard OpenAI format
+                let urlStandard = u.includes('/chat/completions') ? u : u + '/chat/completions';
+
+                // Decide order based on checkbox
+                let firstUrl = auto ? urlStandard : urlRaw;
+                let secondUrl = auto ? urlRaw : urlStandard;
+                
+                // If they are identical (user typed full path and checked auto), just try once
+                if(urlRaw === urlStandard) secondUrl = null;
+
+                let lastError = null;
+
+                try {
+                    let res = await doFetch(firstUrl);
+                    if (res.ok) { let d = await res.json(); return d.choices[0].message.content; }
+                    
+                    // If 404, try second
+                    if (res.status === 404 && secondUrl) {
+                        console.log("404 on first, trying:", secondUrl);
+                        let res2 = await doFetch(secondUrl);
+                        if (res2.ok) { let d = await res2.json(); return d.choices[0].message.content; }
+                    }
+                    
+                    // If we are here, main failed. Throw.
+                    let txt = await res.text().catch(()=>"");
+                    throw new Error(`API Error ${res.status}: ${txt}`);
+
+                } catch (e) {
+                    lastError = e;
+                    // If Network Error (Failed to fetch), try second URL if available
+                    if ((e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) && secondUrl) {
+                        console.log("Network Error on first, trying:", secondUrl);
+                        try {
+                            let res2 = await doFetch(secondUrl);
+                            if (res2.ok) { let d = await res2.json(); return d.choices[0].message.content; }
+                            
+                            // If second also fails with status
+                            let txt = await res2.text().catch(()=>"");
+                            throw new Error(`API Error ${res2.status}: ${txt}`);
+                        } catch (e2) {
+                            // Both failed. Throw original or consolidated error.
+                            // Attach data for the modal
+                            let finalErr = new Error(`連線失敗 (雙重路徑測試無效)。\n主要錯誤: ${e.message}`);
+                            finalErr.data = { url: firstUrl + " & " + secondUrl, status: "Network Error", msg: e.message + " / " + e2.message };
+                            throw finalErr;
+                        }
+                    }
+                    
+                    // Attach data for modal if missing
+                    if(!e.data) {
+                        e.data = { url: firstUrl, status: "Network Error", msg: e.message };
+                    }
+                    throw e;
+                }
+            }
+        }
+    </script>
+</body>
+</html>
