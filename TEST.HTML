@@ -3,11 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>綜合科學科 - 試卷分析及AI報告系統 (Pro v22)</title>
+    <title>綜合科學科 - 試卷分析及AI報告系統 (Pro v24)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- Mammoth.js for DOCX reading -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
@@ -92,7 +94,7 @@
                 <div class="flex items-center justify-between h-16">
                     <div class="flex items-center">
                         <i class="fas fa-microscope text-2xl mr-3"></i>
-                        <span class="font-bold text-xl ml-2">綜合科學科 - 試卷分析及AI報告系統 (Pro v22)</span>
+                        <span class="font-bold text-xl ml-2">綜合科學科 - 試卷分析及AI報告系統 (Pro v24)</span>
                     </div>
                 </div>
             </div>
@@ -103,7 +105,7 @@
             <!-- File Upload -->
             <div class="card mb-8 animate-fade-in-up border-l-4 border-blue-500">
                 <h2 class="text-lg font-bold text-gray-700 mb-4 pb-2 border-b"><i class="fas fa-file-upload mr-2"></i>1. 資料匯入 (請先上傳 CSV)</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">上傳分數表 (MARKSHEET.csv)</label>
                         <input id="marksheet-upload" type="file" accept=".csv" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
@@ -111,6 +113,10 @@
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">上傳題目參數表 (MAP.csv)</label>
                         <input id="map-upload" type="file" accept=".csv" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"/>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">上傳課程大綱 (Optional)</label>
+                        <input id="syllabus-upload" type="file" accept=".txt,.csv,.docx" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100"/>
                     </div>
                 </div>
                 <div id="file-status" class="mt-2 text-sm text-gray-400 text-right italic">等待檔案...</div>
@@ -136,7 +142,7 @@
                 <div onclick="switchTab('settings')" class="nav-card" id="tab-settings">
                     <i class="fas fa-sliders-h"></i>
                     <h3>設定</h3>
-                    <p>API & Prompt</p>
+                    <p>Prompt & 課程範圍</p>
                 </div>
             </div>
 
@@ -176,7 +182,7 @@
                 </div>
             </div>
 
-            <!-- VIEW 2: SUMMARY REPORT (UPDATED WITH SUBJECT) -->
+            <!-- VIEW 2: SUMMARY REPORT -->
             <div id="view-summary" class="hidden space-y-8">
                 <div class="card bg-orange-50 border-l-4 border-orange-500">
                     <h2 class="text-lg font-bold text-gray-700 mb-2"><i class="fas fa-file-alt mr-2"></i>考試成績與教學檢討報告</h2>
@@ -234,8 +240,22 @@
                 <div id="report-preview-area" class="w-full"></div>
             </div>
 
-            <!-- VIEW 4: SETTINGS -->
+            <!-- VIEW 4: SETTINGS (NEW SYLLABUS) -->
             <div id="view-settings" class="hidden space-y-8">
+                <!-- Syllabus Config -->
+                <div class="card border-l-4 border-green-500 mb-6">
+                    <h2 class="text-lg font-bold text-gray-700 mb-2"><i class="fas fa-book mr-2"></i>課程範圍 / 大綱 (Syllabus Scope)</h2>
+                    <p class="text-sm text-gray-600 mb-3">在此輸入課程大綱，AI 生成報告時將會參考此範圍，避免超綱（例如：避免在中二級使用 F=ma）。</p>
+                    <textarea id="syllabus-content" class="w-full h-40 p-4 border border-gray-300 rounded font-mono text-sm bg-gray-50 focus:ring-2 focus:ring-green-500" placeholder="在此貼上課程大綱重點，例如：
+1. 運動：只涉及平均速率計算 (d/t)，不涉及加速度。
+2. 力：只涉及力的量度與平衡，不涉及牛頓第二定律公式。
+..."></textarea>
+                    <div class="flex justify-end mt-2">
+                        <button onclick="saveSyllabus()" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 px-4 rounded shadow"><i class="fas fa-save mr-1"></i>儲存大綱</button>
+                    </div>
+                </div>
+
+                <!-- AI Config -->
                 <div class="card bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200 mb-6">
                     <h3 class="text-md font-bold text-gray-800 mb-3"><i class="fas fa-robot mr-2"></i>API 設定</h3>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -263,9 +283,10 @@
                     </div>
                 </div>
 
+                <!-- Prompt Config -->
                 <div class="card border-l-4 border-purple-500">
                     <h2 class="text-lg font-bold text-gray-700 mb-4 pb-2 border-b"><i class="fas fa-edit mr-2"></i>自訂學生報告指令 (System Prompt)</h2>
-                    <p class="text-sm text-gray-600 mb-2">保留 `{{student_name}}` 等變數。</p>
+                    <p class="text-sm text-gray-600 mb-2">保留 `{{student_name}}` 和 `{{syllabus}}` 等變數。</p>
                     <textarea id="prompt-template" class="w-full h-64 p-4 border border-gray-300 rounded font-mono text-sm bg-gray-50 focus:ring-2 focus:ring-purple-500" spellcheck="false"></textarea>
                     <div class="flex justify-end gap-4 mt-4">
                         <button onclick="resetPrompt()" class="text-gray-500 hover:text-gray-700 text-sm font-bold px-4 py-2">恢復預設</button>
@@ -295,6 +316,9 @@
 
 {{language_instruction}}
 
+【課程範圍參考 (Syllabus Scope)】：
+{{syllabus}}
+
 請嚴格按照以下格式輸出，必須包含分隔符號，絕對不要生成任何圖片：
 
 1. **{{section_1_title}}**
@@ -304,11 +328,12 @@
    (文字簡要)
 
 2. **{{section_2_title}}**
-   (針對每一個「需改善的課題」，以「筆記形式」解釋重點概念。請務必使用生活比喻，簡易明白。例如：「摩擦力：就像地面有看不見的小手...」)
+   (針對每一個「需改善的課題」，以「筆記形式」解釋重點概念。請務必使用生活比喻，簡易明白。例如：「摩擦力：就像地面有看不見的小手...」。注意：內容不可超出上述課程範圍。)
 
 ---PAGE_BREAK---
 
 3. **{{section_3_title}}** (5 條選擇題，純文字)
+   (題目必須在課程範圍內)
 
 ---ANSWERS---
 
@@ -330,6 +355,9 @@
 【弱項課題】：{{bottom_topics}}
 【需關注題目 (鑑別度低或過難)】：{{flagged_questions}}
 
+【課程範圍參考】：
+{{syllabus}}
+
 請用繁體中文，以專業公文語氣撰寫，格式如下（不要圖片）：
 
 # 考試成績與教學檢討報告
@@ -345,17 +373,27 @@
 (針對「需關注題目」進行分析，例如題目是否設計有誤，或是否超出學生能力)
 
 **4. 學與教反思及跟進建議**
-(具體建議下學期或補課時如何改善。例如：增加實驗環節、加強關鍵字操練、針對弱項課題的具體重溫策略)
+(具體建議下學期或補課時如何改善。例如：增加實驗環節、加強關鍵字操練、針對弱項課題的具體重溫策略。建議需符合課程範圍。)
 
 `.trim();
 
+        // Load Settings
         let customPrompt = localStorage.getItem('science_exam_prompt') || DEFAULT_PROMPT;
+        let savedSyllabus = localStorage.getItem('science_exam_syllabus') || "";
+        
         const pt = document.getElementById('prompt-template'); if(pt) pt.value = customPrompt;
+        const st = document.getElementById('syllabus-content'); if(st) st.value = savedSyllabus;
 
         function savePrompt() {
             customPrompt = document.getElementById('prompt-template').value;
             localStorage.setItem('science_exam_prompt', customPrompt);
-            alert("✅ 設定已儲存");
+            alert("✅ Prompt 設定已儲存");
+        }
+
+        function saveSyllabus() {
+            savedSyllabus = document.getElementById('syllabus-content').value;
+            localStorage.setItem('science_exam_syllabus', savedSyllabus);
+            alert("✅ 課程大綱已儲存");
         }
 
         function resetPrompt() {
@@ -397,6 +435,36 @@
         safeListen('marksheet-upload', 'change', (e)=>handleFile(e.target.files[0],'marksheet'));
         safeListen('map-upload', 'change', (e)=>handleFile(e.target.files[0],'map'));
 
+        // --- SYLLABUS HANDLER ---
+        safeListen('syllabus-upload', 'change', (e) => {
+            const file = e.target.files[0];
+            if(!file) return;
+            
+            const reader = new FileReader();
+            
+            if (file.name.endsWith('.docx')) {
+                reader.onload = function(event) {
+                    const arrayBuffer = event.target.result;
+                    mammoth.extractRawText({arrayBuffer: arrayBuffer})
+                        .then(function(result){
+                            document.getElementById('syllabus-content').value = result.value;
+                            saveSyllabus(); // Auto save
+                        })
+                        .catch(function(err){
+                            console.log(err);
+                            alert("DOCX 讀取失敗，請嘗試存為 .txt");
+                        });
+                };
+                reader.readAsArrayBuffer(file);
+            } else {
+                reader.onload = function(event) {
+                    document.getElementById('syllabus-content').value = event.target.result;
+                    saveSyllabus(); // Auto save
+                };
+                reader.readAsText(file);
+            }
+        });
+
         function detectColumns(fields) {
             if(!fields) return;
             colMap.name = fields.find(f => f.trim().match(/^Name/i) || f.trim().match(/姓名/)) || 'Name';
@@ -420,7 +488,6 @@
             });
             switchTab('analysis'); 
             generateAnalysis();
-            
             const sel=document.getElementById('student-select');
             if(sel) {
                 while(sel.options.length>2) sel.remove(2);
@@ -494,23 +561,20 @@
             analysisCache.forEach(i=>{
                 if((f==='D_LOW'&&i.d>=0.2)||(f==='P_LOW'&&i.p>=0.3)) return;
                 let b=i.Difficulty==='High'?'bg-red-100':(i.Difficulty==='Medium'?'bg-yellow-100':'bg-green-100');
-                
                 let dClass = 'text-gray-900';
-                if(i.d > 0.4) dClass = 'text-green-600 font-bold';
-                else if(i.d < 0.2) dClass = 'text-red-600 font-bold';
-
+                if(i.d > 0.4) dClass = 'text-green-600 font-bold'; else if(i.d < 0.2) dClass = 'text-red-600 font-bold';
                 let ev=[]; if(i.p<0.3)ev.push("難"); if(i.d<0.2)ev.push("鑑別低");
-                
                 tb.innerHTML+=`<tr class="hover:bg-gray-50"><td class="table-cell font-bold">${i.id}</td><td class="table-cell text-xs">${i.Topic_ID}</td><td class="table-cell"><span class="px-2 rounded text-xs ${b}">${i.Difficulty}</span></td><td class="table-cell">${(i.p*100).toFixed(0)}%</td><td class="table-cell ${dClass}">${i.d.toFixed(2)}</td><td class="table-cell text-xs">${ev.join(', ')}</td></tr>`;
             });
         }
         safeListen('item-filter', 'change',(e)=>renderItemTable(e.target.value));
 
-        // --- SUMMARY REPORT GENERATION ---
+        // --- SUMMARY REPORT ---
         safeListen('gen-summary-btn', 'click', async () => {
             const schoolName = document.getElementById('school-name').value || "嗇色園主辦可譽中學暨小學";
             const subjectName = document.getElementById('subject-name').value || "綜合科學科";
             const examInfo = document.getElementById('exam-info').value || "（未填寫考試年份）";
+            const syllabus = document.getElementById('syllabus-content').value || "(未提供課程大綱)";
             
             document.getElementById('summary-preview-area').innerHTML = `<div class="card p-6"><p class="animate-pulse text-gray-600"><i class="fas fa-spinner fa-spin mr-2"></i>AI 正在撰寫綜合報告...</p></div>`;
             
@@ -540,20 +604,19 @@
             let sortedTopics = Object.keys(tAgg).map(k=>({name:k, pct: tAgg[k].m?tAgg[k].e/tAgg[k].m:0})).sort((a,b)=>b.pct-a.pct);
             stats.top_topics = sortedTopics.slice(0,3).map(t=>`${t.name} (${(t.pct*100).toFixed(0)}%)`).join(', ');
             stats.bottom_topics = sortedTopics.slice(-3).map(t=>`${t.name} (${(t.pct*100).toFixed(0)}%)`).join(', ');
-
             let flagged = analysisCache.filter(i => i.d < 0.2 || i.p < 0.3).map(i => `${i.id} (P:${(i.p*100).toFixed(0)}%, D:${i.d.toFixed(2)})`).join(', ');
             stats.flagged_questions = flagged || "無明顯異常題目";
 
             let prompt = SUMMARY_PROMPT.replace('{{school_name}}', stats.school_name)
-                                       .replace('{{subject}}', stats.subject)
-                                       .replace(/{{subject}}/g, stats.subject) // Replace multiple occurrences
+                                       .replace('{{subject}}', stats.subject).replace(/{{subject}}/g, stats.subject)
                                        .replace('{{exam_info}}', examInfo)
                                        .replace('{{mean}}', stats.mean).replace('{{full_mark}}', stats.full_mark)
                                        .replace('{{pass_rate}}', stats.pass_rate)
                                        .replace('{{max}}', stats.max).replace('{{min}}', stats.min).replace('{{sd}}', stats.sd)
                                        .replace('{{top_topics}}', stats.top_topics)
                                        .replace('{{bottom_topics}}', stats.bottom_topics)
-                                       .replace('{{flagged_questions}}', stats.flagged_questions);
+                                       .replace('{{flagged_questions}}', stats.flagged_questions)
+                                       .replace('{{syllabus}}', syllabus);
 
             try {
                 let md = await callAI(prompt);
@@ -577,10 +640,7 @@
                 document.getElementById('summary-preview-area').innerHTML = html;
                 document.getElementById('dl-summary-btn').disabled = false;
                 document.getElementById('print-container').innerHTML = html;
-            } catch(e) {
-                console.error(e);
-                showErrorModal(e, 'summary-preview-area');
-            }
+            } catch(e) { console.error(e); showErrorModal(e, 'summary-preview-area'); }
         });
 
         safeListen('dl-summary-btn', 'click', () => {
@@ -636,11 +696,12 @@
             let sName = row[colMap.name] || "未知";
             let sClass = row[colMap.class] || "";
             let selectedLang = document.getElementById('report-language').value;
+            let syllabus = document.getElementById('syllabus-content').value || "(未提供課程範圍)";
             
             let ph=`<div id="${rid}" class="card mb-4 border-l-4 border-gray-400 p-4"><p class="animate-pulse">正在生成 ${sName}...</p></div>`;
             if(!app) document.getElementById('report-preview-area').innerHTML=ph; else document.getElementById('report-preview-area').insertAdjacentHTML('beforeend',ph);
             try {
-                let txt=await callAI(buildPrompt(sName, an, selectedLang));
+                let txt=await callAI(buildPrompt(sName, an, selectedLang, syllabus));
                 let p1, p2;
                 if(txt.includes('---PAGE_BREAK---')) {
                     let parts = txt.split('---PAGE_BREAK---'); p1 = parts[0]; p2 = parts[1];
@@ -718,7 +779,7 @@
             return {totalScore:t,wrong:[...new Set(w)].slice(0,8),bad:Object.keys(b).sort((x,y)=>b[y]-b[x]).slice(0,3),good:Object.keys(g).sort((x,y)=>g[y]-g[x]).slice(0,3)};
         }
 
-        function buildPrompt(n,d, lang) {
+        function buildPrompt(n,d, lang, syllabus) {
             let tpl = document.getElementById('prompt-template').value;
             const L = {
                 zh: { inst: "請用繁體中文撰寫。", sec1: "整體表現回顧", sec2: "重點概念重溫", sec3: "自我挑戰" },
@@ -727,7 +788,8 @@
             const LC = L[lang] || L['zh'];
             return tpl.replace('{{student_name}}', n).replace('{{total_score}}', d.totalScore).replace('{{full_mark}}', totalPaperMark)
                       .replace('{{weaknesses}}', d.bad.join(', ')).replace('{{wrong_concepts}}', d.wrong.join(', ')).replace('{{strengths}}', d.good.join(', '))
-                      .replace('{{language_instruction}}', LC.inst).replace('{{section_1_title}}', LC.sec1).replace('{{section_2_title}}', LC.sec2).replace('{{section_3_title}}', LC.sec3);
+                      .replace('{{language_instruction}}', LC.inst).replace('{{section_1_title}}', LC.sec1).replace('{{section_2_title}}', LC.sec2).replace('{{section_3_title}}', LC.sec3)
+                      .replace('{{syllabus}}', syllabus || "未提供");
         }
 
         async function callAI(p){
