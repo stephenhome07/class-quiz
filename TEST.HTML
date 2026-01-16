@@ -3,12 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>綜合科學科 - 試卷分析及AI報告系統 (Pro v24)</title>
+    <title>綜合科學科 - 試卷分析及AI報告系統 (Pro v27)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <!-- Mammoth.js for DOCX reading -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -18,11 +17,11 @@
         .table-header { @apply px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50; }
         .table-cell { @apply px-6 py-4 whitespace-nowrap text-sm text-gray-900; }
         
-        .nav-card { @apply flex flex-col items-center justify-center p-4 bg-white border-2 border-transparent rounded-xl shadow-sm cursor-pointer transition-all duration-200 hover:shadow-md hover:border-blue-200; }
+        .nav-card { @apply flex flex-col items-center justify-center p-3 bg-white border-2 border-transparent rounded-xl shadow-sm cursor-pointer transition-all duration-200 hover:shadow-md hover:border-blue-200; }
         .nav-card.active { @apply border-blue-600 bg-blue-50 text-blue-800 ring-2 ring-blue-200 ring-opacity-50; }
-        .nav-card i { @apply text-2xl mb-2 text-gray-400; }
+        .nav-card i { @apply text-2xl mb-1 text-gray-400; }
         .nav-card.active i { @apply text-blue-600; }
-        .nav-card h3 { @apply font-bold text-base; }
+        .nav-card h3 { @apply font-bold text-sm; }
         .nav-card p { @apply text-xs text-gray-500 mt-1 text-center hidden md:block; }
 
         .heatmap-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.75rem; }
@@ -40,18 +39,10 @@
         .markdown-body th, .markdown-body td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 0.9em; }
         .markdown-body th { background-color: #f3f4f6; }
 
-        .report-page-style {
-            width: 210mm; min-height: 297mm; padding: 20mm; background: white;
-            position: relative; overflow: hidden; font-size: 11pt; box-sizing: border-box;
-        }
+        .report-page-style { width: 210mm; min-height: 297mm; padding: 20mm; background: white; position: relative; overflow: hidden; font-size: 11pt; box-sizing: border-box; }
         .page-footer { margin-top: 40px; padding-top: 10px; border-top: 1px dashed #ccc; font-size: 10pt; color: #666; page-break-inside: avoid; }
-
         #report-preview-area, #summary-preview-area { display: flex; flex-direction: column; align-items: center; gap: 40px; padding-bottom: 50px; }
-        .preview-wrapper { 
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); 
-            border: 1px solid #d1d5db; 
-            margin-bottom: 20px;
-        }
+        .preview-wrapper { box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); border: 1px solid #d1d5db; margin-bottom: 20px; }
 
         #print-container { display: none; }
         @media print {
@@ -59,14 +50,17 @@
             body { background: white; -webkit-print-color-adjust: exact; }
             #app-container, nav, .no-print, #error-modal { display: none !important; }
             #print-container { display: block !important; position: absolute; top: 0; left: 0; width: 100%; }
-            .report-page-style { 
-                height: 296mm; width: 100%; page-break-after: always; break-after: page; 
-                margin: 0; box-shadow: none; border: none; float: none; 
-            }
+            .report-page-style { height: 296mm; width: 100%; page-break-after: always; break-after: page; margin: 0; box-shadow: none; border: none; float: none; }
             .page-footer { position: absolute; bottom: 20mm; left: 20mm; right: 20mm; }
         }
-
         #error-modal { background: rgba(0,0,0,0.5); }
+        .distractor-card { @apply border-l-4 border-red-500 bg-red-50 p-4 rounded mb-4; }
+        .analysis-box { @apply mt-3 p-3 bg-white rounded border border-gray-200 text-sm text-gray-700 hidden; }
+        
+        /* New Header Styles for Data Import */
+        .section-badge { @apply text-[10px] uppercase font-bold px-2 py-0.5 rounded ml-2; }
+        .badge-req { @apply bg-red-100 text-red-700; }
+        .badge-opt { @apply bg-blue-100 text-blue-700; }
     </style>
 </head>
 <body class="text-gray-800">
@@ -75,14 +69,12 @@
     <div id="error-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center">
         <div class="bg-white rounded-lg shadow-2xl p-6 max-w-lg w-full mx-4 border-l-4 border-red-500 relative animate-fade-in-up">
             <button onclick="closeModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><i class="fas fa-times text-xl"></i></button>
-            <h3 class="text-xl font-bold text-red-600 mb-2"><i class="fas fa-bug mr-2"></i>生成失敗 (Error Report)</h3>
+            <h3 class="text-xl font-bold text-red-600 mb-2"><i class="fas fa-bug mr-2"></i>生成失敗</h3>
             <div class="bg-gray-100 p-3 rounded text-xs font-mono text-gray-800 overflow-auto max-h-60 mb-4 border border-gray-300" id="error-log-content">Waiting...</div>
             <div id="cors-advice" class="hidden mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
                 <strong>💡 連線診斷：</strong><br>Proxy 連線被拒。建議使用官方 Key 或檢查網址。
             </div>
-            <button onclick="copyErrorLog()" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded shadow transition flex items-center justify-center">
-                <i class="fas fa-copy mr-2"></i> 複製完整錯誤報告
-            </button>
+            <button onclick="copyErrorLog()" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded shadow transition flex items-center justify-center"><i class="fas fa-copy mr-2"></i> 複製錯誤報告</button>
         </div>
     </div>
 
@@ -94,7 +86,7 @@
                 <div class="flex items-center justify-between h-16">
                     <div class="flex items-center">
                         <i class="fas fa-microscope text-2xl mr-3"></i>
-                        <span class="font-bold text-xl ml-2">綜合科學科 - 試卷分析及AI報告系統 (Pro v24)</span>
+                        <span class="font-bold text-xl ml-2">綜合科學科 - 試卷分析及AI報告系統 (Pro v27)</span>
                     </div>
                 </div>
             </div>
@@ -104,62 +96,68 @@
             
             <!-- File Upload -->
             <div class="card mb-8 animate-fade-in-up border-l-4 border-blue-500">
-                <h2 class="text-lg font-bold text-gray-700 mb-4 pb-2 border-b"><i class="fas fa-file-upload mr-2"></i>1. 資料匯入 (請先上傳 CSV)</h2>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">上傳分數表 (MARKSHEET.csv)</label>
-                        <input id="marksheet-upload" type="file" accept=".csv" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
+                <h2 class="text-lg font-bold text-gray-700 mb-4 pb-2 border-b"><i class="fas fa-file-upload mr-2"></i>1. 資料匯入 (請先上傳檔案)</h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <!-- Required -->
+                    <div class="bg-red-50 p-3 rounded border border-red-100">
+                        <label class="block text-xs font-bold text-red-700 mb-1">1. 分數表 (MARKSHEET) <span class="badge-req">必要</span></label>
+                        <input id="marksheet-upload" type="file" accept=".csv" class="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-white file:text-red-700 hover:file:bg-red-100"/>
+                        <p class="text-[10px] text-gray-500 mt-1">學生得分記錄</p>
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">上傳題目參數表 (MAP.csv)</label>
-                        <input id="map-upload" type="file" accept=".csv" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"/>
+                    <div class="bg-red-50 p-3 rounded border border-red-100">
+                        <label class="block text-xs font-bold text-red-700 mb-1">2. 題目表 (MAP) <span class="badge-req">必要</span></label>
+                        <input id="map-upload" type="file" accept=".csv" class="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-white file:text-red-700 hover:file:bg-red-100"/>
+                        <p class="text-[10px] text-gray-500 mt-1">題目與課題對照</p>
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">上傳課程大綱 (Optional)</label>
-                        <input id="syllabus-upload" type="file" accept=".txt,.csv,.docx" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100"/>
+                    
+                    <!-- Highly Recommended for AI Analysis -->
+                    <div class="bg-blue-50 p-3 rounded border border-blue-100">
+                        <label class="block text-xs font-bold text-blue-700 mb-1">3. 試卷內容 (Exam Paper) <span class="badge-opt">推薦</span></label>
+                        <input id="exam-paper-upload" type="file" accept=".docx,.txt" class="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-white file:text-blue-700 hover:file:bg-blue-100"/>
+                        <p class="text-[10px] text-gray-500 mt-1">讓 AI 讀題，分析更精準</p>
+                    </div>
+                    <div class="bg-blue-50 p-3 rounded border border-blue-100">
+                        <label class="block text-xs font-bold text-blue-700 mb-1">4. MC 選項 (MC.csv) <span class="badge-opt">推薦</span></label>
+                        <input id="mc-upload" type="file" accept=".csv" class="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-white file:text-blue-700 hover:file:bg-blue-100"/>
+                        <p class="text-[10px] text-gray-500 mt-1">分析學生常犯錯誤選項</p>
                     </div>
                 </div>
-                <div id="file-status" class="mt-2 text-sm text-gray-400 text-right italic">等待檔案...</div>
+
+                <div class="mt-4 pt-2 border-t border-gray-100 flex justify-between items-center">
+                    <div class="text-xs text-gray-500">
+                        <span class="font-bold">狀態：</span> 
+                        <span id="file-status" class="italic">等待檔案...</span>
+                        <span id="paper-status" class="ml-4 italic text-gray-400"></span>
+                    </div>
+                    <!-- Optional Syllabus separate -->
+                    <div>
+                        <input id="syllabus-upload" type="file" accept=".txt,.csv,.docx" class="hidden"/>
+                        <label for="syllabus-upload" class="text-xs text-gray-400 cursor-pointer hover:text-gray-600"><i class="fas fa-plus-circle mr-1"></i>匯入課程大綱 (Optional)</label>
+                    </div>
+                </div>
             </div>
 
             <!-- TABS -->
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 hidden" id="main-tabs">
-                <div onclick="switchTab('analysis')" class="nav-card active" id="tab-analysis">
-                    <i class="fas fa-chart-pie"></i>
-                    <h3>全班數據分析</h3>
-                    <p>熱點圖、分佈圖</p>
-                </div>
-                <div onclick="switchTab('summary')" class="nav-card" id="tab-summary">
-                    <i class="fas fa-file-alt"></i>
-                    <h3>綜合報告</h3>
-                    <p>給校長/科主任的報告</p>
-                </div>
-                <div onclick="switchTab('report')" class="nav-card" id="tab-report">
-                    <i class="fas fa-user-graduate"></i>
-                    <h3>學生 AI 報告</h3>
-                    <p>個別診斷、筆記</p>
-                </div>
-                <div onclick="switchTab('settings')" class="nav-card" id="tab-settings">
-                    <i class="fas fa-sliders-h"></i>
-                    <h3>設定</h3>
-                    <p>Prompt & 課程範圍</p>
-                </div>
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-8 hidden" id="main-tabs">
+                <div onclick="switchTab('analysis')" class="nav-card active" id="tab-analysis"><i class="fas fa-chart-pie"></i><h3>全班數據</h3><p>熱點圖、分佈</p></div>
+                <div onclick="switchTab('mc')" class="nav-card" id="tab-mc"><i class="fas fa-list-ul"></i><h3>MC 分析</h3><p>選項分佈、誤點</p></div>
+                <div onclick="switchTab('summary')" class="nav-card" id="tab-summary"><i class="fas fa-file-alt"></i><h3>綜合報告</h3><p>給校長/科主任</p></div>
+                <div onclick="switchTab('report')" class="nav-card" id="tab-report"><i class="fas fa-user-graduate"></i><h3>學生報告</h3><p>個別診斷</p></div>
+                <div onclick="switchTab('settings')" class="nav-card" id="tab-settings"><i class="fas fa-sliders-h"></i><h3>設定</h3><p>API & Prompt</p></div>
             </div>
 
             <!-- VIEW 1: ANALYSIS -->
             <div id="view-analysis" class="hidden space-y-8">
-                <!-- Stats Cards -->
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div class="card border-t-4 border-blue-500"><div class="text-gray-500 text-sm">平均分</div><div class="text-3xl font-bold mt-1" id="stat-mean">--</div></div>
                     <div class="card border-t-4 border-green-500"><div class="text-gray-500 text-sm">及格率</div><div class="text-3xl font-bold mt-1" id="stat-pass">--%</div></div>
                     <div class="card border-t-4 border-yellow-500"><div class="text-gray-500 text-sm">最高/最低</div><div class="text-3xl font-bold mt-1"><span id="stat-max" class="text-green-600">--</span>/<span id="stat-min" class="text-red-600">--</span></div></div>
                     <div class="card border-t-4 border-purple-500"><div class="text-gray-500 text-sm">標準差</div><div class="text-3xl font-bold mt-1" id="stat-sd">--</div></div>
                 </div>
-                <!-- Charts -->
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     <div class="card flex flex-col h-full">
                         <h3 class="text-lg font-bold mb-4"><i class="fas fa-fire-alt text-red-500 mr-2"></i>強弱課題熱點圖</h3>
-                        <div class="flex justify-between text-xs mb-2"><span><span class="w-3 h-3 bg-red-200 inline-block mr-1"></span>弱</span><span><span class="w-3 h-3 bg-green-200 inline-block mr-1"></span>強</span></div>
                         <div id="heatmap-container" class="heatmap-grid overflow-y-auto max-h-64 p-1 flex-grow"></div>
                     </div>
                     <div class="card flex flex-col h-full">
@@ -167,17 +165,38 @@
                         <div class="relative h-64 w-full"><canvas id="distChart"></canvas></div>
                     </div>
                 </div>
-                <!-- Item Table -->
                 <div class="card overflow-hidden">
                     <div class="flex justify-between items-center mb-4 border-b pb-4">
                         <h3 class="text-lg font-bold"><i class="fas fa-list-ol text-purple-500 mr-2"></i>題項分析</h3>
                         <select id="item-filter" class="p-1 border rounded text-sm"><option value="ALL">全部</option><option value="D_LOW">鑑別度低</option><option value="P_LOW">題目過難</option></select>
                     </div>
                     <div class="overflow-x-auto max-h-96 border rounded-lg">
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50"><tr><th class="table-header">題號</th><th class="table-header">課題</th><th class="table-header">難度</th><th class="table-header">P</th><th class="table-header">D</th><th class="table-header">評價</th></tr></thead>
-                            <tbody class="bg-white divide-y divide-gray-200" id="itemTableBody"></tbody>
-                        </table>
+                        <table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="table-header">題號</th><th class="table-header">課題</th><th class="table-header">難度</th><th class="table-header">P</th><th class="table-header">D</th><th class="table-header">評價</th></tr></thead><tbody class="bg-white divide-y divide-gray-200" id="itemTableBody"></tbody></table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW 1.5: MC ANALYSIS -->
+            <div id="view-mc" class="hidden space-y-8">
+                <div class="card bg-blue-50 border-l-4 border-blue-500 p-4 mb-4">
+                    <div class="flex items-start">
+                        <i class="fas fa-info-circle text-blue-600 mt-1 mr-3"></i>
+                        <div>
+                            <h4 class="font-bold text-blue-800 text-sm">如何使用 AI 誤點偵探？</h4>
+                            <p class="text-xs text-blue-700 mt-1">若您已上傳試卷內容，點擊下方個別題目的「AI 深度分析」按鈕，AI 將會閱讀試卷題目內容，分析為何學生會選錯。</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 class="text-lg font-bold mb-4 text-purple-700"><i class="fas fa-microscope mr-2"></i>MC 選項分佈與誘答項分析</h3>
+                    <p class="text-sm text-gray-500 mb-4">
+                        <span class="inline-block w-3 h-3 bg-green-500 rounded-sm mr-1"></span>正確答案
+                        <span class="inline-block w-3 h-3 bg-red-400 rounded-sm ml-2 mr-1"></span>高誘答錯誤 (>20%)
+                    </p>
+                    <div class="relative h-64 w-full"><canvas id="mcChart"></canvas></div>
+                    <div class="mt-8" id="mc-distractor-list">
+                        <!-- Interactive Cards will be here -->
                     </div>
                 </div>
             </div>
@@ -186,51 +205,24 @@
             <div id="view-summary" class="hidden space-y-8">
                 <div class="card bg-orange-50 border-l-4 border-orange-500">
                     <h2 class="text-lg font-bold text-gray-700 mb-2"><i class="fas fa-file-alt mr-2"></i>考試成績與教學檢討報告</h2>
-                    <p class="text-sm text-gray-600 mb-4">此功能會整合全班數據，為科主任/校長生成一份專業的教學評估與跟進報告。</p>
-                    
+                    <p class="text-xs text-gray-500 mb-4">*AI 將會參考上傳的「試卷內容」與「課程範圍」進行深度分析。</p>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                        <div>
-                            <label class="block text-xs font-bold text-gray-600 mb-1">學校名稱</label>
-                            <input id="school-name" type="text" value="嗇色園主辦可譽中學暨小學" class="w-full p-2 border rounded text-sm bg-white">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold text-gray-600 mb-1">科目</label>
-                            <input id="subject-name" type="text" value="綜合科學科" class="w-full p-2 border rounded text-sm bg-white">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold text-gray-600 mb-1">考試年份及級別</label>
-                            <input id="exam-info" type="text" placeholder="e.g. 2025-2026 年度上學期 中二級" class="w-full p-2 border rounded text-sm bg-white">
-                        </div>
+                        <div><label class="block text-xs font-bold text-gray-600 mb-1">學校</label><input id="school-name" type="text" value="嗇色園主辦可譽中學暨小學" class="w-full p-2 border rounded text-sm bg-white"></div>
+                        <div><label class="block text-xs font-bold text-gray-600 mb-1">科目</label><input id="subject-name" type="text" value="綜合科學科" class="w-full p-2 border rounded text-sm bg-white"></div>
+                        <div><label class="block text-xs font-bold text-gray-600 mb-1">年份/級別</label><input id="exam-info" type="text" placeholder="e.g. 2025-2026 中二級" class="w-full p-2 border rounded text-sm bg-white"></div>
                     </div>
-
-                    <div class="flex gap-4 justify-end">
-                        <button id="gen-summary-btn" class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-6 rounded shadow transition flex items-center">
-                            <i class="fas fa-magic mr-2"></i> 生成綜合報告
-                        </button>
-                        <button id="dl-summary-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded shadow transition disabled:opacity-50" disabled>
-                            <i class="fas fa-download mr-2"></i> 下載報告
-                        </button>
-                    </div>
+                    <div class="flex gap-4 justify-end"><button id="gen-summary-btn" class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-6 rounded shadow flex items-center"><i class="fas fa-magic mr-2"></i> 生成綜合報告</button><button id="dl-summary-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded shadow disabled:opacity-50" disabled><i class="fas fa-download mr-2"></i> 下載</button></div>
                 </div>
                 <div id="summary-preview-area"></div>
             </div>
 
-            <!-- VIEW 3: STUDENT AI REPORTS -->
+            <!-- VIEW 3: STUDENT REPORT -->
             <div id="view-report" class="hidden space-y-8">
                 <div class="card">
                     <h2 class="text-lg font-bold mb-4 border-b pb-2"><i class="fas fa-user-graduate mr-2"></i>學生個別報告</h2>
                     <div class="flex flex-col md:flex-row gap-4 items-end">
-                        <div class="w-full md:w-1/4">
-                            <label class="block text-sm font-medium mb-1">報告語言</label>
-                            <select id="report-language" class="w-full p-2 border rounded font-bold text-indigo-600">
-                                <option value="zh">繁體中文</option>
-                                <option value="en">English</option>
-                            </select>
-                        </div>
-                        <div class="flex-grow w-full">
-                            <label class="block text-sm font-medium mb-1">選擇學生</label>
-                            <select id="student-select" class="w-full p-2 border rounded"><option value="">請選擇...</option><option value="ALL">【 🚀 批量生成 】全班</option></select>
-                        </div>
+                        <div class="w-full md:w-1/4"><label class="block text-sm font-medium mb-1">語言</label><select id="report-language" class="w-full p-2 border rounded font-bold text-indigo-600"><option value="zh">繁體中文</option><option value="en">English</option></select></div>
+                        <div class="flex-grow w-full"><label class="block text-sm font-medium mb-1">選擇學生</label><select id="student-select" class="w-full p-2 border rounded"><option value="">請選擇...</option><option value="ALL">【 🚀 批量生成 】全班</option></select></div>
                         <button id="generate-btn" class="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded shadow"><i class="fas fa-play mr-2"></i>生成</button>
                         <button onclick="window.print()" id="print-btn" class="w-full md:w-auto bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded shadow" disabled><i class="fas fa-print mr-2"></i>列印/PDF</button>
                         <button id="download-btn" class="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded shadow" disabled><i class="fas fa-file-download mr-2"></i>下載HTML</button>
@@ -240,58 +232,29 @@
                 <div id="report-preview-area" class="w-full"></div>
             </div>
 
-            <!-- VIEW 4: SETTINGS (NEW SYLLABUS) -->
+            <!-- VIEW 4: SETTINGS -->
             <div id="view-settings" class="hidden space-y-8">
-                <!-- Syllabus Config -->
                 <div class="card border-l-4 border-green-500 mb-6">
-                    <h2 class="text-lg font-bold text-gray-700 mb-2"><i class="fas fa-book mr-2"></i>課程範圍 / 大綱 (Syllabus Scope)</h2>
-                    <p class="text-sm text-gray-600 mb-3">在此輸入課程大綱，AI 生成報告時將會參考此範圍，避免超綱（例如：避免在中二級使用 F=ma）。</p>
-                    <textarea id="syllabus-content" class="w-full h-40 p-4 border border-gray-300 rounded font-mono text-sm bg-gray-50 focus:ring-2 focus:ring-green-500" placeholder="在此貼上課程大綱重點，例如：
-1. 運動：只涉及平均速率計算 (d/t)，不涉及加速度。
-2. 力：只涉及力的量度與平衡，不涉及牛頓第二定律公式。
-..."></textarea>
-                    <div class="flex justify-end mt-2">
-                        <button onclick="saveSyllabus()" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 px-4 rounded shadow"><i class="fas fa-save mr-1"></i>儲存大綱</button>
-                    </div>
+                    <h2 class="text-lg font-bold text-gray-700 mb-2"><i class="fas fa-book mr-2"></i>課程範圍 (Syllabus)</h2>
+                    <textarea id="syllabus-content" class="w-full h-40 p-4 border border-gray-300 rounded font-mono text-sm bg-gray-50" placeholder="在此輸入課程重點..."></textarea>
+                    <div class="flex justify-end mt-2"><button onclick="saveSyllabus()" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 px-4 rounded shadow"><i class="fas fa-save mr-1"></i>儲存</button></div>
                 </div>
-
-                <!-- AI Config -->
                 <div class="card bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200 mb-6">
                     <h3 class="text-md font-bold text-gray-800 mb-3"><i class="fas fa-robot mr-2"></i>API 設定</h3>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                            <label class="block text-xs font-bold text-gray-600 mb-1">模型</label>
-                            <select id="model-provider" class="w-full text-sm border p-2 rounded">
-                                <option value="gemini">Google Gemini</option>
-                                <option value="deepseek" selected>DeepSeek / OpenAI Compatible</option>
-                            </select>
-                        </div>
+                        <div><label class="block text-xs font-bold text-gray-600 mb-1">模型</label><select id="model-provider" class="w-full text-sm border p-2 rounded"><option value="gemini">Google Gemini</option><option value="deepseek" selected>DeepSeek / OpenAI Compatible</option></select></div>
                         <div class="md:col-span-2 hidden" id="ds-config">
-                            <div class="grid grid-cols-2 gap-2">
-                                <input id="ds-url" type="text" value="https://apiproxy.k12gpt.ai/NPcj-7_" class="text-xs p-2 border rounded" placeholder="API URL">
-                                <input id="ds-model" type="text" value="deepseek-chat" class="text-xs p-2 border rounded" placeholder="Model">
-                            </div>
-                            <div class="mt-2 flex items-center bg-white p-2 rounded border border-gray-200">
-                                <input type="checkbox" id="ds-auto-path" class="mr-2" checked>
-                                <label for="ds-auto-path" class="text-xs font-bold cursor-pointer select-none">自動補全 /chat/completions (含智能雙重路徑測試)</label>
-                            </div>
+                            <div class="grid grid-cols-2 gap-2"><input id="ds-url" type="text" value="https://apiproxy.k12gpt.ai/NPcj-7_" class="text-xs p-2 border rounded" placeholder="API URL"><input id="ds-model" type="text" value="deepseek-chat" class="text-xs p-2 border rounded" placeholder="Model"></div>
+                            <div class="mt-2 flex items-center bg-white p-2 rounded border border-gray-200"><input type="checkbox" id="ds-auto-path" class="mr-2" checked><label for="ds-auto-path" class="text-xs font-bold cursor-pointer select-none">自動補全 /chat/completions (含智能雙重路徑測試)</label></div>
                             <div class="mt-2"><input id="ds-key" type="password" placeholder="API Key (Optional)" class="w-full text-xs p-2 border rounded"></div>
                         </div>
-                        <div class="md:col-span-2 hidden" id="gemini-config">
-                            <input id="gemini-key" type="password" placeholder="Gemini API Key" class="w-full text-xs p-2 border rounded">
-                        </div>
+                        <div class="md:col-span-2 hidden" id="gemini-config"><input id="gemini-key" type="password" placeholder="Gemini API Key" class="w-full text-xs p-2 border rounded"></div>
                     </div>
                 </div>
-
-                <!-- Prompt Config -->
                 <div class="card border-l-4 border-purple-500">
-                    <h2 class="text-lg font-bold text-gray-700 mb-4 pb-2 border-b"><i class="fas fa-edit mr-2"></i>自訂學生報告指令 (System Prompt)</h2>
-                    <p class="text-sm text-gray-600 mb-2">保留 `{{student_name}}` 和 `{{syllabus}}` 等變數。</p>
-                    <textarea id="prompt-template" class="w-full h-64 p-4 border border-gray-300 rounded font-mono text-sm bg-gray-50 focus:ring-2 focus:ring-purple-500" spellcheck="false"></textarea>
-                    <div class="flex justify-end gap-4 mt-4">
-                        <button onclick="resetPrompt()" class="text-gray-500 hover:text-gray-700 text-sm font-bold px-4 py-2">恢復預設</button>
-                        <button onclick="savePrompt()" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded shadow transition"><i class="fas fa-save mr-2"></i>儲存設定</button>
-                    </div>
+                    <h2 class="text-lg font-bold text-gray-700 mb-4 pb-2 border-b"><i class="fas fa-edit mr-2"></i>自訂學生報告指令</h2>
+                    <textarea id="prompt-template" class="w-full h-64 p-4 border border-gray-300 rounded font-mono text-sm bg-gray-50" spellcheck="false"></textarea>
+                    <div class="flex justify-end gap-4 mt-4"><button onclick="resetPrompt()" class="text-gray-500 hover:text-gray-700 text-sm font-bold px-4 py-2">恢復預設</button><button onclick="savePrompt()" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded shadow"><i class="fas fa-save mr-2"></i>儲存</button></div>
                 </div>
             </div>
         </div>
@@ -304,9 +267,10 @@
         renderer.image = function(href, title, text) { return `<span style="color:#999; font-size:0.8em; border:1px dashed #ccc; padding:2px 5px;">[圖片已移除]</span>`; };
         marked.setOptions({ renderer: renderer });
 
-        let marksheetData=[], mapData=[], questionMap={}, totalPaperMark=0, chartInstances={}, analysisCache=null, colMap={name:'',class:'',no:''};
-        
-        // --- PROMPTS ---
+        let marksheetData=[], mapData=[], mcData=[], questionMap={}, totalPaperMark=0, chartInstances={}, analysisCache=null, colMap={name:'',class:'',no:''}, mcDistractors={};
+        let examPaperText = ""; // Global store
+
+        // --- UPDATED PROMPTS WITH EXAM PAPER CONTEXT ---
         const DEFAULT_PROMPT = `
 你是一位科學老師。請為學生 {{student_name}} 製作一份兩頁的學習報告。
 總分：{{total_score}} / {{full_mark}}。
@@ -316,8 +280,12 @@
 
 {{language_instruction}}
 
-【課程範圍參考 (Syllabus Scope)】：
+【課程範圍參考 (Syllabus)】：
 {{syllabus}}
+
+【試卷內容參考 (Exam Paper Content)】：
+{{exam_paper_content}}
+(請參考上述試卷內容，具體引用題目情境來解釋學生的錯題)
 
 請嚴格按照以下格式輸出，必須包含分隔符號，絕對不要生成任何圖片：
 
@@ -328,7 +296,7 @@
    (文字簡要)
 
 2. **{{section_2_title}}**
-   (針對每一個「需改善的課題」，以「筆記形式」解釋重點概念。請務必使用生活比喻，簡易明白。例如：「摩擦力：就像地面有看不見的小手...」。注意：內容不可超出上述課程範圍。)
+   (針對每一個「需改善的課題」，以「筆記形式」解釋重點概念。請務必使用生活比喻，簡易明白。若試卷內容中有相關題目，請引用題目情境加以說明。例如：「如試卷第3題關於推車...」。注意：內容不可超出課程範圍。)
 
 ---PAGE_BREAK---
 
@@ -355,8 +323,15 @@
 【弱項課題】：{{bottom_topics}}
 【需關注題目 (鑑別度低或過難)】：{{flagged_questions}}
 
+【MC 誤點分析 (最多人選錯的題目)】：
+{{mc_distractors}}
+
 【課程範圍參考】：
 {{syllabus}}
+
+【試卷內容參考】：
+{{exam_paper_content}}
+(請務必參考試卷具體題目內容，分析為何某些題目（尤其是MC）學生表現不佳。是題意不清？還是概念陷阱？)
 
 請用繁體中文，以專業公文語氣撰寫，格式如下（不要圖片）：
 
@@ -366,48 +341,29 @@
 (簡述整體表現，比較平均分與及格率是否理想)
 
 **2. 學生強弱項分析**
-* **強項**：(分析學生在哪些課題表現較好，顯示掌握了什麼概念)
-* **弱項**：(深入分析弱項課題，推測學生概念不清的原因，例如：混淆了...，未能掌握...)
+* **強項**：(分析學生在哪些課題表現較好)
+* **弱項**：(深入分析弱項課題。請結合試卷題目內容，具體指出學生在哪一類題目或哪一個概念點上失分最多。)
 
-**3. 試題質素檢討**
-(針對「需關注題目」進行分析，例如題目是否設計有誤，或是否超出學生能力)
+**3. MC 誤點與試題質素檢討**
+(參考「MC 誤點分析」與試卷內容，具體分析 2-3 題高誘答力題目。說明該題目的陷阱在哪裡，學生選錯反映了什麼具體迷思。)
 
 **4. 學與教反思及跟進建議**
 (具體建議下學期或補課時如何改善。例如：增加實驗環節、加強關鍵字操練、針對弱項課題的具體重溫策略。建議需符合課程範圍。)
-
 `.trim();
 
-        // Load Settings
         let customPrompt = localStorage.getItem('science_exam_prompt') || DEFAULT_PROMPT;
         let savedSyllabus = localStorage.getItem('science_exam_syllabus') || "";
-        
         const pt = document.getElementById('prompt-template'); if(pt) pt.value = customPrompt;
         const st = document.getElementById('syllabus-content'); if(st) st.value = savedSyllabus;
 
-        function savePrompt() {
-            customPrompt = document.getElementById('prompt-template').value;
-            localStorage.setItem('science_exam_prompt', customPrompt);
-            alert("✅ Prompt 設定已儲存");
-        }
-
-        function saveSyllabus() {
-            savedSyllabus = document.getElementById('syllabus-content').value;
-            localStorage.setItem('science_exam_syllabus', savedSyllabus);
-            alert("✅ 課程大綱已儲存");
-        }
-
-        function resetPrompt() {
-            if(confirm("確定要恢復預設指令嗎？")) {
-                customPrompt = DEFAULT_PROMPT;
-                document.getElementById('prompt-template').value = customPrompt;
-                localStorage.setItem('science_exam_prompt', customPrompt);
-            }
-        }
+        function savePrompt() { customPrompt = document.getElementById('prompt-template').value; localStorage.setItem('science_exam_prompt', customPrompt); alert("✅ 設定已儲存"); }
+        function saveSyllabus() { savedSyllabus = document.getElementById('syllabus-content').value; localStorage.setItem('science_exam_syllabus', savedSyllabus); alert("✅ 課程大綱已儲存"); }
+        function resetPrompt() { if(confirm("確定要恢復預設指令嗎？")) { customPrompt = DEFAULT_PROMPT; document.getElementById('prompt-template').value = customPrompt; localStorage.setItem('science_exam_prompt', customPrompt); } }
 
         function switchTab(tab) {
             document.querySelectorAll('.nav-card').forEach(b=>b.classList.remove('active'));
             document.getElementById(`tab-${tab}`).classList.add('active');
-            ['view-analysis','view-summary','view-report','view-settings'].forEach(id => { const el = document.getElementById(id); if(el) el.classList.add('hidden'); });
+            ['view-analysis','view-mc','view-summary','view-report','view-settings'].forEach(id => { const el = document.getElementById(id); if(el) el.classList.add('hidden'); });
             const target = document.getElementById(`view-${tab}`); if(target) target.classList.remove('hidden');
         }
 
@@ -417,52 +373,50 @@
             document.getElementById('gemini-config').classList.toggle('hidden', isDeep);
         });
 
-        // --- SAFE LISTENER HELPER ---
-        const safeListen = (id, event, fn) => {
-            const el = document.getElementById(id);
-            if(el) el.addEventListener(event, fn);
-            else console.warn(`Element #${id} missing for event ${event}`);
-        };
+        const safeListen = (id, event, fn) => { const el = document.getElementById(id); if(el) el.addEventListener(event, fn); };
 
         function handleFile(file, type) {
             if(!file) return;
-            Papa.parse(file, {header:true, skipEmptyLines:true, complete:(res)=>{
+            Papa.parse(file, {header: type!=='mc', skipEmptyLines:true, complete:(res)=>{
                 if(type==='marksheet') { marksheetData=res.data; detectColumns(res.meta.fields); }
-                else { mapData=res.data; }
+                else if(type==='map') { mapData=res.data; }
+                else if(type==='mc') { mcData=res.data; }
                 if(marksheetData.length && mapData.length) initSystem();
             }});
         }
         safeListen('marksheet-upload', 'change', (e)=>handleFile(e.target.files[0],'marksheet'));
         safeListen('map-upload', 'change', (e)=>handleFile(e.target.files[0],'map'));
-
-        // --- SYLLABUS HANDLER ---
-        safeListen('syllabus-upload', 'change', (e) => {
-            const file = e.target.files[0];
-            if(!file) return;
-            
-            const reader = new FileReader();
-            
+        safeListen('mc-upload', 'change', (e)=>handleFile(e.target.files[0],'mc'));
+        
+        // --- DOCX/TEXT READER ---
+        const readDocxOrText = (file, callback) => {
             if (file.name.endsWith('.docx')) {
-                reader.onload = function(event) {
-                    const arrayBuffer = event.target.result;
-                    mammoth.extractRawText({arrayBuffer: arrayBuffer})
-                        .then(function(result){
-                            document.getElementById('syllabus-content').value = result.value;
-                            saveSyllabus(); // Auto save
-                        })
-                        .catch(function(err){
-                            console.log(err);
-                            alert("DOCX 讀取失敗，請嘗試存為 .txt");
-                        });
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    mammoth.extractRawText({arrayBuffer: e.target.result})
+                        .then(r => callback(r.value))
+                        .catch(err => { console.error(err); alert("DOCX 讀取失敗，請轉存 .txt"); });
                 };
                 reader.readAsArrayBuffer(file);
             } else {
-                reader.onload = function(event) {
-                    document.getElementById('syllabus-content').value = event.target.result;
-                    saveSyllabus(); // Auto save
-                };
+                const reader = new FileReader();
+                reader.onload = (e) => callback(e.target.result);
                 reader.readAsText(file);
             }
+        };
+
+        safeListen('syllabus-upload', 'change', (e) => {
+            if(e.target.files[0]) readDocxOrText(e.target.files[0], (txt) => {
+                document.getElementById('syllabus-content').value = txt; saveSyllabus();
+            });
+        });
+
+        safeListen('exam-paper-upload', 'change', (e) => {
+            if(e.target.files[0]) readDocxOrText(e.target.files[0], (txt) => {
+                examPaperText = txt;
+                document.getElementById('paper-status').innerHTML = "✅ 試卷內容已載入";
+                document.getElementById('paper-status').className = "text-xs text-green-600 mt-1 font-bold ml-2";
+            });
         });
 
         function detectColumns(fields) {
@@ -478,16 +432,14 @@
             questionMap={}; totalPaperMark=0;
             mapData.forEach(row=>{
                 if(row.Question_ID) { 
-                    questionMap[row.Question_ID]={
-                        ...row, 
-                        fullMark:parseFloat(row.Full_Mark)||0,
-                        Concept_Detail: row.Concept_Detail || row.Topic_Name 
-                    }; 
+                    questionMap[row.Question_ID]={ ...row, fullMark:parseFloat(row.Full_Mark)||0, Concept_Detail: row.Concept_Detail || row.Topic_Name }; 
                     totalPaperMark+=questionMap[row.Question_ID].fullMark; 
                 }
             });
             switchTab('analysis'); 
             generateAnalysis();
+            if(mcData.length > 0) processMCData();
+            
             const sel=document.getElementById('student-select');
             if(sel) {
                 while(sel.options.length>2) sel.remove(2);
@@ -495,6 +447,134 @@
             }
         }
 
+        function processMCData() {
+            let cleanMC = mcData.filter(row => row.length > 5); if(cleanMC.length < 3) return;
+            let answerKeyRow = cleanMC[1];
+            let startRow = 2;
+            let headers = cleanMC[0];
+            let mcStats = {};
+            
+            Object.keys(questionMap).forEach(qId => {
+                if(qId.startsWith('MC')) {
+                    let shortId = qId.replace('MC', 'Q');
+                    let colIdx = headers.indexOf(shortId);
+                    if(colIdx === -1) colIdx = headers.indexOf(qId);
+                    if(colIdx !== -1) {
+                        let correctAns = answerKeyRow[colIdx]?.trim().toUpperCase();
+                        mcStats[qId] = { A:0, B:0, C:0, D:0, correct: correctAns, total:0, id: qId };
+                        for(let i=startRow; i<cleanMC.length; i++) {
+                            let ans = cleanMC[i][colIdx]?.trim().toUpperCase();
+                            if(['A','B','C','D'].includes(ans)) { mcStats[qId][ans]++; mcStats[qId].total++; }
+                        }
+                    }
+                }
+            });
+
+            mcDistractors = {};
+            let chartLabels=[], dsA=[], dsB=[], dsC=[], dsD=[], bgA=[], bgB=[], bgC=[], bgD=[];
+
+            Object.keys(mcStats).forEach(qId => {
+                let s = mcStats[qId];
+                if(s.total > 0) {
+                    chartLabels.push(qId);
+                    dsA.push((s.A/s.total)*100); dsB.push((s.B/s.total)*100); dsC.push((s.C/s.total)*100); dsD.push((s.D/s.total)*100);
+                    
+                    const getColor = (opt) => {
+                        if(opt === s.correct) return '#4ade80';
+                        if((s[opt]/s.total) > 0.2) return '#f87171';
+                        return '#e5e7eb';
+                    };
+                    bgA.push(getColor('A')); bgB.push(getColor('B')); bgC.push(getColor('C')); bgD.push(getColor('D'));
+
+                    let wrongHigh = [];
+                    ['A','B','C','D'].forEach(opt => {
+                        if(opt !== s.correct && (s[opt]/s.total) > 0.2) wrongHigh.push(`${opt} (${Math.round((s[opt]/s.total)*100)}%)`);
+                    });
+                    if(wrongHigh.length > 0) {
+                        mcDistractors[qId] = { correct: s.correct, wrong: wrongHigh, topic: questionMap[qId].Topic_Name, concept: questionMap[qId].Concept_Detail };
+                    }
+                }
+            });
+
+            const ctxMC = document.getElementById('mcChart');
+            if(ctxMC) {
+                if(chartInstances.mc) chartInstances.mc.destroy();
+                chartInstances.mc = new Chart(ctxMC, {
+                    type: 'bar',
+                    data: {
+                        labels: chartLabels,
+                        datasets: [
+                            { label: 'A', data: dsA, backgroundColor: bgA },
+                            { label: 'B', data: dsB, backgroundColor: bgB },
+                            { label: 'C', data: dsC, backgroundColor: bgC },
+                            { label: 'D', data: dsD, backgroundColor: bgD }
+                        ]
+                    },
+                    options: { responsive: true, scales: { x: { stacked: true }, y: { stacked: true, max: 100 } } }
+                });
+            }
+
+            const distList = document.getElementById('mc-distractor-list');
+            if(distList) {
+                let html = '<h4 class="font-bold text-gray-700 mb-2">🚨 重點關注題目 (高誘答力)</h4><div class="grid grid-cols-1 md:grid-cols-2 gap-3">';
+                Object.keys(mcDistractors).forEach(q => {
+                    let d = mcDistractors[q];
+                    html += `<div class="distractor-card relative">
+                        <div class="font-bold text-red-700 flex justify-between">
+                            <span>${q} (正確: ${d.correct})</span>
+                            <span class="text-xs bg-red-200 px-2 py-1 rounded text-red-800">誤選: ${d.wrong.join(', ')}</span>
+                        </div>
+                        <div class="text-xs text-gray-600 mt-1"><strong>概念:</strong> ${d.concept}</div>
+                        <button onclick="analyzeDistractorWithAI('${q}')" class="mt-2 w-full bg-white border border-purple-300 text-purple-700 hover:bg-purple-50 text-xs py-1 rounded shadow-sm flex items-center justify-center">
+                            <i class="fas fa-search mr-1"></i> AI 深度分析
+                        </button>
+                        <div id="analysis-${q}" class="analysis-box"></div>
+                    </div>`;
+                });
+                html += '</div>';
+                distList.innerHTML = html;
+            }
+        }
+
+        // --- AI DETECTIVE ---
+        window.analyzeDistractorWithAI = async function(qId) {
+            const box = document.getElementById(`analysis-${qId}`);
+            const d = mcDistractors[qId];
+            if(!examPaperText) { alert("請先在「資料匯入」區上傳試卷檔案 (DOCX/TXT) 才能進行深度分析。"); return; }
+            
+            box.classList.remove('hidden');
+            box.innerHTML = `<p class="animate-pulse text-purple-600"><i class="fas fa-spinner fa-spin mr-1"></i> AI 正在閱讀試卷並分析 ${qId}...</p>`;
+
+            const prompt = `
+            你是一位科學科試題分析專家。
+            【任務】：分析這條 Multiple Choice 題目，解釋為什麼學生會選錯。
+            
+            【題目資訊】：
+            題號：${qId}
+            正確答案：${d.correct}
+            學生常選錯誤答案：${d.wrong.join(', ')}
+            考核概念：${d.concept}
+
+            【試卷全文內容】：
+            ${examPaperText.substring(0, 10000)} ... (內容太長省略)
+
+            請在試卷文中找到 ${qId} 的題目內容（包括題幹和選項），然後回答：
+            1. **題目內容**：簡述題目在問什麼。
+            2. **正確思路**：為什麼 ${d.correct} 是對的？
+            3. **誤點分析**：為什麼這麼多學生選 ${d.wrong.join(', ')}？這個選項有什麼陷阱？反映學生有什麼迷思？
+            
+            請用繁體中文，精簡扼要地回答。
+            `;
+
+            try {
+                const result = await callAI(prompt);
+                box.innerHTML = `<div class="markdown-body text-xs">${marked.parse(result)}</div>`;
+            } catch(e) {
+                box.innerHTML = `<span class="text-red-500">分析失敗: ${e.message}</span>`;
+            }
+        };
+
+        // --- GENERATE ANALYSIS ---
         function generateAnalysis() {
             let students=[], qStats={}, topicAgg={}, diffAgg={Low:{e:0,m:0},Medium:{e:0,m:0},High:{e:0,m:0}};
             Object.keys(questionMap).forEach(q=>qStats[q]={sum:0,count:0,scores:[]});
@@ -561,8 +641,7 @@
             analysisCache.forEach(i=>{
                 if((f==='D_LOW'&&i.d>=0.2)||(f==='P_LOW'&&i.p>=0.3)) return;
                 let b=i.Difficulty==='High'?'bg-red-100':(i.Difficulty==='Medium'?'bg-yellow-100':'bg-green-100');
-                let dClass = 'text-gray-900';
-                if(i.d > 0.4) dClass = 'text-green-600 font-bold'; else if(i.d < 0.2) dClass = 'text-red-600 font-bold';
+                let dClass = 'text-gray-900'; if(i.d > 0.4) dClass = 'text-green-600 font-bold'; else if(i.d < 0.2) dClass = 'text-red-600 font-bold';
                 let ev=[]; if(i.p<0.3)ev.push("難"); if(i.d<0.2)ev.push("鑑別低");
                 tb.innerHTML+=`<tr class="hover:bg-gray-50"><td class="table-cell font-bold">${i.id}</td><td class="table-cell text-xs">${i.Topic_ID}</td><td class="table-cell"><span class="px-2 rounded text-xs ${b}">${i.Difficulty}</span></td><td class="table-cell">${(i.p*100).toFixed(0)}%</td><td class="table-cell ${dClass}">${i.d.toFixed(2)}</td><td class="table-cell text-xs">${ev.join(', ')}</td></tr>`;
             });
@@ -575,6 +654,7 @@
             const subjectName = document.getElementById('subject-name').value || "綜合科學科";
             const examInfo = document.getElementById('exam-info').value || "（未填寫考試年份）";
             const syllabus = document.getElementById('syllabus-content').value || "(未提供課程大綱)";
+            const examPaperContext = examPaperText ? examPaperText.substring(0, 15000) : "(未上傳試卷內容)";
             
             document.getElementById('summary-preview-area').innerHTML = `<div class="card p-6"><p class="animate-pulse text-gray-600"><i class="fas fa-spinner fa-spin mr-2"></i>AI 正在撰寫綜合報告...</p></div>`;
             
@@ -606,6 +686,13 @@
             stats.bottom_topics = sortedTopics.slice(-3).map(t=>`${t.name} (${(t.pct*100).toFixed(0)}%)`).join(', ');
             let flagged = analysisCache.filter(i => i.d < 0.2 || i.p < 0.3).map(i => `${i.id} (P:${(i.p*100).toFixed(0)}%, D:${i.d.toFixed(2)})`).join(', ');
             stats.flagged_questions = flagged || "無明顯異常題目";
+            
+            let mcInfo = "";
+            Object.keys(mcDistractors).forEach(q => {
+                let d = mcDistractors[q];
+                mcInfo += `\n- ${q} (${d.topic}): 正確${d.correct}, 誤選${d.wrong.join(', ')}。概念：${d.concept}`;
+            });
+            if(!mcInfo) mcInfo = "無明顯集體迷思";
 
             let prompt = SUMMARY_PROMPT.replace('{{school_name}}', stats.school_name)
                                        .replace('{{subject}}', stats.subject).replace(/{{subject}}/g, stats.subject)
@@ -616,7 +703,9 @@
                                        .replace('{{top_topics}}', stats.top_topics)
                                        .replace('{{bottom_topics}}', stats.bottom_topics)
                                        .replace('{{flagged_questions}}', stats.flagged_questions)
-                                       .replace('{{syllabus}}', syllabus);
+                                       .replace('{{syllabus}}', syllabus)
+                                       .replace('{{mc_distractors}}', mcInfo)
+                                       .replace('{{exam_paper_content}}', examPaperContext);
 
             try {
                 let md = await callAI(prompt);
@@ -697,11 +786,12 @@
             let sClass = row[colMap.class] || "";
             let selectedLang = document.getElementById('report-language').value;
             let syllabus = document.getElementById('syllabus-content').value || "(未提供課程範圍)";
+            let examPaperContext = examPaperText ? examPaperText.substring(0, 15000) : "(未上傳試卷內容)";
             
             let ph=`<div id="${rid}" class="card mb-4 border-l-4 border-gray-400 p-4"><p class="animate-pulse">正在生成 ${sName}...</p></div>`;
             if(!app) document.getElementById('report-preview-area').innerHTML=ph; else document.getElementById('report-preview-area').insertAdjacentHTML('beforeend',ph);
             try {
-                let txt=await callAI(buildPrompt(sName, an, selectedLang, syllabus));
+                let txt=await callAI(buildPrompt(sName, an, selectedLang, syllabus, examPaperContext));
                 let p1, p2;
                 if(txt.includes('---PAGE_BREAK---')) {
                     let parts = txt.split('---PAGE_BREAK---'); p1 = parts[0]; p2 = parts[1];
@@ -779,7 +869,7 @@
             return {totalScore:t,wrong:[...new Set(w)].slice(0,8),bad:Object.keys(b).sort((x,y)=>b[y]-b[x]).slice(0,3),good:Object.keys(g).sort((x,y)=>g[y]-g[x]).slice(0,3)};
         }
 
-        function buildPrompt(n,d, lang, syllabus) {
+        function buildPrompt(n,d, lang, syllabus, examPaperContext) {
             let tpl = document.getElementById('prompt-template').value;
             const L = {
                 zh: { inst: "請用繁體中文撰寫。", sec1: "整體表現回顧", sec2: "重點概念重溫", sec3: "自我挑戰" },
@@ -789,7 +879,8 @@
             return tpl.replace('{{student_name}}', n).replace('{{total_score}}', d.totalScore).replace('{{full_mark}}', totalPaperMark)
                       .replace('{{weaknesses}}', d.bad.join(', ')).replace('{{wrong_concepts}}', d.wrong.join(', ')).replace('{{strengths}}', d.good.join(', '))
                       .replace('{{language_instruction}}', LC.inst).replace('{{section_1_title}}', LC.sec1).replace('{{section_2_title}}', LC.sec2).replace('{{section_3_title}}', LC.sec3)
-                      .replace('{{syllabus}}', syllabus || "未提供");
+                      .replace('{{syllabus}}', syllabus || "未提供")
+                      .replace('{{exam_paper_content}}', examPaperContext || "未提供");
         }
 
         async function callAI(p){
