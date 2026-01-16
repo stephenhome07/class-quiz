@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>綜合科學科 - 試卷分析及AI報告系統 (Pro v13)</title>
+    <title>綜合科學科 - 試卷分析及AI報告系統 (Pro v14)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -11,7 +11,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
-        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f3f4f6; }
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #e5e7eb; } /* Darker background for contrast */
         .card { background: white; border-radius: 0.75rem; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1); padding: 1.5rem; }
         .table-header { @apply px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50; }
         .table-cell { @apply px-6 py-4 whitespace-nowrap text-sm text-gray-900; }
@@ -33,26 +33,30 @@
         .markdown-body p { margin-bottom: 0.8em; line-height: 1.6; }
         .markdown-body blockquote { border-left: 4px solid #e5e7eb; padding-left: 1em; color: #4b5563; font-style: italic; background-color: #f9fafb; padding: 0.5rem; }
 
-        /* Report Styles (Shared) */
+        /* --- REPORT PAGE STYLES (STRICT A4) --- */
         .report-page-style {
             width: 210mm; 
-            min-height: 296mm; 
+            min-height: 297mm; /* Exact A4 height */
             padding: 20mm; 
             background: white;
             position: relative; 
             overflow: hidden; 
             font-size: 11pt; 
-            margin: 0 auto; 
             box-sizing: border-box;
         }
         .page-footer { margin-top: 40px; padding-top: 10px; border-top: 1px dashed #ccc; font-size: 10pt; color: #666; page-break-inside: avoid; }
 
-        /* Preview Mode (Screen) */
-        #report-preview-area { display: flex; flex-direction: column; align-items: center; gap: 40px; padding-bottom: 50px; }
+        /* Preview Mode (Screen) - Distinct Pages */
+        #report-preview-area { 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            gap: 40px; /* Big gap between pages */
+            padding-bottom: 50px; 
+        }
         .preview-wrapper { 
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); 
-            border: 1px solid #e5e7eb; 
-            margin-bottom: 20px; /* Visual separation in preview */
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); 
+            border: 1px solid #d1d5db; 
         }
 
         /* Print Mode (Printer) - STRICT PAGINATION */
@@ -71,18 +75,18 @@
                 width: 100%; 
             }
             
+            /* The Page Class in Print */
             .report-page-style { 
-                height: 296mm; /* Force A4 Height */
-                width: 210mm;
-                page-break-after: always; /* Legacy */
-                break-after: page; /* Modern */
+                height: 296mm; /* Force height */
+                width: 100%;
+                page-break-after: always; /* Force break after each div */
+                break-after: page; 
                 margin: 0; 
                 box-shadow: none; 
                 border: none; 
-                overflow: hidden;
+                float: none;
             }
             
-            /* Ensure the footer sticks to bottom of the printable area */
             .page-footer { position: absolute; bottom: 20mm; left: 20mm; right: 20mm; }
         }
 
@@ -97,13 +101,10 @@
         <div class="bg-white rounded-lg shadow-2xl p-6 max-w-lg w-full mx-4 border-l-4 border-red-500 relative animate-fade-in-up">
             <button onclick="closeModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><i class="fas fa-times text-xl"></i></button>
             <h3 class="text-xl font-bold text-red-600 mb-2"><i class="fas fa-bug mr-2"></i>生成失敗 (Error Report)</h3>
-            
             <div class="bg-gray-100 p-3 rounded text-xs font-mono text-gray-800 overflow-auto max-h-60 mb-4 border border-gray-300" id="error-log-content">Waiting...</div>
-
             <div id="cors-advice" class="hidden mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
                 <strong>💡 連線診斷：</strong><br>Proxy 連線被拒。建議使用官方 Key 或檢查網址。
             </div>
-
             <button onclick="copyErrorLog()" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded shadow transition flex items-center justify-center">
                 <i class="fas fa-copy mr-2"></i> 複製完整錯誤報告
             </button>
@@ -111,20 +112,20 @@
     </div>
 
     <!-- WRAPPER -->
-    <div id="app-container">
+    <div id="app-container" class="max-w-7xl mx-auto">
         <!-- Navbar -->
-        <nav class="bg-blue-700 text-white shadow-lg">
+        <nav class="bg-blue-700 text-white shadow-lg mb-6">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="flex items-center justify-between h-16">
                     <div class="flex items-center">
                         <i class="fas fa-microscope text-2xl mr-3"></i>
-                        <span class="font-bold text-xl">綜合科學科 - 試卷分析及AI報告系統 (Pro v13)</span>
+                        <span class="font-bold text-xl ml-2">綜合科學科 - 試卷分析及AI報告系統 (Pro v14)</span>
                     </div>
                 </div>
             </div>
         </nav>
 
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="px-4 sm:px-6 lg:px-8 pb-12">
             
             <!-- File Upload -->
             <div class="card mb-8 animate-fade-in-up border-l-4 border-blue-500">
@@ -249,6 +250,9 @@
         marked.setOptions({ renderer: renderer });
 
         let marksheetData=[], mapData=[], questionMap={}, totalPaperMark=0, chartInstances={}, analysisCache=null;
+        
+        // CSV Header Mapping Helpers
+        let colMap = { name: '', class: '', no: '' };
 
         function switchTab(tab) {
             document.querySelectorAll('.nav-card').forEach(b=>b.classList.remove('active'));
@@ -267,12 +271,25 @@
         function handleFile(file, type) {
             if(!file) return;
             Papa.parse(file, {header:true, skipEmptyLines:true, complete:(res)=>{
-                if(type==='marksheet') marksheetData=res.data; else mapData=res.data;
+                if(type==='marksheet') {
+                    marksheetData=res.data;
+                    detectColumns(res.meta.fields);
+                } else {
+                    mapData=res.data;
+                }
                 if(marksheetData.length && mapData.length) initSystem();
             }});
         }
         document.getElementById('marksheet-upload').addEventListener('change', (e)=>handleFile(e.target.files[0],'marksheet'));
         document.getElementById('map-upload').addEventListener('change', (e)=>handleFile(e.target.files[0],'map'));
+
+        function detectColumns(fields) {
+            // Fuzzy search for columns
+            colMap.name = fields.find(f => f.trim().match(/^Name/i) || f.trim().match(/姓名/)) || 'Name';
+            colMap.class = fields.find(f => f.trim().match(/^Class$/i) || f.trim().match(/班別/)) || 'Class';
+            colMap.no = fields.find(f => f.trim().match(/Class.*No/i) || f.trim().match(/學號/)) || 'Class_No';
+            console.log("Detected Columns:", colMap);
+        }
 
         function initSystem() {
             document.getElementById('file-status').textContent="✅ 檔案已載入";
@@ -284,7 +301,9 @@
             generateAnalysis();
             const sel=document.getElementById('student-select');
             while(sel.options.length>2) sel.remove(2);
-            marksheetData.forEach((row,i)=>{ if(row.Name) sel.add(new Option(`${row.Class_No||''} ${row.Name}`, i)); });
+            marksheetData.forEach((row,i)=>{ 
+                if(row[colMap.name]) sel.add(new Option(`${row[colMap.no]||''} ${row[colMap.name]}`, i)); 
+            });
             switchTab('analysis');
         }
 
@@ -292,7 +311,7 @@
             let students=[], qStats={}, topicAgg={}, diffAgg={Low:{e:0,m:0},Medium:{e:0,m:0},High:{e:0,m:0}};
             Object.keys(questionMap).forEach(q=>qStats[q]={sum:0,count:0,scores:[]});
             marksheetData.forEach(row=>{
-                if(!row.Name) return;
+                if(!row[colMap.name]) return;
                 let sTotal=0, sRow={raw:row};
                 Object.keys(questionMap).forEach(qId=>{
                     if(row.hasOwnProperty(qId)) {
@@ -365,17 +384,15 @@
             let c=document.getElementById('print-container').innerHTML;
             if(!c.trim()) return;
             c = c.replace(/<img[^>]*>/g, "");
-            const h=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Report</title><script src="https://cdn.tailwindcss.com"><\/script><style>@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC&display=swap');body{font-family:'Noto Sans TC',sans-serif;background:#f3f4f6;padding:20px;}.report-page-style{width:210mm;min-height:296mm;padding:20mm;background:white;margin:0 auto 30px;position:relative;overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.1);border:1px solid #ddd;}.page-footer{margin-top:40px;padding-top:10px;border-top:1px dashed #ccc;color:#666;font-size:10pt;}@media print{body{background:white;padding:0;}.report-page-style{width:210mm;height:296mm;margin:0;box-shadow:none;border:none;break-after:page;page-break-after:always;overflow:hidden;}}h1{font-size:1.6em;color:#1e3a8a;border-bottom:2px solid #ddd;padding-bottom:10px;}h2{font-size:1.3em;color:#2563eb;margin-top:1em;}ul{padding-left:1.5em;list-style:disc;}blockquote{border-left:4px solid #e5e7eb;padding-left:1em;background:#f9fafb;padding:0.5rem;margin:10px 0;}</style></head><body>${c}</body></html>`;
+            const h=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Report</title><script src="https://cdn.tailwindcss.com"><\/script><style>@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC&display=swap');body{font-family:'Noto Sans TC',sans-serif;background:#f3f4f6;padding:20px;}.report-page-style{width:210mm;min-height:296mm;padding:20mm;background:white;margin:0 auto 30px;position:relative;overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.1);border:1px solid #ddd;box-sizing:border-box;}.page-footer{margin-top:40px;padding-top:10px;border-top:1px dashed #ccc;color:#666;font-size:10pt;}@media print{body{background:white;padding:0;}.report-page-style{width:100%;height:296mm;margin:0;box-shadow:none;border:none;break-after:page;page-break-after:always;overflow:hidden;}}h1{font-size:1.6em;color:#1e3a8a;border-bottom:2px solid #ddd;padding-bottom:10px;}h2{font-size:1.3em;color:#2563eb;margin-top:1em;}ul{padding-left:1.5em;list-style:disc;}blockquote{border-left:4px solid #e5e7eb;padding-left:1em;background:#f9fafb;padding:0.5rem;margin:10px 0;}</style></head><body>${c}</body></html>`;
             const b=new Blob([h],{type:'text/html'}), u=URL.createObjectURL(b), a=document.createElement('a');
             a.href=u; a.download=`Reports_${new Date().toISOString().slice(0,10)}.html`; document.body.appendChild(a); a.click();
             setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(u);},100);
         });
 
         async function batchGen(){
-            // Fix: Use a snapshot of indices to ensure data integrity
-            // Filter only valid students first
             let validIndices = [];
-            marksheetData.forEach((r, i) => { if(r['Name']) validIndices.push(i); });
+            marksheetData.forEach((r, i) => { if(r[colMap.name]) validIndices.push(i); });
             
             let pb=document.getElementById('progress-bar'), pc=document.getElementById('progress-count');
             document.getElementById('batch-progress').classList.remove('hidden'); document.getElementById('generate-btn').disabled=true;
@@ -384,7 +401,6 @@
                 let originalIndex = validIndices[i];
                 pb.style.width=Math.round(((i+1)/validIndices.length)*100)+'%'; 
                 pc.textContent=`${i+1}/${validIndices.length}`;
-                // Pass true for append
                 await singleGen(originalIndex, true); 
                 await new Promise(r=>setTimeout(r,2000));
             }
@@ -395,15 +411,33 @@
 
         async function singleGen(idx,app=false){
             let row=marksheetData[idx], an=analyzeStudent(row), rid=`rep-${idx}-${Date.now()}`;
-            // Use bracket notation to safely access keys from CSV (Name, Class)
-            let sName = row['Name'] || "未知姓名";
-            let sClass = row['Class'] || "";
+            // Use resolved columns
+            let sName = row[colMap.name] || "未知";
+            let sClass = row[colMap.class] || "";
             
             let ph=`<div id="${rid}" class="card mb-4 border-l-4 border-gray-400 p-4"><p class="animate-pulse">正在生成 ${sName}...</p></div>`;
             if(!app) document.getElementById('report-preview-area').innerHTML=ph; else document.getElementById('report-preview-area').insertAdjacentHTML('beforeend',ph);
             try {
                 let txt=await callAI(buildPrompt(sName,an));
-                let p1=txt.split('---PAGE_BREAK---')[0], p2=txt.split('---PAGE_BREAK---')[1]||"", ex=p2.split('---ANSWERS---')[0]||"", ans=p2.split('---ANSWERS---')[1]||"";
+                // Fallback splitting logic
+                let p1, p2;
+                if(txt.includes('---PAGE_BREAK---')) {
+                    let parts = txt.split('---PAGE_BREAK---');
+                    p1 = parts[0]; p2 = parts[1];
+                } else if(txt.includes('3. 自我挑戰')) {
+                    let parts = txt.split('3. 自我挑戰');
+                    p1 = parts[0]; p2 = "### 3. 自我挑戰" + parts[1];
+                } else {
+                    // Force split by length if structure is missing
+                    p1 = txt; p2 = "（AI 未產生第二頁內容，請重試）";
+                }
+
+                let ex, ans;
+                if(p2.includes('---ANSWERS---')) {
+                    let ep = p2.split('---ANSWERS---'); ex=ep[0]; ans=ep[1];
+                } else {
+                    ex = p2; ans = "無答案";
+                }
                 
                 let h=`
                 <!-- PAGE 1 -->
@@ -432,16 +466,21 @@
                     </div>
                 </div>`;
                 
-                // Add to Print Container
-                let d=document.createElement('div'); d.innerHTML=h; document.getElementById('print-container').appendChild(d);
-                // Update Preview
+                // Direct Append to Print Container (No Wrapper)
+                let tempDiv = document.createElement('div');
+                tempDiv.innerHTML = h;
+                // Move children one by one to avoid wrapper div
+                while(tempDiv.firstChild) {
+                    document.getElementById('print-container').appendChild(tempDiv.firstChild);
+                }
+
+                // Update Preview (With Wrapper)
                 let w=document.createElement('div'); w.innerHTML=h; document.getElementById(rid).replaceWith(w);
                 
                 document.getElementById('print-btn').disabled=false; document.getElementById('download-btn').disabled=false;
             } catch(e) {
                 console.error(e);
                 showErrorModal(e, rid);
-                // Remove placeholder on error so it doesn't stuck
                 let el = document.getElementById(rid); if(el) el.innerHTML = `<div class="text-red-500 p-2">生成失敗</div>`;
             }
         }
@@ -451,13 +490,8 @@
             const modal = document.getElementById('error-modal');
             const content = document.getElementById('error-log-content');
             const corsAdvice = document.getElementById('cors-advice');
-            
             let logText = `Error: ${e.message}\n`;
-            if(e.data) {
-                logText += `URL: ${e.data.url}\n`;
-                logText += `Status: ${e.data.status}\n`;
-                logText += `Response: ${e.data.msg}\n`;
-            }
+            if(e.data) { logText += `URL: ${e.data.url}\nStatus: ${e.data.status}\nResponse: ${e.data.msg}\n`; }
             content.textContent = logText;
             if(e.message.includes('Network Error') || e.message.includes('Failed to fetch')) { corsAdvice.classList.remove('hidden'); } else { corsAdvice.classList.add('hidden'); }
             modal.classList.remove('hidden');
