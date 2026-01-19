@@ -3,737 +3,529 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>綜合科學科 - 試卷分析及AI報告系統 (Pro v39)</title>
+    <title>綜合科學科 - 試卷電子化工具 (AI Digitizer v39)</title>
+    
+    <!-- Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- CSV Parser -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- Document Parsers -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
+    
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
-        body { font-family: 'Noto Sans TC', sans-serif; background-color: #e5e7eb; }
-        .card { background: white; border-radius: 0.75rem; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1); padding: 1.5rem; }
-        .table-header { @apply px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50; }
-        .table-cell { @apply px-6 py-4 whitespace-nowrap text-sm text-gray-900; }
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f0f2f5; }
+        .card { background: white; border-radius: 0.75rem; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1); transition: all 0.3s ease; }
+        .card:hover { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        .btn-primary { background-color: #3b82f6; color: white; }
+        .btn-primary:hover { background-color: #2563eb; }
+        .btn-secondary { background-color: #10b981; color: white; }
+        .btn-secondary:hover { background-color: #059669; }
+        .btn-outline { background-color: white; border: 1px solid #d1d5db; color: #374151; }
+        .btn-outline:hover { background-color: #f3f4f6; }
         
-        .nav-card { @apply flex flex-col items-center justify-center p-3 bg-white border-2 border-transparent rounded-xl shadow-sm cursor-pointer transition-all duration-200 hover:shadow-md hover:border-blue-200; }
-        .nav-card.active { @apply border-blue-600 bg-blue-50 text-blue-800 ring-2 ring-blue-200 ring-opacity-50; }
-        .nav-card i { @apply text-2xl mb-1 text-gray-400; }
-        .nav-card.active i { @apply text-blue-600; }
-        .nav-card h3 { @apply font-bold text-sm; }
-        .nav-card p { @apply text-xs text-gray-500 mt-1 text-center hidden md:block; }
-
-        .heatmap-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.75rem; }
-        .heatmap-item { @apply p-3 rounded-lg text-center shadow-sm border border-gray-100 flex flex-col justify-center h-24 transition hover:shadow-md transform hover:-translate-y-1; }
+        .loader { border: 3px solid #f3f3f3; border-radius: 50%; border-top: 3px solid #3b82f6; width: 16px; height: 16px; animation: spin 1s linear infinite; display: inline-block; margin-right: 5px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
-        /* Markdown */
-        .markdown-body h1 { font-size: 1.4em; font-weight: bold; margin-bottom: 0.5em; color: #1e3a8a; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.3em; }
-        .markdown-body h2 { font-size: 1.2em; font-weight: bold; margin-top: 1.2em; margin-bottom: 0.5em; color: #2563eb; }
-        .markdown-body h3 { font-size: 1.1em; font-weight: bold; margin-top: 1em; color: #4b5563; }
-        .markdown-body ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 1em; }
-        .markdown-body ol { list-style-type: decimal; padding-left: 1.5em; margin-bottom: 1em; }
-        .markdown-body p { margin-bottom: 0.8em; line-height: 1.6; }
-        .markdown-body blockquote { border-left: 4px solid #e5e7eb; padding-left: 1em; color: #4b5563; font-style: italic; background-color: #f9fafb; padding: 0.5rem; }
-
-        /* Report Page */
-        .report-page-style { width: 210mm; min-height: 297mm; padding: 20mm; background: white; position: relative; overflow: hidden; font-size: 11pt; box-sizing: border-box; }
-        .page-footer { margin-top: 40px; padding-top: 10px; border-top: 1px dashed #ccc; font-size: 10pt; color: #666; page-break-inside: avoid; }
-        #report-preview-area, #summary-preview-area { display: flex; flex-direction: column; align-items: center; gap: 40px; padding-bottom: 50px; }
-        .preview-wrapper { box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); border: 1px solid #d1d5db; margin-bottom: 20px; }
-
-        #print-container { display: none; }
-        @media print {
-            @page { size: A4 portrait; margin: 0; }
-            body { background: white; -webkit-print-color-adjust: exact; }
-            #app-container, nav, .no-print, #error-modal { display: none !important; }
-            #print-container { display: block !important; position: absolute; top: 0; left: 0; width: 100%; }
-            .report-page-style { height: 296mm; width: 100%; page-break-after: always; break-after: page; margin: 0; box-shadow: none; border: none; float: none; }
-            .page-footer { position: absolute; bottom: 20mm; left: 20mm; right: 20mm; }
-        }
-        #error-modal { background: rgba(0,0,0,0.5); }
-        .distractor-card { @apply border-l-4 border-red-500 bg-red-50 p-4 rounded mb-4; }
-        .analysis-box { @apply mt-3 p-3 bg-white rounded border border-gray-200 text-sm text-gray-700 hidden; }
-        .badge-req { @apply bg-red-100 text-red-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase ml-1; }
-        .badge-opt { @apply bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase ml-1; }
+        details > summary { list-style: none; cursor: pointer; }
+        details > summary::-webkit-details-marker { display: none; }
     </style>
 </head>
-<body class="text-gray-800">
+<body class="min-h-screen text-gray-800">
 
-    <!-- Error Modal -->
-    <div id="error-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center">
-        <div class="bg-white rounded-lg shadow-2xl p-6 max-w-lg w-full mx-4 border-l-4 border-red-500 relative animate-fade-in-up">
-            <button onclick="closeModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><i class="fas fa-times text-xl"></i></button>
-            <h3 class="text-xl font-bold text-red-600 mb-2"><i class="fas fa-bug mr-2"></i>生成失敗</h3>
-            <div class="bg-gray-100 p-3 rounded text-xs font-mono text-gray-800 overflow-auto max-h-60 mb-4 border border-gray-300" id="error-log-content">Waiting...</div>
-            <div id="cors-advice" class="hidden mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
-                <strong>💡 連線診斷建議：</strong><br>
-                1. 您的 Proxy URL 可能不支援瀏覽器直接連線 (CORS)。瀏覽器比 Python 更嚴格。<br>
-                2. 請嘗試使用 <strong>Google Gemini Key</strong> (直接連線 Google 伺服器最穩定)。<br>
-                3. 請確認 API Key 是否需要填寫 (部分 Proxy 內含 Key 則不需填寫)。
-            </div>
-            <button onclick="copyErrorLog()" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded shadow transition flex items-center justify-center"><i class="fas fa-copy mr-2"></i> 複製錯誤報告</button>
-        </div>
-    </div>
-
-    <!-- WRAPPER -->
-    <div id="app-container" class="max-w-7xl mx-auto">
-        <!-- Navbar -->
-        <nav class="bg-blue-700 text-white shadow-lg mb-6">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div class="flex items-center justify-between h-16">
-                    <div class="flex items-center">
-                        <i class="fas fa-microscope text-2xl mr-3"></i>
-                        <span class="font-bold text-xl ml-2">綜合科學科 - 試卷分析及AI報告系統 (Pro v39)</span>
-                    </div>
-                </div>
-            </div>
-        </nav>
-
-        <div class="px-4 sm:px-6 lg:px-8 pb-12">
-            
-            <!-- File Upload Section -->
-            <div class="card mb-8 animate-fade-in-up border-l-4 border-blue-500">
-                <h2 class="text-lg font-bold text-gray-700 mb-4 pb-2 border-b"><i class="fas fa-file-upload mr-2"></i>1. 資料匯入</h2>
-                
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    <!-- Required Column -->
-                    <div class="bg-red-50 p-4 rounded-lg border-2 border-red-100">
-                        <h3 class="text-sm font-bold text-red-700 mb-3 flex items-center"><i class="fas fa-asterisk mr-2"></i>必要資料 (Required)</h3>
-                        <div class="space-y-4">
-                            <div>
-                                <label class="block text-xs font-semibold text-gray-600 mb-1">1. 分數表 (MARKSHEET.csv)</label>
-                                <input id="marksheet-upload" type="file" accept=".csv" class="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-white file:text-red-700 hover:file:bg-red-50 cursor-pointer border border-red-200 rounded"/>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-gray-600 mb-1">2. 題目表 (MAP.csv)</label>
-                                <input id="map-upload" type="file" accept=".csv" class="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-white file:text-red-700 hover:file:bg-red-50 cursor-pointer border border-red-200 rounded"/>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Optional Column -->
-                    <div class="bg-blue-50 p-4 rounded-lg border-2 border-blue-100">
-                        <h3 class="text-sm font-bold text-blue-700 mb-3 flex items-center"><i class="fas fa-magic mr-2"></i>進階分析資料 (推薦)</h3>
-                        <div class="space-y-4">
-                            <div>
-                                <label class="block text-xs font-semibold text-gray-600 mb-1">3. 試卷內容 (Word/Txt) <span class="badge-opt">提升AI精準度</span></label>
-                                <input id="exam-paper-upload" type="file" accept=".docx,.txt" class="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-white file:text-blue-700 hover:file:bg-blue-50 cursor-pointer border border-blue-200 rounded"/>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-gray-600 mb-1">4. MC 選項紀錄 (MC.csv) <span class="badge-opt">誘答項分析</span></label>
-                                <input id="mc-upload" type="file" accept=".csv" class="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-white file:text-blue-700 hover:file:bg-blue-50 cursor-pointer border border-blue-200 rounded"/>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-gray-600 mb-1">5. 課程大綱 (Syllabus) <span class="badge-opt">防止超綱</span></label>
-                                <input id="syllabus-upload" type="file" accept=".docx,.txt,.csv" class="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-white file:text-blue-700 hover:file:bg-blue-50 cursor-pointer border border-blue-200 rounded"/>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="mt-4 pt-2 border-t border-gray-100 flex justify-between items-center text-xs text-gray-500">
+    <!-- Top Navigation -->
+    <nav class="bg-white shadow sticky top-0 z-50">
+        <div class="max-w-5xl mx-auto px-4">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <i class="fas fa-robot text-indigo-600 text-3xl mr-3"></i>
                     <div>
-                        <span class="font-bold">狀態：</span> <span id="file-status" class="italic">等待檔案...</span>
-                        <span id="paper-status" class="ml-4 italic text-green-600 font-bold"></span>
+                        <h1 class="font-bold text-xl text-gray-900 tracking-tight">試卷電子化工具 (AI Digitizer)</h1>
+                        <p class="text-xs text-gray-500 font-medium">Standalone Version 39</p>
                     </div>
                 </div>
-            </div>
-
-            <!-- TABS -->
-            <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-8 hidden" id="main-tabs">
-                <div onclick="switchTab('analysis')" class="nav-card active" id="tab-analysis"><i class="fas fa-chart-pie"></i><h3>全班數據</h3></div>
-                <div onclick="switchTab('mc')" class="nav-card" id="tab-mc"><i class="fas fa-list-ul"></i><h3>MC 分析</h3></div>
-                <div onclick="switchTab('summary')" class="nav-card" id="tab-summary"><i class="fas fa-file-alt"></i><h3>綜合報告</h3></div>
-                <div onclick="switchTab('report')" class="nav-card" id="tab-report"><i class="fas fa-user-graduate"></i><h3>學生報告</h3></div>
-                <div onclick="switchTab('settings')" class="nav-card" id="tab-settings"><i class="fas fa-sliders-h"></i><h3>設定</h3></div>
-            </div>
-
-            <!-- VIEW 1: ANALYSIS -->
-            <div id="view-analysis" class="hidden space-y-8">
-                <!-- Stats -->
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div class="card border-t-4 border-blue-500"><div class="text-gray-500 text-sm">平均分</div><div class="text-3xl font-bold mt-1" id="stat-mean">--</div></div>
-                    <div class="card border-t-4 border-green-500"><div class="text-gray-500 text-sm">及格率</div><div class="text-3xl font-bold mt-1" id="stat-pass">--%</div></div>
-                    <div class="card border-t-4 border-yellow-500"><div class="text-gray-500 text-sm">最高/最低</div><div class="text-3xl font-bold mt-1"><span id="stat-max" class="text-green-600">--</span>/<span id="stat-min" class="text-red-600">--</span></div></div>
-                    <div class="card border-t-4 border-purple-500"><div class="text-gray-500 text-sm">標準差</div><div class="text-3xl font-bold mt-1" id="stat-sd">--</div></div>
-                </div>
-                <!-- Charts -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    <div class="card flex flex-col h-full"><h3 class="text-lg font-bold mb-4">強弱課題熱點圖</h3><div id="heatmap-container" class="heatmap-grid overflow-y-auto max-h-64 p-1 flex-grow"></div></div>
-                    <div class="card flex flex-col h-full"><h3 class="text-lg font-bold mb-4">成績分佈</h3><div class="relative h-64 w-full"><canvas id="distChart"></canvas></div></div>
-                </div>
-                <!-- Table -->
-                <div class="card overflow-hidden">
-                    <div class="flex justify-between items-center mb-4 border-b pb-4"><h3 class="text-lg font-bold">題項分析</h3><select id="item-filter" class="p-1 border rounded text-sm"><option value="ALL">全部</option><option value="D_LOW">鑑別度低</option><option value="P_LOW">題目過難</option></select></div>
-                    <div class="overflow-x-auto max-h-96 border rounded-lg"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="table-header">題號</th><th class="table-header">課題</th><th class="table-header">難度</th><th class="table-header">P</th><th class="table-header">D</th><th class="table-header">評價</th></tr></thead><tbody class="bg-white divide-y divide-gray-200" id="itemTableBody"></tbody></table></div>
-                </div>
-            </div>
-
-            <!-- VIEW 1.5: MC ANALYSIS -->
-            <div id="view-mc" class="hidden space-y-8">
-                <div class="card"><h3 class="text-lg font-bold mb-4">MC 選項分佈</h3><div class="relative h-64 w-full"><canvas id="mcChart"></canvas></div><div class="mt-8" id="mc-distractor-list"></div></div>
-            </div>
-
-            <!-- VIEW 2: SUMMARY REPORT -->
-            <div id="view-summary" class="hidden space-y-8">
-                <div class="card bg-orange-50 border-l-4 border-orange-500">
-                    <h2 class="text-lg font-bold text-gray-700 mb-2"><i class="fas fa-file-alt mr-2"></i>考試成績與教學檢討報告</h2>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                        <div><label class="block text-xs font-bold text-gray-600 mb-1">學校</label><input id="school-name" type="text" value="嗇色園主辦可譽中學暨小學" class="w-full p-2 border rounded text-sm bg-white"></div>
-                        <div><label class="block text-xs font-bold text-gray-600 mb-1">科目</label><input id="subject-name" type="text" value="綜合科學科" class="w-full p-2 border rounded text-sm bg-white"></div>
-                        <div><label class="block text-xs font-bold text-gray-600 mb-1">年份/級別</label><input id="exam-info" type="text" placeholder="e.g. 2025-2026 中二級" class="w-full p-2 border rounded text-sm bg-white"></div>
-                    </div>
-                    <div class="flex gap-4 justify-end"><button id="gen-summary-btn" class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-6 rounded shadow flex items-center"><i class="fas fa-magic mr-2"></i> 生成綜合報告</button><button id="dl-summary-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded shadow disabled:opacity-50" disabled><i class="fas fa-download mr-2"></i> 下載</button></div>
-                </div>
-                <div id="summary-preview-area"></div>
-            </div>
-
-            <!-- VIEW 3: STUDENT REPORT -->
-            <div id="view-report" class="hidden space-y-8">
-                <div class="card">
-                    <h2 class="text-lg font-bold mb-4 border-b pb-2"><i class="fas fa-user-graduate mr-2"></i>學生個別報告</h2>
-                    <div class="flex flex-col md:flex-row gap-4 items-end">
-                        <div class="w-full md:w-1/4"><label class="block text-sm font-medium mb-1">語言</label><select id="report-language" class="w-full p-2 border rounded font-bold text-indigo-600"><option value="zh">繁體中文</option><option value="en">English</option></select></div>
-                        <div class="flex-grow w-full"><label class="block text-sm font-medium mb-1">選擇學生</label><select id="student-select" class="w-full p-2 border rounded"><option value="">請選擇...</option><option value="ALL">【 🚀 批量生成 】全班</option></select></div>
-                        <button id="generate-btn" class="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded shadow"><i class="fas fa-play mr-2"></i>生成</button>
-                        <button onclick="window.print()" id="print-btn" class="w-full md:w-auto bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded shadow" disabled><i class="fas fa-print mr-2"></i>列印/PDF</button>
-                        <button id="download-btn" class="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded shadow" disabled><i class="fas fa-file-download mr-2"></i>下載HTML</button>
-                    </div>
-                    <div id="batch-progress" class="hidden mt-6 bg-gray-50 p-4 rounded border"><div class="flex justify-between text-xs font-bold mb-2"><span id="progress-text">生成中...</span><span id="progress-count">0/0</span></div><div class="w-full bg-gray-200 rounded-full h-3"><div id="progress-bar" class="bg-indigo-600 h-3 rounded-full" style="width:0%"></div></div></div>
-                </div>
-                <div id="report-preview-area" class="w-full"></div>
-            </div>
-
-            <!-- VIEW 4: SETTINGS -->
-            <div id="view-settings" class="hidden space-y-8">
-                <div class="card border-l-4 border-green-500 mb-6">
-                    <h2 class="text-lg font-bold text-gray-700 mb-2"><i class="fas fa-book mr-2"></i>課程範圍 (Syllabus)</h2>
-                    <textarea id="syllabus-content" class="w-full h-40 p-4 border border-gray-300 rounded font-mono text-sm bg-gray-50" placeholder="在此輸入課程重點..."></textarea>
-                    <div class="flex justify-end mt-2"><button id="save-syllabus-btn" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 px-4 rounded shadow"><i class="fas fa-save mr-1"></i>儲存</button></div>
-                </div>
-                <div class="card bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200 mb-6">
-                    <h3 class="text-md font-bold text-gray-800 mb-3"><i class="fas fa-robot mr-2"></i>API 設定</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div><label class="block text-xs font-bold text-gray-600 mb-1">模型</label><select id="model-provider" class="w-full text-sm border p-2 rounded"><option value="deepseek" selected>DeepSeek (Proxy)</option><option value="gemini">Google Gemini</option></select></div>
-                        <div class="md:col-span-2" id="ds-config">
-                            <div class="grid grid-cols-2 gap-2"><input id="ds-url" type="text" value="https://apiproxy.k12gpt.ai/NPcj-7_" class="text-xs p-2 border rounded" placeholder="Full API Endpoint"><input id="ds-model" type="text" value="deepseek-chat" class="text-xs p-2 border rounded" placeholder="Model"></div>
-                            <div class="mt-2 flex items-center bg-white p-2 rounded border border-gray-200"><input type="checkbox" id="ds-auto-path" class="mr-2"><label for="ds-auto-path" class="text-xs font-bold cursor-pointer select-none">自動補全 /chat/completions (預設關閉)</label></div>
-                            <div class="mt-2"><input id="ds-key" type="password" placeholder="API Key (Optional)" class="w-full text-xs p-2 border rounded"></div>
-                            <button id="test-conn-btn" class="mt-2 bg-blue-500 hover:bg-blue-600 text-white text-xs px-3 py-1 rounded">測試連線</button>
-                        </div>
-                        <div class="md:col-span-2 hidden" id="gemini-config"><input id="gemini-key" type="password" placeholder="Gemini API Key" class="w-full text-xs p-2 border rounded"></div>
-                    </div>
-                </div>
-                <div class="card border-l-4 border-purple-500">
-                    <h2 class="text-lg font-bold text-gray-700 mb-4 pb-2 border-b"><i class="fas fa-edit mr-2"></i>自訂學生報告指令</h2>
-                    <textarea id="prompt-template" class="w-full h-64 p-4 border border-gray-300 rounded font-mono text-sm bg-gray-50" spellcheck="false"></textarea>
-                    <div class="flex justify-end gap-4 mt-4"><button id="reset-prompt-btn" class="text-gray-500 hover:text-gray-700 text-sm font-bold px-4 py-2">恢復預設</button><button id="save-prompt-btn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded shadow"><i class="fas fa-save mr-2"></i>儲存</button></div>
+                <div class="flex items-center">
+                    <span class="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full border border-green-200">
+                        <i class="fas fa-wifi mr-1"></i> K12GPT 已連線
+                    </span>
                 </div>
             </div>
         </div>
+    </nav>
+
+    <!-- Main Container -->
+    <div class="max-w-5xl mx-auto px-4 py-8 space-y-8">
+
+        <!-- Info Banner -->
+        <div class="bg-indigo-50 border-l-4 border-indigo-500 p-4 rounded shadow-sm flex items-start">
+            <i class="fas fa-info-circle text-indigo-500 mt-1 mr-3"></i>
+            <div>
+                <p class="text-sm text-indigo-800 font-bold">使用說明</p>
+                <p class="text-xs text-indigo-700">此工具專用於產生 CSV 數據。請先使用 <b>功能一</b> 生成試卷結構 (MAP)，再使用 <b>功能二</b> 批改學生答卷。生成的 CSV 可匯入 Excel 或舊有的分析系統。</p>
+            </div>
+        </div>
+
+        <!-- ========================================================================================== -->
+        <!-- Feature 1: MAP Generator -->
+        <!-- ========================================================================================== -->
+        <div class="card p-6 border-t-4 border-blue-500 relative overflow-hidden">
+            <div class="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
+                <i class="fas fa-map-marked-alt text-9xl text-blue-500"></i>
+            </div>
+            
+            <div class="flex items-center justify-between mb-6 relative z-10">
+                <h2 class="text-xl font-bold text-gray-800"><i class="fas fa-map mr-2 text-blue-600"></i>1. 試卷結構 (MAP) 生成</h2>
+                <span class="text-xs font-bold bg-blue-100 text-blue-700 px-3 py-1 rounded-full">老師專用</span>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+                <div class="space-y-4">
+                    <!-- Step 1 -->
+                    <div class="p-3 bg-gray-50 rounded border border-gray-200">
+                        <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Step 1: 課程大綱 (Syllabus) <span class="font-normal text-gray-400">(選填)</span></label>
+                        <input type="file" id="syllabus-file-upload" accept=".docx,.txt" class="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-gray-200 file:text-gray-700 hover:file:bg-gray-300"/>
+                        <p class="text-[10px] text-gray-400 mt-1">AI 將參考大綱的 Topic ID (如 7.1) 進行分類。</p>
+                    </div>
+
+                    <!-- Step 2 -->
+                    <div class="p-3 bg-gray-50 rounded border border-gray-200">
+                        <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Step 2: 空白試卷 (Exam Paper) <span class="text-red-500">*</span></label>
+                        <input type="file" id="map-file-upload" accept=".docx,.txt,.pdf" class="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200"/>
+                        <p class="text-[10px] text-gray-400 mt-1">支援 Word (.docx) 或 PDF。</p>
+                    </div>
+                    
+                    <textarea id="map-prompt-extra" rows="2" class="w-full border rounded p-3 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none transition-shadow" placeholder="額外提示 (例如: 這是中三級綜合科學科, 包含物理/化學/生物)"></textarea>
+
+                    <!-- Editable Prompt -->
+                    <details class="bg-white border rounded shadow-sm">
+                        <summary class="p-2 text-xs font-semibold cursor-pointer hover:bg-gray-50 text-gray-600 flex justify-between select-none items-center">
+                            <span><i class="fas fa-code mr-2 text-blue-400"></i> 進階：修改 AI 指令 (System Prompt)</span>
+                            <i class="fas fa-chevron-down text-gray-400"></i>
+                        </summary>
+                        <div class="p-2 border-t bg-gray-50">
+                            <textarea id="prompt-system-map" rows="6" class="w-full text-[10px] font-mono border rounded p-2 text-gray-600 focus:outline-none focus:border-blue-400"></textarea>
+                            <div class="text-right mt-1"><button onclick="resetPrompt('map')" class="text-xs text-blue-600 hover:underline">恢復預設</button></div>
+                        </div>
+                    </details>
+                </div>
+
+                <div class="flex flex-col h-full">
+                    <button onclick="generateMAP()" id="btn-gen-map" class="w-full btn-primary py-3 rounded-lg font-bold shadow-md flex justify-center items-center hover:shadow-lg transition-all mb-4">
+                        <span><i class="fas fa-magic mr-2"></i>生成 MAP CSV</span>
+                    </button>
+
+                    <div class="relative flex-grow">
+                        <textarea id="map-output" class="w-full h-full min-h-[250px] bg-gray-800 text-green-400 border border-gray-700 rounded-lg p-3 text-xs font-mono shadow-inner resize-none" placeholder="等待生成...&#10;Question_ID,Full_Mark,Topic_ID..."></textarea>
+                        <button onclick="copyToClipboard('map-output')" class="absolute top-2 right-2 bg-gray-700 hover:bg-gray-600 text-white text-xs px-2 py-1 rounded transition-colors border border-gray-600"><i class="fas fa-copy"></i> 複製</button>
+                    </div>
+
+                    <!-- NEW FEATURE: Marksheet Generator -->
+                    <div class="mt-4 pt-4 border-t border-blue-100">
+                        <div class="flex justify-between items-center mb-2">
+                            <label class="text-xs font-bold text-blue-800"><i class="fas fa-table mr-1"></i>入分表首欄生成 (Marksheet Header)</label>
+                        </div>
+                        <button onclick="generateMarksheet()" class="w-full btn-outline py-2 rounded text-xs font-bold text-gray-600 mb-2 shadow-sm hover:bg-blue-50 transition-colors">
+                            從上方 MAP 生成 Marksheet Template
+                        </button>
+                        <div class="relative">
+                            <textarea id="marksheet-output" rows="2" class="w-full bg-blue-50 border border-blue-200 rounded p-2 text-xs font-mono text-gray-700" placeholder="Class,ClassNumber,Name,1a,1b..." readonly></textarea>
+                            <button onclick="copyToClipboard('marksheet-output')" class="absolute top-2 right-2 bg-white border shadow-sm text-gray-600 hover:text-blue-600 text-xs px-2 py-1 rounded"><i class="fas fa-copy"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================================================================== -->
+        <!-- Feature 2: Script Analysis -->
+        <!-- ========================================================================================== -->
+        <div class="card p-6 border-t-4 border-emerald-500 relative overflow-hidden">
+            <div class="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
+                <i class="fas fa-user-graduate text-9xl text-emerald-500"></i>
+            </div>
+
+            <div class="flex items-center justify-between mb-6 relative z-10">
+                <h2 class="text-xl font-bold text-gray-800"><i class="fas fa-pen-fancy mr-2 text-emerald-600"></i>2. 學生答卷識別</h2>
+                <span class="text-xs font-bold bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full">批改輔助</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+                <div class="space-y-4">
+                    <!-- Step 1 -->
+                    <div class="p-3 bg-gray-50 rounded border border-gray-200">
+                        <label class="block text-xs font-bold text-gray-700 uppercase mb-2">Step 1: 匯入 MAP 資料 <span class="text-red-500">*</span></label>
+                        <div class="relative">
+                            <textarea id="script-map-context" rows="4" class="w-full border rounded p-2 text-xs font-mono focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-shadow" placeholder="請在此貼上上方生成的 MAP CSV..."></textarea>
+                            <label class="absolute bottom-2 right-2 cursor-pointer bg-white border shadow-sm px-2 py-1 rounded text-[10px] font-bold text-gray-600 hover:bg-emerald-50 transition-colors">
+                                <i class="fas fa-upload mr-1"></i> 載入 CSV 檔
+                                <input type="file" id="map-csv-upload" accept=".csv,.txt" class="hidden" onchange="handleMapCsvUpload(this)"/>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Step 2 -->
+                    <div class="p-3 bg-gray-50 rounded border border-gray-200">
+                        <label class="block text-xs font-bold text-gray-700 uppercase mb-2">Step 2: 上傳學生答卷 <span class="text-red-500">*</span></label>
+                        <input type="file" id="script-file-upload" accept=".docx,.txt,.pdf,.jpg,.jpeg,.png" multiple class="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-emerald-100 file:text-emerald-700 hover:file:bg-emerald-200 transition-colors"/>
+                        <p class="text-[10px] text-gray-500 mt-2"><i class="fas fa-check-circle text-emerald-500"></i> 支援 Word / PDF / 多張圖片 (JPG/PNG)。</p>
+                    </div>
+
+                     <!-- Editable Prompt -->
+                     <details class="bg-white border rounded shadow-sm">
+                        <summary class="p-2 text-xs font-semibold cursor-pointer hover:bg-gray-50 text-gray-600 flex justify-between select-none items-center">
+                            <span><i class="fas fa-code mr-2 text-emerald-400"></i> 進階：修改 AI 指令 (System Prompt)</span>
+                            <i class="fas fa-chevron-down text-gray-400"></i>
+                        </summary>
+                        <div class="p-2 border-t bg-gray-50">
+                            <textarea id="prompt-system-script" rows="6" class="w-full text-[10px] font-mono border rounded p-2 text-gray-600 focus:outline-none focus:border-emerald-400"></textarea>
+                            <div class="text-right mt-1"><button onclick="resetPrompt('script')" class="text-xs text-emerald-600 hover:underline">恢復預設</button></div>
+                        </div>
+                    </details>
+                </div>
+
+                <div class="flex flex-col h-full">
+                    <button onclick="analyzeScript()" id="btn-analyze-script" class="w-full btn-secondary py-3 rounded-lg font-bold shadow-md flex justify-center items-center hover:shadow-lg transition-all mb-4">
+                        <span><i class="fas fa-file-export mr-2"></i>分析並生成 CSV</span>
+                    </button>
+
+                    <div class="flex-grow space-y-2">
+                        <div class="relative h-1/2">
+                            <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">區塊 A: 選擇題 (MC)</label>
+                            <textarea id="script-out-mc" class="w-full h-24 bg-gray-50 border border-gray-300 rounded p-2 text-xs font-mono resize-none focus:ring-1 focus:ring-emerald-500" readonly></textarea>
+                            <button onclick="copyToClipboard('script-out-mc')" class="absolute top-6 right-2 bg-white border hover:bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded transition-colors"><i class="fas fa-copy"></i></button>
+                        </div>
+                        <div class="relative h-1/2">
+                            <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">區塊 B: 文字題 (Answers)</label>
+                            <textarea id="script-out-ans" class="w-full h-24 bg-gray-50 border border-gray-300 rounded p-2 text-xs font-mono resize-none focus:ring-1 focus:ring-emerald-500" readonly></textarea>
+                            <button onclick="copyToClipboard('script-out-ans')" class="absolute top-6 right-2 bg-white border hover:bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded transition-colors"><i class="fas fa-copy"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </div>
 
-    <div id="print-container"></div>
-
+    <!-- JAVASCRIPT LOGIC -->
     <script>
-        // --- GLOBAL UTILS ---
-        const renderer = new marked.Renderer();
-        renderer.image = function(href, title, text) { return `<span style="color:#999; font-size:0.8em; border:1px dashed #ccc; padding:2px 5px;">[圖片已移除]</span>`; };
-        marked.setOptions({ renderer: renderer });
+        // ==========================================
+        // CONFIGURATION & CONSTANTS
+        // ==========================================
+        const PROXY_URL = 'https://apiproxy.k12gpt.ai/NPcj-7_';
+        
+        const DEFAULT_PROMPT_MAP = `你是一個專業的考試數據分析師。你的任務是讀取「試卷內容」並根據「課程大綱」生成一個標準化的 CSV 表格 (MAP)。
 
-        // --- GLOBAL STATE ---
-        let marksheetData=[], mapData=[], mcData=[], questionMap={}, totalPaperMark=0, chartInstances={}, analysisCache=null, colMap={name:'',class:'',no:''}, mcDistractors={};
-        let examPaperText = "";
-        let studentImages = [];
+### 嚴格完整性要求
+1. **必須讀取到文件的最後一行**：請確保分析所有頁面、所有題目，直到試卷結束。
+2. **不可遺漏子題目**：務必列出所有子題目，例如 4di, 4dii, 5a, 5b 等，這非常重要。
+3. **不可中途停止**：即使題目很多，也必須完整列出。
 
-        // --- CORE FUNCTIONS (Top Level) ---
-        function analyzeStudent(r){
-            let t=0,w=[],b={},g={};
-            Object.keys(questionMap).forEach(q=>{
-                if(r[q] !== undefined){
-                    let s=parseFloat(r[q])||0, i=questionMap[q];
-                    t+=s;
-                    if(s < i.fullMark * 0.5){
-                        w.push(i.Concept_Detail || i.Topic_Name);
-                        b[i.Topic_Name]=(b[i.Topic_Name]||0)+1;
-                    } else if(s === i.fullMark){
-                        g[i.Topic_Name]=(g[i.Topic_Name]||0)+1;
-                    }
-                }
-            });
-            return {totalScore:t,wrong:[...new Set(w)].slice(0,8),bad:Object.keys(b).sort((x,y)=>b[y]-b[x]).slice(0,3),good:Object.keys(g).sort((x,y)=>g[y]-g[x]).slice(0,3)};
+### 輸出規則
+只輸出 CSV 內容，不要有 markdown 標記、不要有 csv 開頭或結尾，也不要有任何額外文字。
+
+### CSV 欄位結構
+Question_ID,Full_Mark,Topic_ID,Topic_Name,Difficulty,Concept_Detail
+
+### 欄位填寫規則 (必須嚴格遵守)
+1. **Question_ID (題號格式)**:
+   - **選擇題 (Multiple Choice)**: 必須命名為 MC1, MC2, MC3...
+   - **填充題 (Fill in the blanks)**: 必須命名為 FILL1, FILL2, FILL3...
+   - **是非題 (True/False)**: 必須命名為 TF1, TF2...
+   - **配對題 (Matching)**: 必須命名為 MATCH1, MATCH2...
+   - **短答/長答/結構題 (重要修正)**: 
+     - **忽略試卷分區的中文數字**：如果試卷出現「(五) 問答題」或「五、問答題」，請忽略那個「五」。
+     - **必須以題目本身的阿拉伯數字開始**：如果「(五) 問答題」下方第一題寫著「1. xxx」，該題 Question_ID 應為 1 (或 1a)，**絕對不是 5a**。
+     - 請仔細區分大標題 (Section Header) 與題號 (Question Number)。
+
+2. **Topic_ID (課題編號)**:
+   - 必須與提供的「課程大綱」完全一致 (例如 7.1, 7.2, 11.5)。
+   - 如果試卷題目跨課題，選擇最主要的一個。
+
+3. **Topic_Name (課題名稱)**:
+   - 對應大綱中的名稱。
+
+4. **Difficulty**: Low, Medium, High。
+5. **Concept_Detail**: 簡短考核重點 (10字內)。`;
+
+        const DEFAULT_PROMPT_SCRIPT = `你是一個試卷數據化助理。你的任務是將學生的答卷內容轉換為兩個 CSV 表格。
+
+### 任務要求
+1. **識別學生身份 (Critical)**:
+   - 請在文件或圖片的 **頂部 / 角落** 仔細尋找 班級 (Class), 班號 (No), 姓名 (Name)。
+   - 如果是圖片，請識別手寫字跡。
+   - 如果完全找不到，Class/No/Name 請填 "UNKNOWN" (不要填 null)。
+
+2. **識別答案**:
+   - 根據 MAP 中的題號，找出學生對應的答案。
+   - 如果學生該題空白，填 "No Answer"。
+
+3. **輸出格式 (兩個區塊，用 ###SECTION_SPLIT### 分隔)**:
+
+   區塊 1 (MC):
+   CLASS,CLASSNUMBER,NAME,MC1,MC2,MC3...
+   (MC值應為 A/B/C/D)
+   
+   ###SECTION_SPLIT###
+   
+   區塊 2 (Answers):
+   CLASS,CLASSNUMBER,NAME,FILL1,FILL2,TF1,MATCH1,1a,1b...
+
+### 注意
+- 嚴格遵守 MAP 的題號。
+- 只輸出 CSV，不要有 Markdown。`;
+
+        // ==========================================
+        // INIT
+        // ==========================================
+        function init() {
+            document.getElementById('prompt-system-map').value = DEFAULT_PROMPT_MAP;
+            document.getElementById('prompt-system-script').value = DEFAULT_PROMPT_SCRIPT;
         }
 
-        // --- DEFINED FUNCTIONS ---
-        function saveSyllabusToStorage() {
-             const val = document.getElementById('syllabus-content').value;
-             localStorage.setItem('science_exam_syllabus', val);
-             alert("✅ 課程大綱已儲存");
+        function resetPrompt(type) {
+            if (type === 'map') document.getElementById('prompt-system-map').value = DEFAULT_PROMPT_MAP;
+            if (type === 'script') document.getElementById('prompt-system-script').value = DEFAULT_PROMPT_SCRIPT;
         }
 
-        function buildPrompt(n,d, lang, syllabus, examPaperContext) {
-            let tpl = document.getElementById('prompt-template').value;
-            const L = {
-                zh: { inst: "請用繁體中文撰寫。", sec1: "整體表現回顧", sec2: "重點概念重溫", sec3: "自我挑戰" },
-                en: { inst: "Please write in English.", sec1: "Overall Performance Review", sec2: "Key Concept Review", sec3: "Self-Challenge" }
+        function copyToClipboard(id) {
+            const el = document.getElementById(id);
+            el.select();
+            document.execCommand('copy');
+            const btn = document.querySelector(`button[onclick="copyToClipboard('${id}')"]`);
+            if(btn) {
+                const oldHTML = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-check"></i> 已複製';
+                setTimeout(() => btn.innerHTML = oldHTML, 1500);
+            }
+        }
+
+        // ==========================================
+        // AI CORE FUNCTION
+        // ==========================================
+        async function callAI(systemPrompt, userPrompt, imagePayloads = []) {
+            let messages = [{ role: "system", content: systemPrompt }];
+            let userContent = [{ type: "text", text: userPrompt }];
+
+            if (imagePayloads && imagePayloads.length > 0) {
+                imagePayloads.forEach(img => {
+                    userContent.push({ type: "image_url", image_url: { url: img } });
+                });
+                messages.push({ role: "user", content: userContent });
+            } else {
+                messages.push({ role: "user", content: userPrompt });
+            }
+
+            const payload = {
+                model: "deepseek-chat", 
+                messages: messages, 
+                temperature: 0.1, 
+                max_tokens: 4000 
             };
-            const LC = L[lang] || L['zh'];
-            return tpl.replace('{{student_name}}', n)
-                      .replace('{{total_score}}', d.totalScore)
-                      .replace('{{full_mark}}', totalPaperMark)
-                      .replace('{{weaknesses}}', d.bad.join(', '))
-                      .replace('{{wrong_concepts}}', d.wrong.join(', '))
-                      .replace('{{strengths}}', d.good.join(', '))
-                      .replace('{{language_instruction}}', LC.inst)
-                      .replace('{{section_1_title}}', LC.sec1)
-                      .replace('{{section_2_title}}', LC.sec2)
-                      .replace('{{section_3_title}}', LC.sec3)
-                      .replace('{{syllabus}}', syllabus || "未提供")
-                      .replace('{{exam_paper_content}}', examPaperContext || "未提供");
-        }
 
-        async function callAI(p) {
-            const prov=document.getElementById('model-provider').value;
-            const key=document.getElementById('ds-key').value || document.getElementById('gemini-key').value;
-            
-            if(prov==='gemini'){
-                 const k=document.getElementById('gemini-key').value;
-                 let r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${k}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:p}]}]})});
-                 if(!r.ok) throw new Error(r.statusText); let d=await r.json(); return d.candidates[0].content.parts[0].text;
-            } else {
-                 let u = document.getElementById('ds-url').value.trim(); // Strict URL
-                 
-                 // Apply auto-path logic ONLY if checked
-                 if(document.getElementById('ds-auto-path').checked) {
-                    if(!u.includes('/chat/completions')) u = u.replace(/\/$/, "") + '/chat/completions';
-                 }
-
-                 console.log("Calling API Endpoint:", u);
-                 
-                 // Strict fetch: no Auth header if key is empty
-                 let headers = { 'Content-Type': 'application/json' };
-                 if(key && key.trim() !== "") headers['Authorization'] = `Bearer ${key}`;
-
-                 let r=await fetch(u,{
-                     method:'POST',
-                     headers: headers,
-                     body:JSON.stringify({
-                         model: document.getElementById('ds-model').value,
-                         messages:[{role:"user",content:p}]
-                     })
-                 });
-                 
-                 if(!r.ok) {
-                    let txt = await r.text();
-                    throw new Error(`API Error ${r.status}: ${txt}`);
-                 }
-                 let d=await r.json(); return d.choices[0].message.content;
-            }
-        }
-        
-        async function testConnection() {
             try {
-                const res = await callAI("Say hello");
-                alert("連線成功！回應：" + res);
-            } catch(e) {
-                alert("連線失敗：" + e.message);
-            }
-        }
-
-        async function copyToClipboard(elementId) {
-            const text = document.getElementById(elementId).value || document.getElementById(elementId).textContent;
-            try {
-                if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(text); alert('Copied!'); } 
-                else { throw new Error('Fallback'); }
-            } catch (err) {
-                const ta = document.createElement("textarea"); ta.value = text;
-                ta.style.position = "fixed"; document.body.appendChild(ta); ta.focus(); ta.select();
-                try { document.execCommand('copy'); alert('Copied!'); } catch (e) { alert('Copy failed'); }
-                document.body.removeChild(ta);
-            }
-        }
-        window.copyToClipboard = copyToClipboard;
-        window.copyErrorLog = () => copyToClipboard('error-log-content');
-
-        // --- INITIALIZATION ---
-        const DEFAULT_PROMPT = `
-你是一位科學老師。請為學生 {{student_name}} 製作一份兩頁的學習報告。
-總分：{{total_score}} / {{full_mark}}。
-弱項：{{weaknesses}}。
-錯題概念：{{wrong_concepts}}。
-強項：{{strengths}}。
-
-{{language_instruction}}
-
-【課程範圍參考 (Syllabus Scope)】：
-{{syllabus}}
-
-請嚴格按照以下格式輸出，必須包含分隔符號，絕對不要生成任何圖片：
-
-1. **{{section_1_title}}**
-   - 簡短鼓勵
-   - 點列指出強項
-   - 點列指出需改善之處
-   (文字簡要)
-
-2. **{{section_2_title}}**
-   (針對每一個「需改善的課題」，以「筆記形式」解釋重點概念。請務必使用生活比喻，簡易明白。例如：「摩擦力：就像地面有看不見的小手...」。注意：內容不可超出上述課程範圍。若有提供試卷內容，請引用相關題目情境。)
-
----PAGE_BREAK---
-
-3. **{{section_3_title}}** (5 條選擇題，純文字)
-   (題目必須在課程範圍內)
-
----ANSWERS---
-
-(答案及簡短解釋)
-`.trim();
-
-        const SUMMARY_PROMPT = `
-你是一位資深的 {{subject}} 科主任。請根據以下全班考試數據，為校長撰寫一份專業的「考試成績與教學檢討報告」。
-
-學校：{{school_name}}
-考試年份及級別：{{exam_info}}
-科目：{{subject}}
-平均分：{{mean}} / {{full_mark}}
-及格率：{{pass_rate}}
-最高/最低分：{{max}} / {{min}}
-標準差：{{sd}}
-
-【強項課題】：{{top_topics}}
-【弱項課題】：{{bottom_topics}}
-【需關注題目 (鑑別度低或過難)】：{{flagged_questions}}
-
-【MC 誤點分析 (最多人選錯的題目)】：
-{{mc_distractors}}
-
-【課程範圍參考】：
-{{syllabus}}
-
-【試卷內容參考】：
-{{exam_paper_content}}
-
-請用繁體中文，以專業公文語氣撰寫，格式如下（不要圖片）：
-
-# 考試成績與教學檢討報告
-
-**1. 考試成績摘要**
-(簡述整體表現，比較平均分與及格率是否理想)
-
-**2. 學生強弱項分析**
-* **強項**：(分析學生在哪些課題表現較好，顯示掌握了什麼概念)
-* **弱項**：(深入分析弱項課題，推測學生概念不清的原因，例如：混淆了...，未能掌握...)
-
-**3. MC 誤點與試題質素檢討**
-(參考「MC 誤點分析」，分析學生為何在某些題目會集體選錯某個選項。是概念不清？題目有歧義？還是常見迷思？請結合試卷題目內容具體說明。)
-
-**4. 學與教反思及跟進建議**
-(具體建議下學期或補課時如何改善。例如：增加實驗環節、加強關鍵字操練、針對弱項課題的具體重溫策略。建議需符合課程範圍。)
-`.trim();
-
-        let customPrompt = localStorage.getItem('science_exam_prompt') || DEFAULT_PROMPT;
-        let savedSyllabus = localStorage.getItem('science_exam_syllabus') || "";
-        const pt = document.getElementById('prompt-template'); if(pt) pt.value = customPrompt;
-        const st = document.getElementById('syllabus-content'); if(st) st.value = savedSyllabus;
-
-        // --- HELPER ---
-        const safeListen = (id, event, fn) => { const el = document.getElementById(id); if(el) el.addEventListener(event, fn); };
-        
-        // --- BUTTON HANDLERS ---
-        safeListen('save-prompt-btn', 'click', () => {
-            customPrompt = document.getElementById('prompt-template').value; localStorage.setItem('science_exam_prompt', customPrompt); alert("✅ 設定已儲存");
-        });
-        
-        safeListen('save-syllabus-btn', 'click', () => {
-            saveSyllabusToStorage();
-        });
-        
-        safeListen('reset-prompt-btn', 'click', () => {
-            if(confirm("確定要恢復預設指令嗎？")) { customPrompt = DEFAULT_PROMPT; document.getElementById('prompt-template').value = customPrompt; localStorage.setItem('science_exam_prompt', customPrompt); }
-        });
-        
-        safeListen('test-conn-btn', 'click', testConnection);
-
-        function switchTab(tab) {
-            document.querySelectorAll('.nav-card').forEach(b=>b.classList.remove('active'));
-            document.getElementById(`tab-${tab}`).classList.add('active');
-            ['view-analysis','view-mc','view-summary','view-report','view-settings'].forEach(id => { const el = document.getElementById(id); if(el) el.classList.add('hidden'); });
-            const target = document.getElementById(`view-${tab}`); if(target) target.classList.remove('hidden');
-        }
-
-        document.getElementById('model-provider').addEventListener('change', (e)=>{
-            const isDeep = e.target.value === 'deepseek';
-            document.getElementById('ds-config').classList.toggle('hidden', !isDeep);
-            document.getElementById('gemini-config').classList.toggle('hidden', isDeep);
-        });
-
-        function handleFile(file, type) {
-            if(!file) return;
-            Papa.parse(file, {header: type!=='mc', skipEmptyLines:true, complete:(res)=>{
-                if(type==='marksheet') { marksheetData=res.data; detectColumns(res.meta.fields); }
-                else if(type==='map') { 
-                    mapData=res.data; 
-                    let mapTxt = res.data.map(r => `${r.Question_ID} (Topic:${r.Topic_Name})`).join(', ');
-                }
-                else if(type==='mc') { mcData=res.data; }
-                if(marksheetData.length && mapData.length) initSystem();
-            }});
-        }
-        safeListen('marksheet-upload', 'change', (e)=>handleFile(e.target.files[0],'marksheet'));
-        safeListen('map-upload', 'change', (e)=>handleFile(e.target.files[0],'map'));
-        safeListen('mc-upload', 'change', (e)=>handleFile(e.target.files[0],'mc'));
-        
-        const readDocxOrText = (file, callback) => {
-            if (file.name.endsWith('.docx')) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    mammoth.extractRawText({arrayBuffer: e.target.result})
-                        .then(r => callback(r.value))
-                        .catch(err => { console.error(err); alert("DOCX 讀取失敗，請轉存 .txt"); });
-                };
-                reader.readAsArrayBuffer(file);
-            } else {
-                const reader = new FileReader();
-                reader.onload = (e) => callback(e.target.result);
-                reader.readAsText(file);
-            }
-        };
-        safeListen('syllabus-upload', 'change', (e) => { 
-            if(e.target.files[0]) readDocxOrText(e.target.files[0], (txt) => { 
-                document.getElementById('syllabus-content').value = txt; 
-                saveSyllabusToStorage();
-            }); 
-        });
-        
-        safeListen('exam-paper-upload', 'change', (e) => { if(e.target.files[0]) readDocxOrText(e.target.files[0], (txt) => { examPaperText = txt; document.getElementById('paper-status').innerHTML = "✅ 試卷內容已載入"; document.getElementById('paper-status').className = "text-xs text-green-600 mt-1 font-bold ml-2"; }); });
-
-        function detectColumns(fields) { if(!fields) return; colMap.name = fields.find(f => f.trim().match(/^Name/i) || f.trim().match(/姓名/)) || 'Name'; colMap.class = fields.find(f => f.trim().match(/^Class$/i) || f.trim().match(/班別/)) || 'Class'; colMap.no = fields.find(f => f.trim().match(/Class.*No/i) || f.trim().match(/學號/)) || 'Class_No'; }
-        
-        function initSystem() {
-            document.getElementById('file-status').textContent="✅ 檔案已載入";
-            document.getElementById('main-tabs').classList.remove('hidden');
-            questionMap={}; totalPaperMark=0;
-            mapData.forEach(row=>{ if(row.Question_ID) { questionMap[row.Question_ID]={ ...row, fullMark:parseFloat(row.Full_Mark)||0, Concept_Detail: row.Concept_Detail || row.Topic_Name }; totalPaperMark+=questionMap[row.Question_ID].fullMark; } });
-            switchTab('analysis'); generateAnalysis(); if(mcData.length > 0) processMCData();
-            const sel=document.getElementById('student-select');
-            if(sel) { while(sel.options.length>2) sel.remove(2); marksheetData.forEach((row,i)=>{ if(row[colMap.name]) sel.add(new Option(`${row[colMap.no]||''} ${row[colMap.name]}`, i)); }); }
-        }
-
-        function processMCData() { 
-             let cleanMC = mcData.filter(row => row.length > 5); if(cleanMC.length < 3) return;
-            let answerKeyRow = cleanMC[1];
-            let startRow = 2;
-            let headers = cleanMC[0];
-            let mcStats = {};
-            
-            Object.keys(questionMap).forEach(qId => {
-                if(qId.startsWith('MC')) {
-                    let shortId = qId.replace('MC', 'Q');
-                    let colIdx = headers.indexOf(shortId);
-                    if(colIdx === -1) colIdx = headers.indexOf(qId);
-                    if(colIdx !== -1) {
-                        let correctAns = answerKeyRow[colIdx]?.trim().toUpperCase();
-                        mcStats[qId] = { A:0, B:0, C:0, D:0, correct: correctAns, total:0, id: qId };
-                        for(let i=startRow; i<cleanMC.length; i++) {
-                            let ans = cleanMC[i][colIdx]?.trim().toUpperCase();
-                            if(['A','B','C','D'].includes(ans)) { mcStats[qId][ans]++; mcStats[qId].total++; }
-                        }
-                    }
-                }
-            });
-
-            mcDistractors = {};
-            let chartLabels=[], dsA=[], dsB=[], dsC=[], dsD=[], bgA=[], bgB=[], bgC=[], bgD=[];
-
-            Object.keys(mcStats).forEach(qId => {
-                let s = mcStats[qId];
-                if(s.total > 0) {
-                    chartLabels.push(qId);
-                    dsA.push((s.A/s.total)*100); dsB.push((s.B/s.total)*100); dsC.push((s.C/s.total)*100); dsD.push((s.D/s.total)*100);
-                    const getColor = (opt) => { if(opt === s.correct) return '#4ade80'; if((s[opt]/s.total) > 0.2) return '#f87171'; return '#e5e7eb'; };
-                    bgA.push(getColor('A')); bgB.push(getColor('B')); bgC.push(getColor('C')); bgD.push(getColor('D'));
-                    let wrongHigh = [];
-                    ['A','B','C','D'].forEach(opt => { if(opt !== s.correct && (s[opt]/s.total) > 0.2) wrongHigh.push(`${opt} (${Math.round((s[opt]/s.total)*100)}%)`); });
-                    if(wrongHigh.length > 0) { mcDistractors[qId] = { correct: s.correct, wrong: wrongHigh, topic: questionMap[qId].Topic_Name, concept: questionMap[qId].Concept_Detail }; }
-                }
-            });
-
-            const ctxMC = document.getElementById('mcChart');
-            if(ctxMC) {
-                if(chartInstances.mc) chartInstances.mc.destroy();
-                chartInstances.mc = new Chart(ctxMC, { type: 'bar', data: { labels: chartLabels, datasets: [ { label: 'A', data: dsA, backgroundColor: bgA }, { label: 'B', data: dsB, backgroundColor: bgB }, { label: 'C', data: dsC, backgroundColor: bgC }, { label: 'D', data: dsD, backgroundColor: bgD } ] }, options: { responsive: true, scales: { x: { stacked: true }, y: { stacked: true, max: 100 } } } });
-            }
-            const distList = document.getElementById('mc-distractor-list');
-            if(distList) {
-                let html = '<h4 class="font-bold text-gray-700 mb-2">🚨 重點關注題目 (高誘答力)</h4><div class="grid grid-cols-1 md:grid-cols-2 gap-3">';
-                Object.keys(mcDistractors).forEach(q => { let d = mcDistractors[q]; html += `<div class="distractor-card relative"><div class="font-bold text-red-700 flex justify-between"><span>${q} (正確: ${d.correct})</span><span class="text-xs bg-red-200 px-2 py-1 rounded text-red-800">誤選: ${d.wrong.join(', ')}</span></div><div class="text-xs text-gray-600 mt-1"><strong>概念:</strong> ${d.concept}</div><button onclick="analyzeDistractorWithAI('${q}')" class="mt-2 w-full bg-white border border-purple-300 text-purple-700 hover:bg-purple-50 text-xs py-1 rounded shadow-sm flex items-center justify-center"><i class="fas fa-search mr-1"></i> AI 深度分析</button><div id="analysis-${q}" class="analysis-box"></div></div>`; });
-                html += '</div>'; distList.innerHTML = html;
-            }
-        }
-
-        window.analyzeDistractorWithAI = async function(qId) { 
-            const box = document.getElementById(`analysis-${qId}`); const d = mcDistractors[qId];
-            if(!examPaperText) { alert("請先在「資料匯入」區上傳試卷檔案"); return; }
-            box.classList.remove('hidden'); box.innerHTML = `<p class="animate-pulse text-purple-600">AI 分析中...</p>`;
-            const prompt = `分析 MC 題 ${qId}。正確:${d.correct}, 誤選:${d.wrong.join(', ')}, 概念:${d.concept}。\n試卷內容:\n${examPaperText.substring(0,10000)}\n\n請回答：1.題目內容 2.正確思路 3.誤點分析 (繁體中文)`;
-            try { const res = await callAI(prompt); box.innerHTML = `<div class="markdown-body text-xs">${marked.parse(res)}</div>`; } catch(e) { box.innerHTML = `<span class="text-red-500">${e.message}</span>`; }
-        };
-
-        function generateAnalysis() { 
-            let students=[], qStats={}, topicAgg={}, diffAgg={Low:{e:0,m:0},Medium:{e:0,m:0},High:{e:0,m:0}};
-            Object.keys(questionMap).forEach(q=>qStats[q]={sum:0,count:0,scores:[]});
-            marksheetData.forEach(row=>{
-                if(!row[colMap.name]) return;
-                let sTotal=0, sRow={raw:row};
-                Object.keys(questionMap).forEach(qId=>{
-                    if(row.hasOwnProperty(qId)) {
-                        let sc=parseFloat(row[qId])||0, info=questionMap[qId];
-                        sTotal+=sc; qStats[qId].sum+=sc; qStats[qId].count++;
-                        if(!topicAgg[info.Topic_ID]) topicAgg[info.Topic_ID]={e:0,m:0,name:info.Topic_Name,id:info.Topic_ID};
-                        topicAgg[info.Topic_ID].e+=sc; topicAgg[info.Topic_ID].m+=info.fullMark;
-                        if(diffAgg[info.Difficulty]) { diffAgg[info.Difficulty].e+=sc; diffAgg[info.Difficulty].m+=info.fullMark; }
-                    }
+                const res = await fetch(PROXY_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
                 });
-                sRow.total=sTotal; students.push(sRow);
-            });
-            const scores=students.map(s=>s.total), mean=scores.reduce((a,b)=>a+b,0)/scores.length;
-            document.getElementById('stat-mean').textContent=mean.toFixed(1);
-            document.getElementById('stat-pass').textContent=((scores.filter(s=>s/totalPaperMark>=0.5).length/scores.length)*100).toFixed(1)+"%";
-            document.getElementById('stat-max').textContent=Math.max(...scores); document.getElementById('stat-min').textContent=Math.min(...scores);
-            document.getElementById('stat-sd').textContent=Math.sqrt(scores.reduce((a,b)=>a+Math.pow(b-mean,2),0)/scores.length).toFixed(1);
-            const hCont=document.getElementById('heatmap-container'); 
-            if(hCont) {
-                let hHTML = '';
-                Object.values(topicAgg).sort((a,b)=>a.id.localeCompare(b.id)).forEach(t=>{
-                    let pct=t.m?(t.e/t.m)*100:0, hue=Math.max(0,Math.min(120,pct*1.2));
-                    hHTML+=`<div class="heatmap-item" style="background:hsla(${hue},85%,90%,1);border-color:hsla(${hue},80%,40%,0.5)"><div class="text-xs font-bold opacity-70">${t.id}</div><div class="text-xs truncate px-1" title="${t.name}">${t.name}</div><div class="text-xl font-bold">${pct.toFixed(0)}%</div></div>`;
-                });
-                hCont.innerHTML = hHTML;
+                if (!res.ok) throw new Error(await res.text());
+                const data = await res.json();
+                return data.choices[0].message.content;
+            } catch (e) {
+                console.error(e);
+                throw e;
             }
-            const ctxDist = document.getElementById('distChart');
-            if(ctxDist) { if(chartInstances.dist) chartInstances.dist.destroy(); let bins=new Array(10).fill(0); scores.forEach(s=>{let idx=Math.floor((s/totalPaperMark)*10);if(idx>=10)idx=9;bins[idx]++;}); chartInstances.dist=new Chart(ctxDist,{type:'bar',data:{labels:['0-10%','11-20%','21-30%','31-40%','41-50%','51-60%','61-70%','71-80%','81-90%','91-100%'],datasets:[{label:'人數',data:bins,backgroundColor:'#60a5fa',borderRadius:4}]},options:{maintainAspectRatio:false}}); }
-            const ctxDiff = document.getElementById('difficultyChart'); // Not in HTML but keep logic
-            students.sort((a,b)=>b.total-a.total);
-            let highG=students.slice(0,Math.ceil(students.length*0.27)), lowG=students.slice(students.length-Math.ceil(students.length*0.27));
-            let items=[];
-            Object.keys(questionMap).forEach(qId=>{ let info=questionMap[qId], p=(qStats[qId].sum/qStats[qId].count)/info.fullMark; let d=(highG.reduce((s,x)=>s+(parseFloat(x.raw[qId])||0),0)/highG.length - lowG.reduce((s,x)=>s+(parseFloat(x.raw[qId])||0),0)/lowG.length)/info.fullMark; items.push({id:qId,...info,p,d}); });
-            analysisCache=items; renderItemTable('ALL');
         }
 
-        function renderItemTable(f) {
-            const tb=document.getElementById('itemTableBody'); if(!tb) return; tb.innerHTML='';
-            analysisCache.forEach(i=>{
-                if((f==='D_LOW'&&i.d>=0.2)||(f==='P_LOW'&&i.p>=0.3)) return;
-                let b=i.Difficulty==='High'?'bg-red-100':(i.Difficulty==='Medium'?'bg-yellow-100':'bg-green-100');
-                let dClass = 'text-gray-900'; if(i.d > 0.4) dClass = 'text-green-600 font-bold'; else if(i.d < 0.2) dClass = 'text-red-600 font-bold';
-                let ev=[]; if(i.p<0.3)ev.push("難"); if(i.d<0.2)ev.push("鑑別低");
-                tb.innerHTML+=`<tr class="hover:bg-gray-50"><td class="table-cell font-bold">${i.id}</td><td class="table-cell text-xs">${i.Topic_ID}</td><td class="table-cell"><span class="px-2 rounded text-xs ${b}">${i.Difficulty}</span></td><td class="table-cell">${(i.p*100).toFixed(0)}%</td><td class="table-cell ${dClass}">${i.d.toFixed(2)}</td><td class="table-cell text-xs">${ev.join(', ')}</td></tr>`;
-            });
-        }
-        safeListen('item-filter', 'change',(e)=>renderItemTable(e.target.value));
-
-        // --- SUMMARY REPORT ---
-        safeListen('gen-summary-btn', 'click', async () => { 
-             const schoolName = document.getElementById('school-name').value;
-             const subjectName = document.getElementById('subject-name').value;
-             const examInfo = document.getElementById('exam-info').value;
-             const syllabus = document.getElementById('syllabus-content').value;
-             const examPaperContext = examPaperText ? examPaperText.substring(0, 15000) : "(未上傳)";
-             document.getElementById('summary-preview-area').innerHTML = `<div class="card p-6"><p class="animate-pulse">生成中...</p></div>`;
-             
-             // ... Prepare stats ...
-             const stats = { school_name: schoolName, subject: subjectName, mean: document.getElementById('stat-mean').textContent, pass_rate: document.getElementById('stat-pass').textContent, max: document.getElementById('stat-max').textContent, min: document.getElementById('stat-min').textContent, sd: document.getElementById('stat-sd').textContent, full_mark: totalPaperMark };
-             // ... Prepare top/bottom topics ...
-             let tAgg={}; marksheetData.forEach(r=>{ if(r[colMap.name]) Object.keys(questionMap).forEach(q=>{ if(r[q]){ let sc=parseFloat(r[q])||0,i=questionMap[q]; if(!tAgg[i.Topic_Name])tAgg[i.Topic_Name]={e:0,m:0}; tAgg[i.Topic_Name].e+=sc;tAgg[i.Topic_Name].m+=i.fullMark;} }) });
-             let sortedTopics = Object.keys(tAgg).map(k=>({name:k, pct: tAgg[k].m?tAgg[k].e/tAgg[k].m:0})).sort((a,b)=>b.pct-a.pct);
-             stats.top_topics = sortedTopics.slice(0,3).map(t=>`${t.name}`).join(', '); stats.bottom_topics = sortedTopics.slice(-3).map(t=>`${t.name}`).join(', ');
-             // ... Flagged ...
-             let flagged = analysisCache.filter(i => i.d < 0.2 || i.p < 0.3).map(i => i.id).join(', '); stats.flagged_questions = flagged || "無";
-             
-             let mcInfo = "";
-             Object.keys(mcDistractors).forEach(q => {
-                let d = mcDistractors[q];
-                mcInfo += `\n- ${q} (${d.topic}): 正確${d.correct}, 誤選${d.wrong.join(', ')}。概念：${d.concept}`;
-             });
-             if(!mcInfo) mcInfo = "無明顯集體迷思";
-
-             let prompt = SUMMARY_PROMPT.replace(/{{school_name}}/g, stats.school_name).replace(/{{subject}}/g, stats.subject).replace(/{{exam_info}}/g, examInfo)
-                 .replace(/{{mean}}/g, stats.mean).replace(/{{pass_rate}}/g, stats.pass_rate).replace(/{{max}}/g, stats.max).replace(/{{min}}/g, stats.min).replace(/{{sd}}/g, stats.sd)
-                 .replace(/{{top_topics}}/g, stats.top_topics).replace(/{{bottom_topics}}/g, stats.bottom_topics).replace(/{{flagged_questions}}/g, stats.flagged_questions)
-                 .replace(/{{syllabus}}/g, syllabus).replace(/{{mc_distractors}}/g, mcInfo).replace(/{{exam_paper_content}}/g, examPaperContext);
-
-             try {
-                 let md = await callAI(prompt);
-                 document.getElementById('summary-preview-area').innerHTML = `<div class="report-page-style preview-wrapper bg-white"><div class="markdown-body text-sm">${marked.parse(md)}</div></div>`;
-                 document.getElementById('dl-summary-btn').disabled = false;
-                 document.getElementById('print-container').innerHTML = `<div class="report-page-style bg-white"><div class="markdown-body text-sm">${marked.parse(md)}</div></div>`;
-             } catch(e) { showErrorModal(e); }
-        });
+        // ==========================================
+        // FILE HANDLING & LOGIC
+        // ==========================================
         
-        safeListen('dl-summary-btn', 'click', () => { 
-            let c = document.getElementById('summary-preview-area').innerHTML;
-            const h=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Summary Report</title><script src="https://cdn.tailwindcss.com"><\/script><style>@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC&display=swap');body{font-family:'Noto Sans TC',sans-serif;padding:20px;background:#f3f4f6;}.report-page-style{width:210mm;min-height:297mm;padding:20mm;background:white;margin:0 auto;box-shadow:0 4px 6px rgba(0,0,0,0.1);}h1{font-size:1.8em;font-weight:bold;margin-bottom:0.5em;}h2{font-size:1.4em;font-weight:bold;margin-top:1em;color:#2563eb;}ul{padding-left:1.5em;list-style:disc;}p{margin-bottom:0.8em;line-height:1.6;}</style></head><body>${c}</body></html>`;
-            const b=new Blob([h],{type:'text/html'}), u=URL.createObjectURL(b), a=document.createElement('a');
-            a.href=u; a.download=`Summary_Report_${new Date().toISOString().slice(0,10)}.html`; document.body.appendChild(a); a.click();
-            setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(u);},100);
-        });
-
-        // --- STUDENT REPORT ---
-        safeListen('generate-btn', 'click', async()=>{
-             const v=document.getElementById('student-select').value; if(!v) return alert("請選擇");
-             document.getElementById('print-container').innerHTML=''; document.getElementById('report-preview-area').innerHTML='';
-             if(v==='ALL') await batchGen(); else await singleGen(parseInt(v));
-        });
-        // ... (clear/download same as v30) ...
-        safeListen('download-btn', 'click',()=>{ 
-            let c=document.getElementById('print-container').innerHTML;
-            if(!c.trim()) return;
-            c = c.replace(/<img[^>]*>/g, "");
-            const h=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Report</title><script src="https://cdn.tailwindcss.com"><\/script><style>@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC&display=swap');body{font-family:'Noto Sans TC',sans-serif;background:#f3f4f6;padding:20px;}.report-page-style{width:210mm;min-height:296mm;padding:20mm;background:white;margin:0 auto 30px;position:relative;overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.1);border:1px solid #ddd;box-sizing:border-box;}.page-footer{margin-top:40px;padding-top:10px;border-top:1px dashed #ccc;color:#666;font-size:10pt;}@media print{body{background:white;padding:0;}.report-page-style{width:100%;height:296mm;margin:0;box-shadow:none;border:none;break-after:page;page-break-after:always;overflow:hidden;}}h1{font-size:1.6em;color:#1e3a8a;border-bottom:2px solid #ddd;padding-bottom:10px;}h2{font-size:1.3em;color:#2563eb;margin-top:1em;}ul{padding-left:1.5em;list-style:disc;}blockquote{border-left:4px solid #e5e7eb;padding-left:1em;background:#f9fafb;padding:0.5rem;margin:10px 0;}</style></head><body>${c}</body></html>`;
-            const b=new Blob([h],{type:'text/html'}), u=URL.createObjectURL(b), a=document.createElement('a');
-            a.href=u; a.download=`Reports_${new Date().toISOString().slice(0,10)}.html`; document.body.appendChild(a); a.click();
-            setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(u);},100);
-        });
-
-        async function batchGen(){
-            let validIndices = []; marksheetData.forEach((r, i) => { if(r[colMap.name]) validIndices.push(i); });
-            let pb=document.getElementById('progress-bar'), pc=document.getElementById('progress-count');
-            document.getElementById('batch-progress').classList.remove('hidden');
-            for(let i=0; i<validIndices.length; i++){
-                pb.style.width=Math.round(((i+1)/validIndices.length)*100)+'%'; pc.textContent=`${i+1}/${validIndices.length}`;
-                await singleGen(validIndices[i], true); await new Promise(r=>setTimeout(r,2000));
-            }
-            document.getElementById('batch-progress').classList.add('hidden'); alert("完成！");
+        function readFile(file, method) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = e => resolve(e.target.result);
+                reader.onerror = reject;
+                reader[method](file);
+            });
         }
 
-        async function singleGen(idx,app=false){
-            let row=marksheetData[idx], an=analyzeStudent(row), rid=`rep-${idx}-${Date.now()}`;
-            let sName = row[colMap.name] || "未知";
-            let ph=`<div id="${rid}" class="card mb-4 border-l-4 border-gray-400 p-4"><p class="animate-pulse">正在生成 ${sName}...</p></div>`;
-            if(!app) document.getElementById('report-preview-area').innerHTML=ph; else document.getElementById('report-preview-area').insertAdjacentHTML('beforeend',ph);
-            
-            // ... Build prompt ...
-            let prompt = DEFAULT_PROMPT.replace('{{student_name}}', sName).replace('{{total_score}}', an.totalScore).replace('{{full_mark}}', totalPaperMark)
-                      .replace('{{weaknesses}}', an.bad.join(', ')).replace('{{wrong_concepts}}', an.wrong.join(', ')).replace('{{strengths}}', an.good.join(', '))
-                      .replace('{{language_instruction}}', "請用繁體中文。").replace('{{section_1_title}}', "整體回顧").replace('{{section_2_title}}', "概念重溫").replace('{{section_3_title}}', "自我挑戰")
-                      .replace('{{syllabus}}', document.getElementById('syllabus-content').value || "")
-                      .replace('{{exam_paper_content}}', examPaperText || "");
-            
+        async function extractText(file) {
+            const name = file.name.toLowerCase();
+            if (name.endsWith('.docx')) {
+                const buff = await readFile(file, 'readAsArrayBuffer');
+                const res = await mammoth.extractRawText({ arrayBuffer: buff });
+                return res.value;
+            } else if (name.endsWith('.pdf')) {
+                const buff = await readFile(file, 'readAsArrayBuffer');
+                const pdf = await pdfjsLib.getDocument(buff).promise;
+                let txt = "";
+                for(let i=1; i<=pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const content = await page.getTextContent();
+                    txt += content.items.map(item => item.str).join(' ') + "\n";
+                }
+                return txt;
+            } else if (file.type.startsWith('image/')) {
+                return { type: 'image', file: file };
+            } else {
+                return await readFile(file, 'readAsText');
+            }
+        }
+
+        async function handleMapCsvUpload(input) {
+            if (input.files.length > 0) {
+                try {
+                    const txt = await readFile(input.files[0], 'readAsText');
+                    document.getElementById('script-map-context').value = txt;
+                } catch(e) {
+                    alert("讀取 CSV 失敗: " + e.message);
+                }
+            }
+        }
+
+        // --- Feature 1: MAP Generator ---
+        async function generateMAP() {
+            const syllabusInput = document.getElementById('syllabus-file-upload');
+            const examInput = document.getElementById('map-file-upload');
+            const btn = document.getElementById('btn-gen-map');
+            const output = document.getElementById('map-output');
+            const extra = document.getElementById('map-prompt-extra').value;
+            let sysPrompt = document.getElementById('prompt-system-map').value;
+
+            if (examInput.files.length === 0) { alert("請上傳空白試卷"); return; }
+
+            const originalText = btn.innerHTML;
+            btn.innerHTML = `<span class="loader"></span> 深度分析中 (支援長文本)...`;
+            btn.disabled = true;
+
             try {
-                let txt=await callAI(prompt);
-                let p1=txt.split('---PAGE_BREAK---')[0], p2=txt.split('---PAGE_BREAK---')[1]||"", ans=p2.split('---ANSWERS---')[1]||"";
-                let h = `<div class="report-page-style preview-wrapper bg-white"><div class="markdown-body text-sm">${marked.parse(p1)}</div></div>
-                         <div class="report-page-style preview-wrapper bg-white"><div class="markdown-body text-sm">${marked.parse(p2.split('---ANSWERS---')[0])}</div><div class="page-footer text-xs">${marked.parse(ans)}</div></div>`;
+                const examText = await extractText(examInput.files[0]);
+                let sylText = "無";
+                if (syllabusInput.files.length > 0) sylText = await extractText(syllabusInput.files[0]);
+
+                sysPrompt += `\n\n### 課程大綱\n${sylText.substring(0,5000)}`;
+                const userPrompt = `額外提示: ${extra}\n\n試卷內容:\n${examText.substring(0, 40000)}\n\n(請確保完整)`;
+
+                let res = await callAI(sysPrompt, userPrompt);
                 
-                if(!app) document.getElementById('report-preview-area').innerHTML=h; else document.getElementById(rid).outerHTML=h;
-                let printDiv = document.createElement('div'); printDiv.innerHTML = h;
-                while(printDiv.firstChild) document.getElementById('print-container').appendChild(printDiv.firstChild);
-            } catch(e) { showErrorModal(e); }
+                // Safe Regex Clean
+                let cleanResult = res.trim();
+                cleanResult = cleanResult.replace(new RegExp('^```csv\\s*', 'i'), '')
+                                         .replace(new RegExp('^```\\s*', 'i'), '')
+                                         .replace(new RegExp('\\s*```$', 'i'), '');
+                
+                output.value = cleanResult;
+            } catch (e) {
+                alert("Error: " + e.message);
+                output.value = "Error: " + e.message;
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
         }
 
-        function showErrorModal(e) { document.getElementById('error-log-content').textContent=e.message; document.getElementById('error-modal').classList.remove('hidden'); }
-        function closeModal() { document.getElementById('error-modal').classList.add('hidden'); }
+        // --- New Feature: Marksheet Template Generator ---
+        function generateMarksheet() {
+            const mapText = document.getElementById('map-output').value.trim();
+            if(!mapText) { alert("請先生成 MAP 或手動貼上 MAP CSV"); return; }
+
+            Papa.parse(mapText, {
+                header: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    if(results.data.length === 0) return;
+                    
+                    // Try to find the Question_ID column
+                    // Since AI output might have varied capitalization or extra spaces, we look for key containing 'Question' or 'ID'
+                    let idKey = results.meta.fields.find(f => f.toLowerCase().includes('question') || f.toLowerCase().includes('id'));
+                    
+                    // Fallback to first column if key not found
+                    if (!idKey) idKey = results.meta.fields[0];
+
+                    let qIds = results.data.map(row => row[idKey]);
+                    
+                    // Clean up IDs
+                    qIds = qIds.filter(id => id && id.trim() !== '');
+
+                    const header = "Class,ClassNumber,Name," + qIds.join(",");
+                    document.getElementById('marksheet-output').value = header;
+                },
+                error: function(err) {
+                    alert("解析失敗: " + err.message);
+                }
+            });
+        }
+
+        // --- Feature 2: Script Analysis ---
+        async function analyzeScript() {
+            const fileInput = document.getElementById('script-file-upload');
+            const mapContext = document.getElementById('script-map-context').value;
+            const btn = document.getElementById('btn-analyze-script');
+            const outMC = document.getElementById('script-out-mc');
+            const outAns = document.getElementById('script-out-ans');
+            let sysPrompt = document.getElementById('prompt-system-script').value;
+
+            if (fileInput.files.length === 0) { alert("請上傳學生答卷"); return; }
+            if (!mapContext) { alert("請輸入 MAP 資料"); return; }
+
+            const originalText = btn.innerHTML;
+            btn.innerHTML = `<span class="loader"></span> 識別與分析中...`;
+            btn.disabled = true;
+
+            try {
+                let fullText = "";
+                let images = [];
+
+                for (let i=0; i<fileInput.files.length; i++) {
+                    const extracted = await extractText(fileInput.files[i]);
+                    if (extracted.type === 'image') {
+                        images.push(await readFile(extracted.file, 'readAsDataURL'));
+                    } else {
+                        fullText += `\n--- FILE START ---\n${extracted}\n`;
+                    }
+                }
+
+                sysPrompt += `\n\n### MAP 結構\n${mapContext}`;
+                let instruction = "";
+                if (images.length > 0) instruction = "(請注意：本答卷包含圖片，請結合圖片與文字進行分析)";
+                
+                const userPrompt = `${instruction}\n學生答卷內容(文字):\n${fullText.substring(0, 30000)}`;
+
+                let res = await callAI(sysPrompt, userPrompt, images);
+
+                const parts = res.split('###SECTION_SPLIT###');
+                
+                const clean = (t) => {
+                    if (!t) return "";
+                    return t.replace(new RegExp('```csv', 'gi'), '')
+                            .replace(new RegExp('```', 'gi'), '')
+                            .trim();
+                };
+                
+                if (parts.length >= 2) {
+                    outMC.value = clean(parts[0]);
+                    outAns.value = clean(parts[1]);
+                } else {
+                    outMC.value = res;
+                    outAns.value = "Format Error: No split marker found. AI output:\n" + res;
+                }
+
+            } catch (e) {
+                alert("Error: " + e.message);
+                outMC.value = "Error: " + e.message;
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        // Init
+        init();
     </script>
 </body>
 </html>
