@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>綜合科學科 - 試卷分析及AI報告系統 (Pro v40_FIX)</title>
+    <title>綜合科學科 - 試卷分析及AI報告系統 (Pro v41 PageControl)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -36,8 +36,8 @@
         .markdown-body p { margin-bottom: 0.8em; line-height: 1.6; }
         .markdown-body blockquote { border-left: 4px solid #e5e7eb; padding-left: 1em; color: #4b5563; font-style: italic; background-color: #f9fafb; padding: 0.5rem; }
 
-        /* Report Page */
-        .report-page-style { width: 210mm; min-height: 297mm; padding: 20mm; background: white; position: relative; overflow: hidden; font-size: 11pt; box-sizing: border-box; }
+        /* Report Page - Modified to allow height to grow based on content */
+        .report-page-style { width: 210mm; min-height: 297mm; height: auto; padding: 20mm; background: white; position: relative; font-size: 11pt; box-sizing: border-box; }
         .page-footer { margin-top: 40px; padding-top: 10px; border-top: 1px dashed #ccc; font-size: 10pt; color: #666; page-break-inside: avoid; }
         #report-preview-area, #summary-preview-area { display: flex; flex-direction: column; align-items: center; gap: 40px; padding-bottom: 50px; }
         .preview-wrapper { box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); border: 1px solid #d1d5db; margin-bottom: 20px; }
@@ -48,8 +48,8 @@
             body { background: white; -webkit-print-color-adjust: exact; }
             #app-container, nav, .no-print, #error-modal { display: none !important; }
             #print-container { display: block !important; position: absolute; top: 0; left: 0; width: 100%; }
-            .report-page-style { height: 296mm; width: 100%; page-break-after: always; break-after: page; margin: 0; box-shadow: none; border: none; float: none; }
-            .page-footer { position: absolute; bottom: 20mm; left: 20mm; right: 20mm; }
+            .report-page-style { width: 100%; min-height: 296mm; height: auto; page-break-after: always; break-after: page; margin: 0; box-shadow: none; border: none; float: none; }
+            .page-footer { position: relative; bottom: 0; margin-top: 20mm; }
         }
         #error-modal { background: rgba(0,0,0,0.5); }
         .distractor-card { @apply border-l-4 border-red-500 bg-red-50 p-4 rounded mb-4; }
@@ -81,7 +81,7 @@
                 <div class="flex items-center justify-between h-16">
                     <div class="flex items-center">
                         <i class="fas fa-microscope text-2xl mr-3"></i>
-                        <span class="font-bold text-xl ml-2">綜合科學科 - 試卷分析及AI報告系統 (Pro v40)</span>
+                        <span class="font-bold text-xl ml-2">綜合科學科 - 試卷分析及AI報告系統 (Pro v41)</span>
                     </div>
                 </div>
             </div>
@@ -179,22 +179,45 @@
             <div id="view-report" class="hidden space-y-8">
                 <div class="card">
                     <h2 class="text-lg font-bold mb-4 border-b pb-2"><i class="fas fa-user-graduate mr-2"></i>學生個別報告</h2>
+                    
+                    <div class="bg-gray-50 p-3 rounded-lg border mb-4">
+                        <h3 class="text-sm font-bold text-gray-700 mb-2">📑 報告篇幅設定 (Page Control)</h3>
+                        <div class="flex flex-wrap gap-4">
+                            <div class="w-full md:w-1/4">
+                                <label class="block text-xs font-bold text-blue-700 mb-1">語言 (Language)</label>
+                                <select id="report-language" class="w-full p-2 border rounded text-sm font-bold text-indigo-600">
+                                    <option value="zh">繁體中文</option>
+                                    <option value="en">English</option>
+                                </select>
+                            </div>
+                            <div class="w-full md:w-1/4">
+                                <label class="block text-xs font-bold text-gray-600 mb-1">整體回顧 (Review)</label>
+                                <select id="report-p1-len" class="w-full p-2 border rounded text-sm">
+                                    <option value="0.5">0.5 頁 (精簡)</option>
+                                    <option value="1">1 頁 (詳盡)</option>
+                                </select>
+                            </div>
+                            <div class="w-full md:w-1/4">
+                                <label class="block text-xs font-bold text-gray-600 mb-1">概念重溫 (Key Concepts)</label>
+                                <select id="report-p2-len" class="w-full p-2 border rounded text-sm">
+                                    <option value="0.5">0.5 頁 (約3個重點)</option>
+                                    <option value="1" selected>1 頁 (約5個重點)</option>
+                                    <option value="2">2 頁 (極度詳盡)</option>
+                                </select>
+                            </div>
+                            <div class="w-full md:w-1/4">
+                                <label class="block text-xs font-bold text-gray-600 mb-1">自我挑戰 (Questions)</label>
+                                <select id="report-p3-len" class="w-full p-2 border rounded text-sm font-bold">
+                                    <option value="1" selected>1 頁 (約 5 題)</option>
+                                    <option value="2">2 頁 (約 10 題)</option>
+                                    <option value="3">3 頁 (約 15 題)</option>
+                                    <option value="4">4 頁 (約 20 題)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="flex flex-col md:flex-row gap-4 items-end">
-                        <div class="w-full md:w-1/4">
-                            <label class="block text-sm font-medium mb-1">語言</label>
-                            <select id="report-language" class="w-full p-2 border rounded font-bold text-indigo-600">
-                                <option value="zh">繁體中文</option>
-                                <option value="en">English</option>
-                            </select>
-                        </div>
-                        <div class="w-full md:w-1/4">
-                             <label class="block text-sm font-medium mb-1">反思題目數量</label>
-                             <select id="report-q-count" class="w-full p-2 border rounded font-bold">
-                                 <option value="3">3 題</option>
-                                 <option value="5" selected>5 題</option>
-                                 <option value="8">8 題</option>
-                             </select>
-                        </div>
                         <div class="flex-grow w-full">
                             <label class="block text-sm font-medium mb-1">選擇學生</label>
                             <select id="student-select" class="w-full p-2 border rounded"><option value="">請選擇...</option><option value="ALL">【 🚀 批量生成 】全班</option></select>
@@ -267,29 +290,6 @@
             return {totalScore:t,wrong:[...new Set(w)].slice(0,8),bad:Object.keys(b).sort((x,y)=>b[y]-b[x]).slice(0,3),good:Object.keys(g).sort((x,y)=>g[y]-g[x]).slice(0,3)};
         }
 
-        // Keep this for potential future use or consistency
-        function buildPrompt(n,d, lang, syllabus, examPaperContext, numQ) {
-            let tpl = document.getElementById('prompt-template').value;
-            const L = {
-                zh: { inst: "請用繁體中文撰寫。", sec1: "整體表現回顧", sec2: "重點概念重溫", sec3: "自我挑戰" },
-                en: { inst: "Please write in English.", sec1: "Overall Performance Review", sec2: "Key Concept Review", sec3: "Self-Challenge" }
-            };
-            const LC = L[lang] || L['zh'];
-            return tpl.replace('{{student_name}}', n)
-                      .replace('{{total_score}}', d.totalScore)
-                      .replace('{{full_mark}}', totalPaperMark)
-                      .replace('{{weaknesses}}', d.bad.join(', '))
-                      .replace('{{wrong_concepts}}', d.wrong.join(', '))
-                      .replace('{{strengths}}', d.good.join(', '))
-                      .replace('{{language_instruction}}', LC.inst)
-                      .replace('{{section_1_title}}', LC.sec1)
-                      .replace('{{section_2_title}}', LC.sec2)
-                      .replace('{{section_3_title}}', LC.sec3)
-                      .replace('{{syllabus}}', syllabus || "未提供")
-                      .replace('{{exam_paper_content}}', examPaperContext || "未提供")
-                      .replace('{{num_questions}}', numQ || "5");
-        }
-
         async function callAI(p) {
             const prov=document.getElementById('model-provider').value;
             const key=document.getElementById('ds-key').value || document.getElementById('gemini-key').value;
@@ -355,7 +355,7 @@
 
         // --- INITIALIZATION ---
         const DEFAULT_PROMPT = `
-你是一位科學老師。請為學生 {{student_name}} 製作一份兩頁的學習報告。
+你是一位科學老師。請為學生 {{student_name}} 製作一份學習報告。
 總分：{{total_score}} / {{full_mark}}。
 弱項：{{weaknesses}}。
 錯題概念：{{wrong_concepts}}。
@@ -366,16 +366,20 @@
 【課程範圍參考 (Syllabus Scope)】：
 {{syllabus}}
 
+【篇幅要求】：
+1. {{section_1_limit}}
+2. {{section_2_limit}}
+3. {{section_3_limit}}
+
 請嚴格按照以下格式輸出，必須包含分隔符號，絕對不要生成任何圖片：
 
 1. **{{section_1_title}}**
    - 簡短鼓勵
    - 點列指出強項
    - 點列指出需改善之處
-   (文字簡要)
 
 2. **{{section_2_title}}**
-   (針對每一個「需改善的課題」，以「筆記形式」解釋重點概念。請務必使用生活比喻，簡易明白。例如：「摩擦力：就像地面有看不見的小手...」。注意：內容不可超出上述課程範圍。若有提供試卷內容，請引用相關題目情境。總字數約500字內, 半頁紙可以完成)
+   (針對每一個「需改善的課題」，以「筆記形式」解釋重點概念。請務必使用生活比喻，簡易明白。注意：內容不可超出上述課程範圍。若有提供試卷內容，請引用相關題目情境。)
 
 ---PAGE_BREAK---
 
@@ -429,7 +433,7 @@
 (具體建議下學期或補課時如何改善。例如：增加實驗環節、加強關鍵字操練、針對弱項課題的具體重溫策略。建議需符合課程範圍。)
 `.trim();
 
-        let customPrompt = localStorage.getItem('science_exam_prompt') || DEFAULT_PROMPT;
+        let customPrompt = localStorage.getItem('science_exam_prompt_v2') || DEFAULT_PROMPT;
         let savedSyllabus = localStorage.getItem('science_exam_syllabus') || "";
         const pt = document.getElementById('prompt-template'); if(pt) pt.value = customPrompt;
         const st = document.getElementById('syllabus-content'); if(st) st.value = savedSyllabus;
@@ -439,7 +443,7 @@
         
         // --- BUTTON HANDLERS ---
         safeListen('save-prompt-btn', 'click', () => {
-            customPrompt = document.getElementById('prompt-template').value; localStorage.setItem('science_exam_prompt', customPrompt); alert("✅ 設定已儲存");
+            customPrompt = document.getElementById('prompt-template').value; localStorage.setItem('science_exam_prompt_v2', customPrompt); alert("✅ 設定已儲存");
         });
         
         safeListen('save-syllabus-btn', 'click', () => {
@@ -447,7 +451,7 @@
         });
         
         safeListen('reset-prompt-btn', 'click', () => {
-            if(confirm("確定要恢復預設指令嗎？")) { customPrompt = DEFAULT_PROMPT; document.getElementById('prompt-template').value = customPrompt; localStorage.setItem('science_exam_prompt', customPrompt); }
+            if(confirm("確定要恢復預設指令嗎？")) { customPrompt = DEFAULT_PROMPT; document.getElementById('prompt-template').value = customPrompt; localStorage.setItem('science_exam_prompt_v2', customPrompt); }
         });
         
         safeListen('test-conn-btn', 'click', testConnection);
@@ -679,33 +683,32 @@
         // --- STUDENT REPORT ---
         safeListen('generate-btn', 'click', async()=>{
              const v=document.getElementById('student-select').value; if(!v) return alert("請選擇");
-             const numQ = document.getElementById('report-q-count').value;
              document.getElementById('print-container').innerHTML=''; document.getElementById('report-preview-area').innerHTML='';
-             if(v==='ALL') await batchGen(numQ); else await singleGen(parseInt(v), false, numQ);
+             if(v==='ALL') await batchGen(); else await singleGen(parseInt(v), false);
         });
-        // ... (clear/download same as v30) ...
+        
         safeListen('download-btn', 'click',()=>{ 
             let c=document.getElementById('print-container').innerHTML;
             if(!c.trim()) return;
             c = c.replace(/<img[^>]*>/g, "");
-            const h=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Report</title><script src="https://cdn.tailwindcss.com"><\/script><style>@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC&display=swap');body{font-family:'Noto Sans TC',sans-serif;background:#f3f4f6;padding:20px;}.report-page-style{width:210mm;min-height:296mm;padding:20mm;background:white;margin:0 auto 30px;position:relative;overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.1);border:1px solid #ddd;box-sizing:border-box;}.page-footer{margin-top:40px;padding-top:10px;border-top:1px dashed #ccc;color:#666;font-size:10pt;}@media print{body{background:white;padding:0;}.report-page-style{width:100%;height:296mm;margin:0;box-shadow:none;border:none;break-after:page;page-break-after:always;overflow:hidden;}}h1{font-size:1.6em;color:#1e3a8a;border-bottom:2px solid #ddd;padding-bottom:10px;}h2{font-size:1.3em;color:#2563eb;margin-top:1em;}ul{padding-left:1.5em;list-style:disc;}blockquote{border-left:4px solid #e5e7eb;padding-left:1em;background:#f9fafb;padding:0.5rem;margin:10px 0;}</style></head><body>${c}</body></html>`;
+            const h=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Report</title><script src="https://cdn.tailwindcss.com"><\/script><style>@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC&display=swap');body{font-family:'Noto Sans TC',sans-serif;background:#f3f4f6;padding:20px;}.report-page-style{width:210mm;min-height:296mm;height:auto;padding:20mm;background:white;margin:0 auto 30px;position:relative;overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.1);border:1px solid #ddd;box-sizing:border-box;}.page-footer{margin-top:40px;padding-top:10px;border-top:1px dashed #ccc;color:#666;font-size:10pt;}@media print{body{background:white;padding:0;}.report-page-style{width:100%;min-height:296mm;height:auto;margin:0;box-shadow:none;border:none;break-after:page;page-break-after:always;overflow:visible;}}h1{font-size:1.6em;color:#1e3a8a;border-bottom:2px solid #ddd;padding-bottom:10px;}h2{font-size:1.3em;color:#2563eb;margin-top:1em;}ul{padding-left:1.5em;list-style:disc;}blockquote{border-left:4px solid #e5e7eb;padding-left:1em;background:#f9fafb;padding:0.5rem;margin:10px 0;}</style></head><body>${c}</body></html>`;
             const b=new Blob([h],{type:'text/html'}), u=URL.createObjectURL(b), a=document.createElement('a');
             a.href=u; a.download=`Reports_${new Date().toISOString().slice(0,10)}.html`; document.body.appendChild(a); a.click();
             setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(u);},100);
         });
 
-        async function batchGen(numQ){
+        async function batchGen(){
             let validIndices = []; marksheetData.forEach((r, i) => { if(r[colMap.name]) validIndices.push(i); });
             let pb=document.getElementById('progress-bar'), pc=document.getElementById('progress-count');
             document.getElementById('batch-progress').classList.remove('hidden');
             for(let i=0; i<validIndices.length; i++){
                 pb.style.width=Math.round(((i+1)/validIndices.length)*100)+'%'; pc.textContent=`${i+1}/${validIndices.length}`;
-                await singleGen(validIndices[i], true, numQ); await new Promise(r=>setTimeout(r,2000));
+                await singleGen(validIndices[i], true); await new Promise(r=>setTimeout(r,2000));
             }
             document.getElementById('batch-progress').classList.add('hidden'); alert("完成！");
         }
 
-        async function singleGen(idx,app=false, numQ){
+        async function singleGen(idx,app=false){
             let row=marksheetData[idx], an=analyzeStudent(row), rid=`rep-${idx}-${Date.now()}`;
             let sName = row[colMap.name] || "未知";
             let sClass = row[colMap.class] || "";
@@ -713,30 +716,53 @@
             let selectedLang = document.getElementById('report-language').value;
             let syllabus = document.getElementById('syllabus-content').value || "(未提供課程範圍)";
             
-            let ph=`<div id="${rid}" class="card mb-4 border-l-4 border-gray-400 p-4"><p class="animate-pulse">正在生成 ${sName}...</p></div>`;
+            // --- NEW: Page Controls ---
+            const len1 = document.getElementById('report-p1-len').value;
+            const len2 = document.getElementById('report-p2-len').value;
+            const len3 = document.getElementById('report-p3-len').value;
+
+            // Map lengths to logic
+            // Review
+            const l1Inst = len1 === '0.5' 
+                ? "請將「整體表現」控制在半頁內(約250字)，精簡重點。" 
+                : "請將「整體表現」寫得較為詳盡(約一頁，400-500字)。";
+            
+            // Concepts
+            let l2Inst = "";
+            if(len2 === '0.5') l2Inst = "重點概念請極度精簡，只挑選最重要的 3 個概念解釋，必須控制在半頁內。";
+            else if(len2 === '1') l2Inst = "重點概念請詳細解釋，約 5-6 個概念，控制在約一頁篇幅。";
+            else l2Inst = "重點概念請非常詳盡解釋，可使用兩頁篇幅，深入剖析每一個弱項。";
+
+            // Questions
+            let qNum = 5;
+            if(len3 === '2') qNum = 10;
+            if(len3 === '3') qNum = 15;
+            if(len3 === '4') qNum = 20;
+            const l3Inst = `請生成 ${qNum} 條選擇題。請確保排版寬鬆，題目與選項清晰。`;
+
+            let ph=`<div id="${rid}" class="card mb-4 border-l-4 border-gray-400 p-4"><p class="animate-pulse">正在生成 ${sName} (Q:${qNum})...</p></div>`;
             if(!app) document.getElementById('report-preview-area').innerHTML=ph; else document.getElementById('report-preview-area').insertAdjacentHTML('beforeend',ph);
             
-            // --- FIX 1: Dynamic Language Logic ---
             const langOpts = {
                 zh: { inst: "請用繁體中文撰寫。", t1: "整體回顧", t2: "概念重溫", t3: "自我挑戰" },
                 en: { inst: "Please write in English.", t1: "Overall Review", t2: "Key Concepts", t3: "Self-Challenge" }
             };
             const activeLang = langOpts[selectedLang] || langOpts.zh;
 
-            // ... Build prompt ...
             let prompt = DEFAULT_PROMPT.replace('{{student_name}}', sName).replace('{{total_score}}', an.totalScore).replace('{{full_mark}}', totalPaperMark)
                       .replace('{{weaknesses}}', an.bad.join(', ')).replace('{{wrong_concepts}}', an.wrong.join(', ')).replace('{{strengths}}', an.good.join(', '))
                       .replace('{{language_instruction}}', activeLang.inst)
-                      .replace('{{section_1_title}}', activeLang.t1)
-                      .replace('{{section_2_title}}', activeLang.t2)
-                      .replace('{{section_3_title}}', activeLang.t3)
+                      .replace('{{section_1_title}}', activeLang.t1).replace('{{section_1_limit}}', l1Inst)
+                      .replace('{{section_2_title}}', activeLang.t2).replace('{{section_2_limit}}', l2Inst)
+                      .replace('{{section_3_title}}', activeLang.t3).replace('{{section_3_limit}}', l3Inst)
                       .replace('{{syllabus}}', syllabus)
                       .replace('{{exam_paper_content}}', examPaperText || "")
-                      .replace('{{num_questions}}', numQ);
+                      .replace('{{num_questions}}', qNum);
             
             try {
                 let txt=await callAI(prompt);
                 let p1=txt.split('---PAGE_BREAK---')[0], p2=txt.split('---PAGE_BREAK---')[1]||"", ans=p2.split('---ANSWERS---')[1]||"";
+                let questionsPart = p2.split('---ANSWERS---')[0];
                 
                 const L = { title: selectedLang==='en'?'Science Diagnostic Report':'科學科學習診斷報告', answers: selectedLang==='en'?'Answers':'參考答案' };
 
@@ -758,7 +784,7 @@
                     <div class="markdown-body text-sm">${marked.parse(p1)}</div>
                 </div>
                 <div class="report-page-style preview-wrapper bg-white">
-                    <div class="markdown-body text-sm">${marked.parse(p2.split('---ANSWERS---')[0])}</div>
+                    <div class="markdown-body text-sm">${marked.parse(questionsPart)}</div>
                     <div class="page-footer text-xs">
                         <strong>${L.answers}:</strong><br>
                         ${marked.parse(ans)}
@@ -769,7 +795,6 @@
                 let printDiv = document.createElement('div'); printDiv.innerHTML = h;
                 while(printDiv.firstChild) document.getElementById('print-container').appendChild(printDiv.firstChild);
 
-                // --- FIX 2: Enable Print and Download Buttons ---
                 document.getElementById('print-btn').disabled = false;
                 document.getElementById('download-btn').disabled = false;
 
