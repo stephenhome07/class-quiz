@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Circuit Fixer Mission</title>
+    <style>
+        /* --- 遊戲樣式設定 --- */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #2c3e50;
+            color: white;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            text-align: center;
+            overflow: hidden;
+        }
+
+        .game-container {
+            background-color: #34495e;
+            width: 90%;
+            max-width: 400px;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            position: relative;
+        }
+
+        h1 { font-size: 1.5rem; margin-bottom: 10px; color: #f1c40f; }
+        p { font-size: 0.9rem; color: #bdc3c7; }
+
+        /* 電路進度條視覺化 */
+        .circuit-visual {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 20px 0;
+            gap: 5px;
+        }
+        .wire {
+            height: 8px;
+            width: 40px;
+            background-color: #7f8c8d;
+            border-radius: 4px;
+            transition: background-color 0.5s;
+        }
+        .bulb {
+            font-size: 3rem;
+            filter: grayscale(100%);
+            transition: all 0.5s;
+        }
+        .bulb.lit {
+            filter: grayscale(0%);
+            text-shadow: 0 0 30px #f1c40f;
+            transform: scale(1.2);
+        }
+
+        /* 問題區域 */
+        .question-box {
+            background: #ecf0f1;
+            color: #2c3e50;
+            padding: 20px;
+            border-radius: 10px;
+            min-height: 150px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .q-text { font-size: 1.1rem; font-weight: bold; margin-bottom: 5px; }
+        .q-sub { font-size: 0.9rem; color: #7f8c8d; margin-bottom: 20px; }
+
+        /* 選項按鈕 */
+        .options {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 15px;
+            font-size: 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.1s, background 0.2s;
+        }
+        button:active { transform: scale(0.98); }
+        button.correct { background-color: #2ecc71; }
+        button.wrong { background-color: #e74c3c; animation: shake 0.4s; }
+
+        /* 慶祝畫面 */
+        #win-screen {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(44, 62, 80, 0.95);
+            z-index: 10;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            border-radius: 15px;
+        }
+        #win-screen h2 { color: #2ecc71; font-size: 2rem; }
+        .retry-btn { background-color: #e67e22; margin-top: 20px; }
+
+        @keyframes shake {
+            0% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            50% { transform: translateX(5px); }
+            75% { transform: translateX(-5px); }
+            100% { transform: translateX(0); }
+        }
+
+        /* 進度指示 */
+        .progress-text { margin-top: 10px; font-size: 0.8rem; color: #95a5a6; }
+    </style>
+</head>
+<body>
+
+<div class="game-container">
+    <h1>⚡ Circuit Fixer ⚡</h1>
+    <p>Answer correctly to connect the wires!<br>答對問題來接通電路！</p>
+
+    <div class="circuit-visual">
+        <div class="wire" id="w1"></div>
+        <div class="wire" id="w2"></div>
+        <div class="bulb" id="main-bulb">💡</div>
+        <div class="wire" id="w3"></div>
+        <div class="wire" id="w4"></div>
+        <div class="wire" id="w5"></div>
+    </div>
+
+    <div class="question-box" id="q-container">
+        <div class="q-text" id="q-text">Loading...</div>
+        <div class="q-sub" id="q-sub"></div>
+        <div class="options" id="opt-container">
+            </div>
+    </div>
+    
+    <div class="progress-text">Level: <span id="current-level">1</span> / 5</div>
+
+    <div id="win-screen">
+        <div style="font-size: 4rem;">💡✨</div>
+        <h2>Success!</h2>
+        <p>You fixed the circuit!<br>你成功修復了電路！</p>
+        <button class="retry-btn" onclick="restartGame()">Play Again 再玩一次</button>
+    </div>
+</div>
+
+<script>
+    // --- 題目數據庫 (針對基礎弱項) ---
+    const questions = [
+        {
+            text: "Which object allows electricity to pass through?",
+            sub: "哪一種物體可以讓電流通過？",
+            options: [
+                { text: "Plastic Ruler (膠尺)", correct: false },
+                { text: "Iron Nail (鐵釘)", correct: true }
+            ]
+        },
+        {
+            text: "The bulb is OFF. What is missing?",
+            sub: "燈泡不亮。這裡欠缺了什麼？",
+            options: [
+                { text: "Energy Source (Battery) 能量來源", correct: true },
+                { text: "Another Wire 多一條電線", correct: false }
+            ]
+        },
+        {
+            text: "Why is the wire covered with plastic?",
+            sub: "為什麼電線外層包著塑料？",
+            options: [
+                { text: "To make it look nice 為了美觀", correct: false },
+                { text: "It is an insulator (Safety) 它是絕緣體 (安全)", correct: true }
+            ]
+        },
+        {
+            text: "If the switch is 'OPEN', the bulb will...",
+            sub: "如果開關是「打開 (斷開)」的，燈泡會...",
+            options: [
+                { text: "Light up (亮起)", correct: false },
+                { text: "Not light up (不亮)", correct: true }
+            ]
+        },
+        {
+            text: "Which of these is a conductor?",
+            sub: "以下哪一項是導電體？",
+            options: [
+                { text: "Pencil Lead (Graphite) 鉛筆芯", correct: true },
+                { text: "Rubber Eraser 橡皮擦", correct: false }
+            ]
+        }
+    ];
+
+    let currentQ = 0;
+    
+    // --- 遊戲邏輯 ---
+    function loadQuestion() {
+        if (currentQ >= questions.length) {
+            showWin();
+            return;
+        }
+
+        const q = questions[currentQ];
+        document.getElementById('q-text').innerText = (currentQ + 1) + ". " + q.text;
+        document.getElementById('q-sub').innerText = q.sub;
+        document.getElementById('current-level').innerText = currentQ + 1;
+
+        const container = document.getElementById('opt-container');
+        container.innerHTML = ''; // 清空舊按鈕
+
+        // 隨機排列選項，避免死記位置
+        const shuffledOpts = [...q.options].sort(() => Math.random() - 0.5);
+
+        shuffledOpts.forEach(opt => {
+            const btn = document.createElement('button');
+            btn.innerText = opt.text;
+            btn.onclick = () => checkAnswer(btn, opt.correct);
+            container.appendChild(btn);
+        });
+    }
+
+    function checkAnswer(btn, isCorrect) {
+        if (isCorrect) {
+            btn.classList.add('correct');
+            // 接通一段電路
+            document.getElementById(`w${currentQ + 1}`).style.backgroundColor = '#f1c40f'; // 變成黃色/金色
+            
+            setTimeout(() => {
+                currentQ++;
+                loadQuestion();
+            }, 600);
+        } else {
+            btn.classList.add('wrong');
+            navigator.vibrate(200); // 手機震動反饋
+            setTimeout(() => {
+                btn.classList.remove('wrong');
+            }, 500);
+        }
+    }
+
+    function showWin() {
+        // 點亮燈泡
+        document.getElementById('main-bulb').classList.add('lit');
+        
+        // 顯示獲勝畫面
+        setTimeout(() => {
+            document.getElementById('win-screen').style.display = 'flex';
+            startConfetti();
+        }, 800);
+    }
+
+    function restartGame() {
+        currentQ = 0;
+        document.getElementById('win-screen').style.display = 'none';
+        document.getElementById('main-bulb').classList.remove('lit');
+        
+        // 重置電線顏色
+        for(let i=1; i<=5; i++) {
+            document.getElementById(`w${i}`).style.backgroundColor = '#7f8c8d';
+        }
+        loadQuestion();
+    }
+
+    // --- 簡單的撒花特效 (Confetti) ---
+    function startConfetti() {
+        // 簡單的 CSS 動畫無法做全屏粒子，這裡僅作簡易慶祝
+        // 如果需要複雜特效可以引入 external library，但為了單文件保持簡單
+        console.log("Confetti!"); 
+    }
+
+    // 初始化
+    loadQuestion();
+
+</script>
+</body>
+</html>
