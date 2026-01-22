@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>綜合科學科 - 試卷分析及AI報告系統 (Pro v40)</title>
+    <title>綜合科學科 - 試卷分析及AI報告系統 (Pro v40_FIX)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -60,7 +60,6 @@
 </head>
 <body class="text-gray-800">
 
-    <!-- Error Modal -->
     <div id="error-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center">
         <div class="bg-white rounded-lg shadow-2xl p-6 max-w-lg w-full mx-4 border-l-4 border-red-500 relative animate-fade-in-up">
             <button onclick="closeModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><i class="fas fa-times text-xl"></i></button>
@@ -76,9 +75,7 @@
         </div>
     </div>
 
-    <!-- WRAPPER -->
     <div id="app-container" class="max-w-7xl mx-auto">
-        <!-- Navbar -->
         <nav class="bg-blue-700 text-white shadow-lg mb-6">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="flex items-center justify-between h-16">
@@ -92,12 +89,10 @@
 
         <div class="px-4 sm:px-6 lg:px-8 pb-12">
             
-            <!-- File Upload Section -->
             <div class="card mb-8 animate-fade-in-up border-l-4 border-blue-500">
                 <h2 class="text-lg font-bold text-gray-700 mb-4 pb-2 border-b"><i class="fas fa-file-upload mr-2"></i>1. 資料匯入</h2>
                 
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    <!-- Required Column -->
                     <div class="bg-red-50 p-4 rounded-lg border-2 border-red-100">
                         <h3 class="text-sm font-bold text-red-700 mb-3 flex items-center"><i class="fas fa-asterisk mr-2"></i>必要資料 (Required)</h3>
                         <div class="space-y-4">
@@ -112,7 +107,6 @@
                         </div>
                     </div>
 
-                    <!-- Optional Column -->
                     <div class="bg-blue-50 p-4 rounded-lg border-2 border-blue-100">
                         <h3 class="text-sm font-bold text-blue-700 mb-3 flex items-center"><i class="fas fa-magic mr-2"></i>進階分析資料 (推薦)</h3>
                         <div class="space-y-4">
@@ -140,7 +134,6 @@
                 </div>
             </div>
 
-            <!-- TABS -->
             <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-8 hidden" id="main-tabs">
                 <div onclick="switchTab('analysis')" class="nav-card active" id="tab-analysis"><i class="fas fa-chart-pie"></i><h3>全班數據</h3></div>
                 <div onclick="switchTab('mc')" class="nav-card" id="tab-mc"><i class="fas fa-list-ul"></i><h3>MC 分析</h3></div>
@@ -149,33 +142,27 @@
                 <div onclick="switchTab('settings')" class="nav-card" id="tab-settings"><i class="fas fa-sliders-h"></i><h3>設定</h3></div>
             </div>
 
-            <!-- VIEW 1: ANALYSIS -->
             <div id="view-analysis" class="hidden space-y-8">
-                <!-- Stats -->
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div class="card border-t-4 border-blue-500"><div class="text-gray-500 text-sm">平均分</div><div class="text-3xl font-bold mt-1" id="stat-mean">--</div></div>
                     <div class="card border-t-4 border-green-500"><div class="text-gray-500 text-sm">及格率</div><div class="text-3xl font-bold mt-1" id="stat-pass">--%</div></div>
                     <div class="card border-t-4 border-yellow-500"><div class="text-gray-500 text-sm">最高/最低</div><div class="text-3xl font-bold mt-1"><span id="stat-max" class="text-green-600">--</span>/<span id="stat-min" class="text-red-600">--</span></div></div>
                     <div class="card border-t-4 border-purple-500"><div class="text-gray-500 text-sm">標準差</div><div class="text-3xl font-bold mt-1" id="stat-sd">--</div></div>
                 </div>
-                <!-- Charts -->
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     <div class="card flex flex-col h-full"><h3 class="text-lg font-bold mb-4">強弱課題熱點圖</h3><div id="heatmap-container" class="heatmap-grid overflow-y-auto max-h-64 p-1 flex-grow"></div></div>
                     <div class="card flex flex-col h-full"><h3 class="text-lg font-bold mb-4">成績分佈</h3><div class="relative h-64 w-full"><canvas id="distChart"></canvas></div></div>
                 </div>
-                <!-- Table -->
                 <div class="card overflow-hidden">
                     <div class="flex justify-between items-center mb-4 border-b pb-4"><h3 class="text-lg font-bold">題項分析</h3><select id="item-filter" class="p-1 border rounded text-sm"><option value="ALL">全部</option><option value="D_LOW">鑑別度低</option><option value="P_LOW">題目過難</option></select></div>
                     <div class="overflow-x-auto max-h-96 border rounded-lg"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="table-header">題號</th><th class="table-header">課題</th><th class="table-header">難度</th><th class="table-header">P</th><th class="table-header">D</th><th class="table-header">評價</th></tr></thead><tbody class="bg-white divide-y divide-gray-200" id="itemTableBody"></tbody></table></div>
                 </div>
             </div>
 
-            <!-- VIEW 1.5: MC ANALYSIS -->
             <div id="view-mc" class="hidden space-y-8">
                 <div class="card"><h3 class="text-lg font-bold mb-4">MC 選項分佈</h3><div class="relative h-64 w-full"><canvas id="mcChart"></canvas></div><div class="mt-8" id="mc-distractor-list"></div></div>
             </div>
 
-            <!-- VIEW 2: SUMMARY REPORT -->
             <div id="view-summary" class="hidden space-y-8">
                 <div class="card bg-orange-50 border-l-4 border-orange-500">
                     <h2 class="text-lg font-bold text-gray-700 mb-2"><i class="fas fa-file-alt mr-2"></i>考試成績與教學檢討報告</h2>
@@ -189,7 +176,6 @@
                 <div id="summary-preview-area"></div>
             </div>
 
-            <!-- VIEW 3: STUDENT REPORT -->
             <div id="view-report" class="hidden space-y-8">
                 <div class="card">
                     <h2 class="text-lg font-bold mb-4 border-b pb-2"><i class="fas fa-user-graduate mr-2"></i>學生個別報告</h2>
@@ -222,7 +208,6 @@
                 <div id="report-preview-area" class="w-full"></div>
             </div>
 
-            <!-- VIEW 4: SETTINGS -->
             <div id="view-settings" class="hidden space-y-8">
                 <div class="card border-l-4 border-green-500 mb-6">
                     <h2 class="text-lg font-bold text-gray-700 mb-2"><i class="fas fa-book mr-2"></i>課程範圍 (Syllabus)</h2>
@@ -282,6 +267,7 @@
             return {totalScore:t,wrong:[...new Set(w)].slice(0,8),bad:Object.keys(b).sort((x,y)=>b[y]-b[x]).slice(0,3),good:Object.keys(g).sort((x,y)=>g[y]-g[x]).slice(0,3)};
         }
 
+        // Keep this for potential future use or consistency
         function buildPrompt(n,d, lang, syllabus, examPaperContext, numQ) {
             let tpl = document.getElementById('prompt-template').value;
             const L = {
@@ -730,10 +716,20 @@
             let ph=`<div id="${rid}" class="card mb-4 border-l-4 border-gray-400 p-4"><p class="animate-pulse">正在生成 ${sName}...</p></div>`;
             if(!app) document.getElementById('report-preview-area').innerHTML=ph; else document.getElementById('report-preview-area').insertAdjacentHTML('beforeend',ph);
             
+            // --- FIX 1: Dynamic Language Logic ---
+            const langOpts = {
+                zh: { inst: "請用繁體中文撰寫。", t1: "整體回顧", t2: "概念重溫", t3: "自我挑戰" },
+                en: { inst: "Please write in English.", t1: "Overall Review", t2: "Key Concepts", t3: "Self-Challenge" }
+            };
+            const activeLang = langOpts[selectedLang] || langOpts.zh;
+
             // ... Build prompt ...
             let prompt = DEFAULT_PROMPT.replace('{{student_name}}', sName).replace('{{total_score}}', an.totalScore).replace('{{full_mark}}', totalPaperMark)
                       .replace('{{weaknesses}}', an.bad.join(', ')).replace('{{wrong_concepts}}', an.wrong.join(', ')).replace('{{strengths}}', an.good.join(', '))
-                      .replace('{{language_instruction}}', "請用繁體中文。").replace('{{section_1_title}}', "整體回顧").replace('{{section_2_title}}', "概念重溫").replace('{{section_3_title}}', "自我挑戰")
+                      .replace('{{language_instruction}}', activeLang.inst)
+                      .replace('{{section_1_title}}', activeLang.t1)
+                      .replace('{{section_2_title}}', activeLang.t2)
+                      .replace('{{section_3_title}}', activeLang.t3)
                       .replace('{{syllabus}}', syllabus)
                       .replace('{{exam_paper_content}}', examPaperText || "")
                       .replace('{{num_questions}}', numQ);
@@ -745,7 +741,6 @@
                 const L = { title: selectedLang==='en'?'Science Diagnostic Report':'科學科學習診斷報告', answers: selectedLang==='en'?'Answers':'參考答案' };
 
                 let h = `
-                <!-- PAGE 1 -->
                 <div class="report-page-style preview-wrapper bg-white">
                     <div class="flex justify-between items-start border-b-2 border-gray-800 pb-4 mb-6">
                         <div class="text-left">
@@ -762,7 +757,6 @@
                     </div>
                     <div class="markdown-body text-sm">${marked.parse(p1)}</div>
                 </div>
-                <!-- PAGE 2 -->
                 <div class="report-page-style preview-wrapper bg-white">
                     <div class="markdown-body text-sm">${marked.parse(p2.split('---ANSWERS---')[0])}</div>
                     <div class="page-footer text-xs">
@@ -774,6 +768,11 @@
                 if(!app) document.getElementById('report-preview-area').innerHTML=h; else document.getElementById(rid).outerHTML=h;
                 let printDiv = document.createElement('div'); printDiv.innerHTML = h;
                 while(printDiv.firstChild) document.getElementById('print-container').appendChild(printDiv.firstChild);
+
+                // --- FIX 2: Enable Print and Download Buttons ---
+                document.getElementById('print-btn').disabled = false;
+                document.getElementById('download-btn').disabled = false;
+
             } catch(e) { showErrorModal(e); }
         }
 
@@ -788,4 +787,3 @@
     </script>
 </body>
 </html>
-
