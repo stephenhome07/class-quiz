@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Symbol Master</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #2b3e50;
+            color: white;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            user-select: none;
+        }
+
+        .game-card {
+            background: white;
+            color: #333;
+            width: 90%;
+            max-width: 400px;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            text-align: center;
+        }
+
+        h2 { margin: 0 0 5px 0; color: #8e44ad; }
+        .subtitle { font-size: 0.9rem; color: #7f8c8d; margin-bottom: 20px; }
+
+        /* 問題區域 */
+        .question-area {
+            background-color: #f0f3f4;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            min-height: 80px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        .q-en { font-size: 1.4rem; font-weight: bold; color: #2c3e50; }
+        .q-ch { font-size: 1rem; color: #7f8c8d; }
+
+        /* 選項網格 */
+        .options-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .opt-btn {
+            background: #fff;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100px;
+        }
+        
+        .opt-btn:active { transform: scale(0.95); }
+        .opt-btn.correct { background-color: #d4efdf; border-color: #27ae60; }
+        .opt-btn.wrong { background-color: #fadbd8; border-color: #c0392b; animation: shake 0.4s; }
+
+        /* SVG 樣式 */
+        svg { width: 80%; height: 80%; stroke: black; stroke-width: 3; fill: none; stroke-linecap: round; }
+
+        /* 進度條 */
+        .progress { margin-top: 15px; height: 6px; background: #e0e0e0; border-radius: 3px; overflow: hidden; }
+        .bar { height: 100%; background: #8e44ad; width: 0%; transition: width 0.3s; }
+
+        @keyframes shake {
+            0% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            50% { transform: translateX(5px); }
+            75% { transform: translateX(-5px); }
+            100% { transform: translateX(0); }
+        }
+
+        /* 獲勝畫面 */
+        #win-screen {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(43, 62, 80, 0.98);
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 10;
+        }
+        .retry-btn {
+            background: #e67e22; color: white; border: none; padding: 12px 30px;
+            font-size: 1.2rem; border-radius: 30px; margin-top: 20px; cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+<div class="game-card">
+    <h2>Symbol Master</h2>
+    <div class="subtitle">Match the name to the correct symbol!<br>將名稱配對正確的符號！</div>
+
+    <div class="progress"><div class="bar" id="progress-bar"></div></div>
+
+    <div class="question-area">
+        <div class="q-en" id="q-en">Loading...</div>
+        <div class="q-ch" id="q-ch"></div>
+    </div>
+
+    <div class="options-grid" id="opt-grid">
+        </div>
+</div>
+
+<div id="win-screen">
+    <div style="font-size: 5rem;">🏆</div>
+    <h1>Excellent!</h1>
+    <p>You mastered the symbols!<br>你掌握了所有符號！</p>
+    <button class="retry-btn" onclick="restartGame()">Play Again</button>
+</div>
+
+<script>
+    // 定義 SVG 符號 (標準物理符號)
+    const symbols = {
+        'cell': `<svg viewBox="0 0 100 60"><line x1="0" y1="30" x2="40" y2="30"/><line x1="40" y1="15" x2="40" y2="45"/><line x1="60" y1="5" x2="60" y2="55" stroke-width="5"/><line x1="60" y1="30" x2="100" y2="30"/></svg>`,
+        
+        'battery': `<svg viewBox="0 0 100 60"><line x1="0" y1="30" x2="25" y2="30"/><line x1="25" y1="15" x2="25" y2="45"/><line x1="40" y1="10" x2="40" y2="50" stroke-width="4"/><line x1="45" y1="30" x2="60" y2="30" stroke-dasharray="4,4"/><line x1="65" y1="15" x2="65" y2="45"/><line x1="80" y1="10" x2="80" y2="50" stroke-width="4"/><line x1="80" y1="30" x2="100" y2="30"/></svg>`,
+        
+        'bulb': `<svg viewBox="0 0 100 60"><line x1="0" y1="30" x2="35" y2="30"/><circle cx="50" cy="30" r="15"/><line x1="42" y1="22" x2="58" y2="38"/><line x1="58" y1="22" x2="42" y2="38"/><line x1="65" y1="30" x2="100" y2="30"/></svg>`,
+        
+        'switch_open': `<svg viewBox="0 0 100 60"><line x1="0" y1="40" x2="30" y2="40"/><circle cx="30" cy="40" r="3" fill="black"/><line x1="30" y1="40" x2="60" y2="20"/><circle cx="70" cy="40" r="3" fill="black"/><line x1="70" y1="40" x2="100" y2="40"/></svg>`,
+        
+        'switch_closed': `<svg viewBox="0 0 100 60"><line x1="0" y1="40" x2="30" y2="40"/><circle cx="30" cy="40" r="3" fill="black"/><line x1="30" y1="40" x2="70" y2="40"/><circle cx="70" cy="40" r="3" fill="black"/><line x1="70" y1="40" x2="100" y2="40"/></svg>`,
+        
+        'wire': `<svg viewBox="0 0 100 60"><line x1="10" y1="30" x2="90" y2="30"/><text x="50" y="55" text-anchor="middle" font-size="12" stroke="none" fill="#999">straight</text></svg>`
+    };
+
+    // 定義題目
+    const questions = [
+        { key: 'cell', en: "Cell", ch: "電芯 (單個)" },
+        { key: 'battery', en: "Battery", ch: "電池組 (多個)" },
+        { key: 'bulb', en: "Light Bulb", ch: "燈泡" },
+        { key: 'switch_open', en: "Open Switch", ch: "開關 (斷開/打開)" },
+        { key: 'switch_closed', en: "Closed Switch", ch: "開關 (閉合)" }
+    ];
+
+    let currentQ = 0;
+    let shuffledQuestions = [];
+
+    function initGame() {
+        shuffledQuestions = [...questions].sort(() => Math.random() - 0.5);
+        currentQ = 0;
+        loadQuestion();
+    }
+
+    function loadQuestion() {
+        if (currentQ >= shuffledQuestions.length) {
+            document.getElementById('win-screen').style.display = 'flex';
+            return;
+        }
+
+        const q = shuffledQuestions[currentQ];
+        document.getElementById('q-en').innerText = q.en;
+        document.getElementById('q-ch').innerText = q.ch;
+        
+        // 更新進度條
+        const pct = (currentQ / shuffledQuestions.length) * 100;
+        document.getElementById('progress-bar').style.width = pct + '%';
+
+        // 準備選項 (1個對的 + 3個錯的)
+        const correctKey = q.key;
+        let keys = Object.keys(symbols).filter(k => k !== correctKey);
+        // 隨機選3個錯的
+        keys = keys.sort(() => Math.random() - 0.5).slice(0, 3);
+        keys.push(correctKey);
+        // 打亂選項順序
+        keys.sort(() => Math.random() - 0.5);
+
+        const grid = document.getElementById('opt-grid');
+        grid.innerHTML = '';
+
+        keys.forEach(k => {
+            const btn = document.createElement('div');
+            btn.className = 'opt-btn';
+            btn.innerHTML = symbols[k];
+            btn.onclick = () => checkAnswer(btn, k === correctKey);
+            grid.appendChild(btn);
+        });
+    }
+
+    function checkAnswer(btn, isCorrect) {
+        if (isCorrect) {
+            btn.classList.add('correct');
+            setTimeout(() => {
+                currentQ++;
+                loadQuestion();
+            }, 500);
+        } else {
+            btn.classList.add('wrong');
+            navigator.vibrate(200);
+            setTimeout(() => {
+                btn.classList.remove('wrong');
+            }, 500);
+        }
+    }
+
+    function restartGame() {
+        document.getElementById('win-screen').style.display = 'none';
+        initGame();
+    }
+
+    // Start
+    initGame();
+
+</script>
+</body>
+</html>
