@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Voltmeter Scale Master</title>
+<style>
+    body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #2c3e50;
+        color: white;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+    }
+
+    .container {
+        background: white;
+        color: #333;
+        width: 90%;
+        max-width: 500px;
+        border-radius: 15px;
+        padding: 20px;
+        text-align: center;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    }
+
+    h2 { margin: 0; color: #e67e22; }
+    p.subtitle { color: #7f8c8d; font-size: 0.9rem; margin-bottom: 20px; }
+
+    /* 儀表板區域 */
+    .meter-box {
+        position: relative;
+        width: 100%;
+        height: 220px;
+        background: #fdfefe;
+        border: 2px solid #bdc3c7;
+        border-radius: 10px 10px 0 0;
+        overflow: hidden;
+        margin-bottom: 20px;
+    }
+    canvas { width: 100%; height: 100%; }
+
+    /* 控制區 */
+    .controls {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+        margin-bottom: 20px;
+    }
+    .range-btn {
+        padding: 8px 15px;
+        border: 2px solid #3498db;
+        background: white;
+        color: #3498db;
+        border-radius: 20px;
+        cursor: pointer;
+        font-weight: bold;
+        transition: 0.2s;
+    }
+    .range-btn.active {
+        background: #3498db;
+        color: white;
+    }
+
+    /* 輸入區 */
+    .input-area {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+    input[type="number"] {
+        padding: 10px;
+        font-size: 1.2rem;
+        width: 100px;
+        text-align: center;
+        border: 2px solid #bdc3c7;
+        border-radius: 8px;
+    }
+    button.check-btn {
+        padding: 10px 20px;
+        font-size: 1rem;
+        background-color: #27ae60;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+    }
+    button.check-btn:active { transform: scale(0.95); }
+
+    .feedback { font-size: 1.1rem; font-weight: bold; min-height: 1.5em; margin-bottom: 15px; }
+    .hint { font-size: 0.85rem; color: #95a5a6; background: #ecf0f1; padding: 5px; border-radius: 5px; display: inline-block;}
+
+</style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Scale Master</h2>
+    <p class="subtitle">Voltmeter Reading Practice<br>伏特計讀錶練習</p>
+
+    <div class="controls">
+        <button class="range-btn active" id="btn-3v" onclick="setRange(3)">Range: 0-3 V</button>
+        <button class="range-btn" id="btn-15v" onclick="setRange(15)">Range: 0-15 V</button>
+    </div>
+
+    <div class="meter-box">
+        <canvas id="meterCanvas"></canvas>
+    </div>
+
+    <div class="hint" id="hint-text">1 small div = 0.1 V (每一小格)</div>
+
+    <div class="feedback" id="feedback"></div>
+
+    <div class="input-area">
+        <input type="number" id="user-input" placeholder="0.0" step="0.1">
+        <button class="check-btn" onclick="checkAnswer()">Check (檢查)</button>
+    </div>
+    
+    <button onclick="newQuestion()" style="background:none; border:none; color:#3498db; text-decoration:underline; cursor:pointer; margin-top:10px;">Skip / Next Question</button>
+</div>
+
+<script>
+    const canvas = document.getElementById('meterCanvas');
+    const ctx = canvas.getContext('2d');
+    let currentRange = 3; // 3 or 15
+    let currentValue = 0;
+    
+    // 設定 Canvas 解析度 (高清屏優化)
+    function resizeCanvas() {
+        const parent = canvas.parentElement;
+        canvas.width = parent.clientWidth * 2;
+        canvas.height = parent.clientHeight * 2;
+        ctx.scale(2, 2);
+    }
+    window.addEventListener('resize', () => { resizeCanvas(); drawMeter(); });
+
+    function setRange(range) {
+        currentRange = range;
+        
+        // 更新按鈕樣式
+        document.getElementById('btn-3v').className = range === 3 ? 'range-btn active' : 'range-btn';
+        document.getElementById('btn-15v').className = range === 15 ? 'range-btn active' : 'range-btn';
+        
+        // 更新提示文字
+        const hint = range === 3 ? "1 small div = 0.1 V (每一小格)" : "1 small div = 0.5 V (每一小格)";
+        document.getElementById('hint-text').innerText = hint;
+
+        newQuestion();
+    }
+
+    function newQuestion() {
+        document.getElementById('feedback').innerText = "";
+        document.getElementById('user-input').value = "";
+        document.getElementById('user-input').focus();
+        
+        // 生成隨機值 (必須符合刻度邏輯)
+        if (currentRange === 3) {
+            // 0 - 3V, 每一小格 0.1V. 總共 30 格
+            const steps = Math.floor(Math.random() * 31); 
+            currentValue = (steps * 0.1).toFixed(1);
+        } else {
+            // 0 - 15V, 每一小格 0.5V. 總共 30 格
+            const steps = Math.floor(Math.random() * 31);
+            currentValue = (steps * 0.5).toFixed(1);
+        }
+
+        drawMeter();
+    }
+
+    function drawMeter() {
+        const w = canvas.width / 2;
+        const h = canvas.height / 2;
+        const cx = w / 2;
+        const cy = h * 0.85;
+        const radius = w * 0.8;
+
+        ctx.clearRect(0, 0, w, h);
+
+        // 畫刻度盤 (Arc)
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, Math.PI * 1.1, Math.PI * 1.9);
+        ctx.strokeStyle = "#333";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // 畫刻度線
+        const totalDivs = 30; // 3V 和 15V 都是 30 個小格
+        const startAngle = Math.PI * 1.1;
+        const endAngle = Math.PI * 1.9;
+        const totalAngle = endAngle - startAngle;
+
+        for (let i = 0; i <= totalDivs; i++) {
+            const angle = startAngle + (i / totalDivs) * totalAngle;
+            const x1 = cx + Math.cos(angle) * (radius - 5);
+            const y1 = cy + Math.sin(angle) * (radius - 5);
+            
+            let len = 10;
+            let isMajor = false;
+            let isMedium = false;
+
+            if (i % 10 === 0) { isMajor = true; len = 20; }
+            else if (i % 5 === 0) { isMedium = true; len = 15; }
+
+            const x2 = cx + Math.cos(angle) * (radius - len);
+            const y2 = cy + Math.sin(angle) * (radius - len);
+
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.strokeStyle = isMajor ? "black" : (isMedium ? "#555" : "#999");
+            ctx.lineWidth = isMajor ? 3 : (isMedium ? 2 : 1);
+            ctx.stroke();
+
+            // 畫數字
+            if (isMajor) {
+                const val = (i / totalDivs) * currentRange;
+                const tx = cx + Math.cos(angle) * (radius - 35);
+                const ty = cy + Math.sin(angle) * (radius - 35);
+                ctx.font = "bold 16px Arial";
+                ctx.fillStyle = "black";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(val, tx, ty);
+            }
+        }
+
+        // 畫指針
+        const ratio = currentValue / currentRange;
+        const needleAngle = startAngle + ratio * totalAngle;
+        const nx = cx + Math.cos(needleAngle) * (radius - 10);
+        const ny = cy + Math.sin(needleAngle) * (radius - 10);
+
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(nx, ny);
+        ctx.strokeStyle = "#e74c3c";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // 畫指針中心圓點
+        ctx.beginPath();
+        ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+        ctx.fillStyle = "#333";
+        ctx.fill();
+        
+        // V 標誌
+        ctx.font = "bold 24px Arial";
+        ctx.fillStyle = "#555";
+        ctx.fillText("V", cx, cy - 40);
+    }
+
+    function checkAnswer() {
+        const input = parseFloat(document.getElementById('user-input').value);
+        const feedback = document.getElementById('feedback');
+        
+        if (isNaN(input)) {
+            feedback.innerHTML = "<span style='color:#e67e22'>Please enter a number!</span>";
+            return;
+        }
+
+        // 允許極小的誤差 (浮點數問題)
+        if (Math.abs(input - currentValue) < 0.05) {
+            feedback.innerHTML = "<span style='color:#27ae60'>Correct! Well done! ✅</span>";
+            // 放煙火或震動
+            navigator.vibrate(100);
+            setTimeout(newQuestion, 1500); // 自動下一題
+        } else {
+            feedback.innerHTML = `<span style='color:#c0392b'>Wrong! The answer is ${currentValue} V</span>`;
+            navigator.vibrate([50, 50, 50]);
+        }
+    }
+
+    // 初始化
+    resizeCanvas();
+    setRange(3); // 默認 3V
+</script>
+</body>
+</html>
