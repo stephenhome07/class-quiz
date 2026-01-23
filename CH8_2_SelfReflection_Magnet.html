@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Effect Sorter</title>
+<style>
+    body { font-family: 'Segoe UI', sans-serif; background: #2c3e50; color: white; text-align: center; padding: 20px; overflow: hidden; }
+    .game-box { max-width: 400px; margin: 0 auto; height: 80vh; display: flex; flex-direction: column; justify-content: space-between; }
+    
+    .card-area { 
+        flex-grow: 1; display: flex; justify-content: center; align-items: center; position: relative; 
+    }
+    
+    .card {
+        background: white; color: #333; width: 250px; height: 180px; border-radius: 15px;
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+        box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+        transition: transform 0.3s;
+        position: absolute;
+    }
+    .card h1 { font-size: 4rem; margin: 0; }
+    .card p { font-size: 1.5rem; font-weight: bold; margin: 10px 0 0 0; }
+    
+    .buttons { display: flex; gap: 10px; margin-bottom: 20px; }
+    .btn { flex: 1; padding: 20px; border: none; border-radius: 10px; font-size: 1.2rem; cursor: pointer; font-weight: bold; color: white; transition: 0.1s; }
+    .btn-heat { background-color: #e74c3c; box-shadow: 0 4px 0 #c0392b; }
+    .btn-mag { background-color: #3498db; box-shadow: 0 4px 0 #2980b9; }
+    .btn:active { transform: translateY(4px); box-shadow: none; }
+
+    .feedback { position: absolute; top: 10%; width: 100%; font-size: 2rem; font-weight: bold; opacity: 0; pointer-events: none; }
+    .fade-up { animation: fadeUp 0.8s forwards; }
+
+    @keyframes fadeUp {
+        0% { opacity: 1; transform: translateY(0); }
+        100% { opacity: 0; transform: translateY(-50px); }
+    }
+</style>
+</head>
+<body>
+
+<div class="game-box">
+    <div>
+        <h3>⚡ Effect Sorter ⚡</h3>
+        <p>Is it Heating or Magnetic?<br>是熱效應 還是 磁效應？</p>
+    </div>
+
+    <div class="card-area" id="card-container">
+        </div>
+    <div id="feedback" class="feedback"></div>
+
+    <div class="buttons">
+        <button class="btn btn-heat" onclick="guess('heat')">🔥 Heating<br>熱效應</button>
+        <button class="btn btn-mag" onclick="guess('mag')">🧲 Magnetic<br>磁效應</button>
+    </div>
+</div>
+
+<script>
+    const items = [
+        { name: "Toaster<br>多士爐", icon: "🍞", type: "heat" },
+        { name: "Electric Bell<br>電鈴", icon: "🔔", type: "mag" },
+        { name: "Iron<br>熨斗", icon: "👕", type: "heat" },
+        { name: "Maglev Train<br>磁浮列車", icon: "🚄", type: "mag" },
+        { name: "Fuse<br>保險絲", icon: "💥", type: "heat" },
+        { name: "Door Lock<br>磁力鎖", icon: "🔒", type: "mag" },
+        { name: "Rice Cooker<br>電飯煲", icon: "🍚", type: "heat" },
+        { name: "Loudspeaker<br>揚聲器", icon: "🔊", type: "mag" }
+    ];
+
+    let currentIdx = 0;
+    let shuffledItems = [];
+
+    function init() {
+        shuffledItems = [...items].sort(() => Math.random() - 0.5);
+        currentIdx = 0;
+        showCard();
+    }
+
+    function showCard() {
+        const container = document.getElementById('card-container');
+        container.innerHTML = '';
+        
+        if (currentIdx >= shuffledItems.length) {
+            container.innerHTML = `<div class="card" style="background:#f1c40f;"><h1>🏆</h1><p>Finished!<br>完成！</p><button style="margin-top:20px; padding:10px;" onclick="init()">Play Again</button></div>`;
+            return;
+        }
+
+        const item = shuffledItems[currentIdx];
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `<h1>${item.icon}</h1><p>${item.name}</p>`;
+        container.appendChild(card);
+    }
+
+    function guess(type) {
+        if (currentIdx >= shuffledItems.length) return;
+
+        const item = shuffledItems[currentIdx];
+        const feedback = document.getElementById('feedback');
+        const card = document.querySelector('.card');
+
+        if (type === item.type) {
+            feedback.innerHTML = "<span style='color:#2ecc71'>Correct! ✅</span>";
+            card.style.transform = "scale(1.1) rotate(10deg)";
+            card.style.opacity = "0";
+            setTimeout(() => {
+                currentIdx++;
+                showCard();
+            }, 300);
+        } else {
+            feedback.innerHTML = "<span style='color:#e74c3c'>Wrong! ❌</span>";
+            card.style.animation = "shake 0.4s";
+            navigator.vibrate(200);
+            setTimeout(() => {
+                card.style.animation = "";
+            }, 400);
+        }
+        
+        // Trigger animation
+        feedback.classList.remove('fade-up');
+        void feedback.offsetWidth; // trigger reflow
+        feedback.classList.add('fade-up');
+    }
+
+    // Add CSS for shake
+    const style = document.createElement('style');
+    style.innerHTML = `
+        @keyframes shake {
+            0% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            50% { transform: translateX(10px); }
+            75% { transform: translateX(-10px); }
+            100% { transform: translateX(0); }
+        }
+    `;
+    document.head.appendChild(style);
+
+    init();
+</script>
+</body>
+</html>

@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ammeter Doctor</title>
+<style>
+    body { font-family: 'Segoe UI', sans-serif; background: #ecf0f1; text-align: center; padding: 20px; }
+    .container { max-width: 400px; margin: 0 auto; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
+    h2 { color: #e74c3c; }
+    .diagram-box { height: 180px; border: 2px dashed #bdc3c7; margin: 20px 0; display: flex; align-items: center; justify-content: center; background: #f9f9f9; position: relative; }
+    .btn { display: block; width: 100%; padding: 15px; margin: 10px 0; border: none; border-radius: 8px; font-size: 1rem; cursor: pointer; transition: 0.2s; color: white; }
+    .btn-a { background: #3498db; }
+    .btn-b { background: #2ecc71; }
+    .btn:active { transform: scale(0.98); }
+    
+    .message { margin-top: 15px; font-weight: bold; min-height: 1.2em; }
+    .wrong { color: #c0392b; }
+    .correct { color: #27ae60; }
+
+    /* SVG 樣式 */
+    svg { width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+
+<div class="container" id="game-area">
+    <h2>🚑 Ammeter Doctor</h2>
+    <p>Please help fix the circuit!<br>請幫忙正確連接安培計！</p>
+    
+    <div class="diagram-box" id="diagram">
+        <svg viewBox="0 0 200 120">
+            <rect x="20" y="40" width="10" height="40" fill="#7f8c8d"/> <rect x="30" y="30" width="10" height="60" fill="#f39c12"/> <text x="15" y="35" font-size="12">-</text> <text x="45" y="35" font-size="12">+</text>
+            <circle cx="160" cy="60" r="15" fill="none" stroke="black" stroke-width="2"/> <path d="M152,52 L168,68 M168,52 L152,68" stroke="black" stroke-width="2"/>
+            <path d="M40,60 L145,60" stroke="#7f8c8d" stroke-width="2" stroke-dasharray="5,5"/> </svg>
+    </div>
+
+    <div class="message" id="msg">Step 1: How to connect? (第一步：如何連接？)</div>
+
+    <div id="choices">
+        <button class="btn btn-a" onclick="checkStep1('parallel')">Connect in Parallel (並聯)</button>
+        <button class="btn btn-b" onclick="checkStep1('series')">Connect in Series (串聯)</button>
+    </div>
+</div>
+
+<script>
+    let step = 1;
+
+    function checkStep1(choice) {
+        const msg = document.getElementById('msg');
+        if (choice === 'parallel') {
+            msg.innerHTML = "<span class='wrong'>❌ Boom! Short Circuit! (短路！安培計會燒壞！)</span>";
+            navigator.vibrate(200);
+        } else {
+            step = 2;
+            msg.innerHTML = "<span class='correct'>✅ Correct! Series connection. (正確！必須串聯。)</span>";
+            // 進入第二步：正負極
+            setTimeout(() => {
+                msg.innerHTML = "Step 2: Connect the Terminals (第二步：接駁端鈕)";
+                document.getElementById('choices').innerHTML = `
+                    <button class="btn btn-a" onclick="checkStep2('wrong')">Red(+) to Negative(-)</button>
+                    <button class="btn btn-b" onclick="checkStep2('correct')">Red(+) to Positive(+)</button>
+                `;
+                // 更新圖示：顯示串聯但未接線
+                document.getElementById('diagram').innerHTML = `
+                    <svg viewBox="0 0 200 120">
+                        <rect x="20" y="40" width="10" height="40" fill="#7f8c8d"/> <rect x="30" y="30" width="10" height="60" fill="#f39c12"/>
+                        <circle cx="160" cy="60" r="15" fill="none" stroke="black"/> <path d="M152,52 L168,68 M168,52 L152,68" stroke="black"/>
+                        <circle cx="100" cy="60" r="15" fill="white" stroke="black" stroke-width="2"/> <text x="96" y="65" font-weight="bold">A</text>
+                        <line x1="40" y1="60" x2="85" y2="60" stroke="black" stroke-width="2"/>
+                        <line x1="115" y1="60" x2="145" y2="60" stroke="black" stroke-width="2"/>
+                        <text x="80" y="50" fill="red" font-weight="bold">+</text> <text x="110" y="50" fill="black" font-weight="bold">-</text>
+                    </svg>
+                `;
+            }, 1000);
+        }
+    }
+
+    function checkStep2(choice) {
+        const msg = document.getElementById('msg');
+        const diagram = document.getElementById('diagram');
+        
+        if (choice === 'wrong') {
+            msg.innerHTML = "<span class='wrong'>❌ Oh no! The pointer moves BACKWARDS! (指針反方向偏轉！)</span>";
+            navigator.vibrate(200);
+            // 模擬指針反轉
+             diagram.innerHTML = `
+                 <svg viewBox="0 0 200 120">
+                    <rect x="20" y="40" width="10" height="40" fill="#7f8c8d"/> <rect x="30" y="30" width="10" height="60" fill="#f39c12"/>
+                    <circle cx="160" cy="60" r="15" fill="none" stroke="black"/> <path d="M152,52 L168,68 M168,52 L152,68" stroke="black"/>
+                    <circle cx="100" cy="60" r="15" fill="white" stroke="black" stroke-width="2"/>
+                    <line x1="100" y1="60" x2="90" y2="70" stroke="red" stroke-width="2"/> <line x1="40" y1="60" x2="85" y2="60" stroke="black" stroke-width="2"/>
+                    <line x1="115" y1="60" x2="145" y2="60" stroke="black" stroke-width="2"/>
+                </svg>`;
+        } else {
+            msg.innerHTML = "<span class='correct'>🎉 Perfect! The bulb lights up! (成功！燈泡亮了！)</span>";
+            // 成功畫面
+            diagram.innerHTML = `
+                <svg viewBox="0 0 200 120">
+                    <rect x="20" y="40" width="10" height="40" fill="#7f8c8d"/> <rect x="30" y="30" width="10" height="60" fill="#f39c12"/>
+                    <circle cx="160" cy="60" r="15" fill="yellow" stroke="orange" stroke-width="2" style="filter: drop-shadow(0 0 10px gold);"/> 
+                    <circle cx="100" cy="60" r="15" fill="white" stroke="black" stroke-width="2"/>
+                    <line x1="100" y1="60" x2="110" y2="50" stroke="red" stroke-width="2"/> <line x1="40" y1="60" x2="85" y2="60" stroke="black" stroke-width="2"/>
+                    <line x1="115" y1="60" x2="145" y2="60" stroke="black" stroke-width="2"/>
+                </svg>`;
+            document.getElementById('choices').innerHTML = '<button class="btn btn-b" onclick="location.reload()">Play Again</button>';
+        }
+    }
+</script>
+</body>
+</html>
