@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ch 8.2 Diagnostic Answers</title>
+    <style>
+        /* --- 樣式設定 --- */
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            line-height: 1.6; 
+            margin: 0; 
+            padding: 20px; 
+            background-color: #f0f2f5; 
+            color: #333; 
+        }
+        .container { 
+            max-width: 600px; 
+            margin: 0 auto; 
+            background: white; 
+            padding: 30px; 
+            border-radius: 15px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1); 
+        }
+        .header { 
+            text-align: center; 
+            border-bottom: 3px solid #f1c40f; 
+            padding-bottom: 15px; 
+            margin-bottom: 25px; 
+        }
+        .header h1 { margin: 0; color: #2c3e50; font-size: 1.5rem; }
+        .header p { margin: 5px 0 0; color: #7f8c8d; font-size: 0.9rem; }
+        
+        .question-block { 
+            margin-bottom: 30px; 
+            border: 1px solid #e0e0e0; 
+            border-radius: 10px; 
+            overflow: hidden; 
+            background-color: #fff;
+        }
+        .q-title { 
+            background-color: #f8f9fa; 
+            padding: 12px 15px; 
+            font-weight: bold; 
+            color: #555; 
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+        }
+        .q-body { padding: 15px; }
+        
+        /* 答案樣式 */
+        .answer-row {
+            margin-top: 15px;
+            display: flex;
+            align-items: center;
+            background-color: #e8f8f5;
+            padding: 10px;
+            border-radius: 8px;
+            color: #27ae60;
+            font-weight: bold;
+        }
+        .answer-label { margin-right: 10px; color: #16a085; }
+        
+        /* 解釋樣式 */
+        .explanation { 
+            background-color: #fffcf5; 
+            padding: 12px; 
+            border-left: 4px solid #f1c40f; 
+            margin-top: 10px; 
+            font-size: 0.95rem; 
+            color: #5d6d7e; 
+        }
+        .exp-title { font-weight: bold; color: #d35400; font-size: 0.85rem; text-transform: uppercase; margin-bottom: 4px; display: block;}
+
+        .icon { font-size: 1.2rem; margin-right: 5px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>Ch 8.2 Diagnostic Answers</h1>
+        <p>Current & Its Effects (電流及其效應)</p>
+    </div>
+
+    <div class="question-block">
+        <div class="q-title">
+            <span>Question 1</span>
+            <span>Unit (單位)</span>
+        </div>
+        <div class="q-body">
+            The unit of current is _______.<br>
+            電流的單位是 _______。
+            
+            <div class="answer-row">
+                <span class="icon">✅</span>
+                Answer: (B) Ampere 安培 (A)
+            </div>
+            
+            <div class="explanation">
+                <span class="exp-title">Explanation 解釋</span>
+                <ul>
+                    <li>(A) Volt (V) is for Voltage (電壓).</li>
+                    <li>(C) Watt (W) is for Power (功率).</li>
+                    <li><strong>Ampere (A)</strong> is the correct unit for measuring flow of charges.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="question-block">
+        <div class="q-title">
+            <span>Question 2</span>
+            <span>Connection (連接)</span>
+        </div>
+        <div class="q-body">
+            Ammeter must be connected in _______.<br>
+            安培計必須 _______ 連接。
+            
+            <div class="answer-row">
+                <span class="icon">✅</span>
+                Answer: (A) Series (串聯)
+            </div>
+            
+            <div class="explanation">
+                <span class="exp-title">Why Series? 為什麼是串聯？</span>
+                An ammeter counts how many charges flow <strong>THROUGH</strong> it (like a toll gate).<br>
+                安培計像一個「收費站」，必須安裝在路中間 (串聯) 才能計算流量。<br>
+                <small>*Warning: Connecting in Parallel causes a Short Circuit! (並聯會導致短路！)</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="question-block">
+        <div class="q-title">
+            <span>Question 3</span>
+            <span>Effect (效應)</span>
+        </div>
+        <div class="q-body">
+            An Electric Lock uses ______ effect.<br>
+            磁力鎖利用了 ______ 效應。
+            
+            <div class="answer-row">
+                <span class="icon">✅</span>
+                Answer: (B) Magnetic (磁)
+            </div>
+            
+            <div class="explanation">
+                <span class="exp-title">Concept 概念</span>
+                When current flows, the coil becomes an <strong>Electromagnet (電磁鐵)</strong> and attracts the lock bolt.<br>
+                當電流通過，線圈變成電磁鐵，將鎖舌吸開。
+            </div>
+        </div>
+    </div>
+
+    <div style="text-align: center; margin-top: 30px; font-size: 0.8rem; color: #aaa;">
+        Great job completing the worksheet! <br> Keep it up!
+    </div>
+</div>
+
+</body>
+</html>
