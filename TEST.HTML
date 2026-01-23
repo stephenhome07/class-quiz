@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>綜合科學科 - 試卷分析及AI報告系統 (Pro v44 SplitGen)</title>
+    <title>綜合科學科 - 試卷分析及AI報告系統 (Pro v45 Lang/Layout Fix)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -94,7 +94,7 @@
                 <div class="flex items-center justify-between h-16">
                     <div class="flex items-center">
                         <i class="fas fa-microscope text-2xl mr-3"></i>
-                        <span class="font-bold text-xl ml-2">綜合科學科 - 試卷分析及AI報告系統 (Pro v44)</span>
+                        <span class="font-bold text-xl ml-2">綜合科學科 - 試卷分析及AI報告系統 (Pro v45)</span>
                     </div>
                 </div>
             </div>
@@ -587,8 +587,18 @@
             if(!app) document.getElementById('report-preview-area').innerHTML=ph; else document.getElementById('report-preview-area').insertAdjacentHTML('beforeend',ph);
             
             const langOpts = {
-                zh: { inst: "請用繁體中文撰寫。", t1: "整體回顧", t2: "概念重溫", t3: "自我挑戰" },
-                en: { inst: "Please write in English.", t1: "Overall Review", t2: "Key Concepts", t3: "Self-Challenge" }
+                zh: { 
+                    inst: "請用繁體中文撰寫。", 
+                    q_inst: "題目與選項必須用繁體中文。",
+                    t1: "整體回顧", t2: "概念重溫", t3: "自我挑戰", 
+                    ans_title: "參考答案"
+                },
+                en: { 
+                    inst: "Please write strictly in English.", 
+                    q_inst: "Questions and options must be in English only.",
+                    t1: "Overall Review", t2: "Key Concepts", t3: "Self-Challenge", 
+                    ans_title: "Answers"
+                }
             };
             const activeLang = langOpts[selectedLang] || langOpts.zh;
 
@@ -614,16 +624,25 @@
    (筆記形式解釋概念, 生活比喻)
 `.trim();
 
-            // PART 2: Questions & Answers
+            // PART 2: Questions & Answers (UPDATED for Layout & Language)
             let promptPart2 = `
 你是一位科學老師。請為學生 {{student_name}} 製作學習報告的「第二部分 (練習題)」。
 弱項：{{weaknesses}}。
 【課程範圍】：{{syllabus}}
 【篇幅要求】：{{section_3_limit}}
 
-請嚴格按照以下格式輸出 (不要圖片)：
-3. **{{section_3_title}}** ({{num_questions}} 條選擇題，純文字)
-   (題目必須在課程範圍內，各選項 A, B, C, D 必須分行顯示)
+**IMPORTANT: {{q_instruction}}**
+
+請嚴格按照以下 Markdown 格式輸出 (不要圖片)：
+3. **{{section_3_title}}** ({{num_questions}} 條選擇題)
+   (嚴格排版要求：每條題目的選項 A, B, C, D 必須各自獨立一行，禁止擠在同一行)
+   
+   格式範例：
+   1. 題目內容
+   A. 選項內容
+   B. 選項內容
+   C. 選項內容
+   D. 選項內容
 
 ---ANSWERS---
 (參考答案及簡短解釋)
@@ -637,6 +656,7 @@
                 .replace('{{wrong_concepts}}', an.wrong.join(', '))
                 .replace('{{strengths}}', an.good.join(', '))
                 .replace('{{language_instruction}}', activeLang.inst)
+                .replace('{{q_instruction}}', activeLang.q_inst)
                 .replace('{{syllabus}}', syllabus)
                 .replace('{{exam_paper_content}}', examPaperText || "")
                 .replace('{{section_1_title}}', activeLang.t1).replace('{{section_1_limit}}', l1Inst)
@@ -652,14 +672,11 @@
                 ]);
 
                 // Combine Results
-                // res1 contains Review + Concepts
-                // res2 contains Questions + Answers
-                
                 let p2_split = res2.split('---ANSWERS---');
                 let questionsPart = p2_split[0];
                 let answersPart = p2_split[1] || "(AI 未能生成答案，請重試)";
 
-                const L = { title: selectedLang==='en'?'Science Diagnostic Report':'科學科學習診斷報告', answers: selectedLang==='en'?'Answers':'參考答案' };
+                const L = { title: selectedLang==='en'?'Science Diagnostic Report':'科學科學習診斷報告', answers: activeLang.ans_title };
 
                 let h = `
                 <div class="report-page-style preview-wrapper bg-white">
