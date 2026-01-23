@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>綜合科學科 - 試卷分析及AI報告系統 (Pro v42 FixMap)</title>
+    <title>綜合科學科 - 試卷分析及AI報告系統 (Pro v43 SafePrint)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -22,12 +22,11 @@
         .nav-card i { @apply text-2xl mb-1 text-gray-400; }
         .nav-card.active i { @apply text-blue-600; }
         .nav-card h3 { @apply font-bold text-sm; }
-        .nav-card p { @apply text-xs text-gray-500 mt-1 text-center hidden md:block; }
 
         .heatmap-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.75rem; }
         .heatmap-item { @apply p-3 rounded-lg text-center shadow-sm border border-gray-100 flex flex-col justify-center h-24 transition hover:shadow-md transform hover:-translate-y-1; }
         
-        /* Markdown */
+        /* Markdown Styling */
         .markdown-body h1 { font-size: 1.4em; font-weight: bold; margin-bottom: 0.5em; color: #1e3a8a; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.3em; }
         .markdown-body h2 { font-size: 1.2em; font-weight: bold; margin-top: 1.2em; margin-bottom: 0.5em; color: #2563eb; }
         .markdown-body h3 { font-size: 1.1em; font-weight: bold; margin-top: 1em; color: #4b5563; }
@@ -36,21 +35,49 @@
         .markdown-body p { margin-bottom: 0.8em; line-height: 1.6; }
         .markdown-body blockquote { border-left: 4px solid #e5e7eb; padding-left: 1em; color: #4b5563; font-style: italic; background-color: #f9fafb; padding: 0.5rem; }
 
-        /* Report Page */
-        .report-page-style { width: 210mm; min-height: 297mm; height: auto; padding: 20mm; background: white; position: relative; font-size: 11pt; box-sizing: border-box; }
-        .page-footer { margin-top: 40px; padding-top: 10px; border-top: 1px dashed #ccc; font-size: 10pt; color: #666; page-break-inside: avoid; }
-        #report-preview-area, #summary-preview-area { display: flex; flex-direction: column; align-items: center; gap: 40px; padding-bottom: 50px; }
-        .preview-wrapper { box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); border: 1px solid #d1d5db; margin-bottom: 20px; }
+        /* --- PRINT FIXES START --- */
+        .report-page-style { 
+            width: 210mm; 
+            min-height: 297mm; 
+            padding: 20mm; /* Screen padding */
+            background: white; 
+            margin: 0 auto 20px;
+            font-size: 11pt; 
+            box-sizing: border-box; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
 
         #print-container { display: none; }
+
         @media print {
-            @page { size: A4 portrait; margin: 0; }
-            body { background: white; -webkit-print-color-adjust: exact; }
+            @page { 
+                size: A4 portrait; 
+                margin: 15mm 10mm 15mm 10mm; /* Top/Bot 15mm, Left/Right 10mm - 防止切頭切尾 */
+            }
+            body { background: white; -webkit-print-color-adjust: exact; padding: 0; margin: 0; }
             #app-container, nav, .no-print, #error-modal { display: none !important; }
-            #print-container { display: block !important; position: absolute; top: 0; left: 0; width: 100%; }
-            .report-page-style { width: 100%; min-height: 296mm; height: auto; page-break-after: always; break-after: page; margin: 0; box-shadow: none; border: none; float: none; }
-            .page-footer { position: relative; bottom: 0; margin-top: 20mm; }
+            #print-container { display: block !important; width: 100%; }
+            
+            /* Remove screen styles for the page container */
+            .report-page-style { 
+                width: 100%; 
+                min-height: auto; 
+                height: auto; 
+                page-break-after: always; 
+                break-after: page; 
+                margin: 0; 
+                padding: 0; /* Let @page handle margins to avoid double padding */
+                box-shadow: none; 
+                border: none; 
+            }
+            
+            /* Prevent breaking inside elements */
+            .markdown-body h1, .markdown-body h2 { page-break-after: avoid; break-after: avoid; }
+            .markdown-body p, .markdown-body li { page-break-inside: avoid; break-inside: avoid; }
+            .page-footer { margin-top: 20px; page-break-inside: avoid; }
         }
+        /* --- PRINT FIXES END --- */
+
         #error-modal { background: rgba(0,0,0,0.5); }
         .distractor-card { @apply border-l-4 border-red-500 bg-red-50 p-4 rounded mb-4; }
         .analysis-box { @apply mt-3 p-3 bg-white rounded border border-gray-200 text-sm text-gray-700 hidden; }
@@ -65,12 +92,6 @@
             <button onclick="closeModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><i class="fas fa-times text-xl"></i></button>
             <h3 class="text-xl font-bold text-red-600 mb-2"><i class="fas fa-bug mr-2"></i>生成失敗</h3>
             <div class="bg-gray-100 p-3 rounded text-xs font-mono text-gray-800 overflow-auto max-h-60 mb-4 border border-gray-300" id="error-log-content">Waiting...</div>
-            <div id="cors-advice" class="hidden mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
-                <strong>💡 連線診斷建議：</strong><br>
-                1. 您的 Proxy URL 可能不支援瀏覽器直接連線 (CORS)。瀏覽器比 Python 更嚴格。<br>
-                2. 請嘗試使用 <strong>Google Gemini Key</strong> (直接連線 Google 伺服器最穩定)。<br>
-                3. 請確認 API Key 是否需要填寫 (部分 Proxy 內含 Key 則不需填寫)。
-            </div>
             <button onclick="copyErrorLog()" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded shadow transition flex items-center justify-center"><i class="fas fa-copy mr-2"></i> 複製錯誤報告</button>
         </div>
     </div>
@@ -81,7 +102,7 @@
                 <div class="flex items-center justify-between h-16">
                     <div class="flex items-center">
                         <i class="fas fa-microscope text-2xl mr-3"></i>
-                        <span class="font-bold text-xl ml-2">綜合科學科 - 試卷分析及AI報告系統 (Pro v42)</span>
+                        <span class="font-bold text-xl ml-2">綜合科學科 - 試卷分析及AI報告系統 (Pro v43)</span>
                     </div>
                 </div>
             </div>
@@ -92,6 +113,21 @@
             <div class="card mb-8 animate-fade-in-up border-l-4 border-blue-500">
                 <h2 class="text-lg font-bold text-gray-700 mb-4 pb-2 border-b"><i class="fas fa-file-upload mr-2"></i>1. 資料匯入</h2>
                 
+                <div class="mb-4 bg-yellow-50 p-3 rounded border border-yellow-200">
+                    <label class="block text-xs font-bold text-gray-700 mb-2">📄 CSV 檔案編碼 (防止中文亂碼)</label>
+                    <div class="flex gap-4">
+                        <label class="flex items-center cursor-pointer">
+                            <input type="radio" name="csv_encoding" value="UTF-8" class="form-radio text-blue-600 h-4 w-4">
+                            <span class="ml-2 text-sm text-gray-700">UTF-8 (Google Form/系統匯出)</span>
+                        </label>
+                        <label class="flex items-center cursor-pointer">
+                            <input type="radio" name="csv_encoding" value="Big5" class="form-radio text-blue-600 h-4 w-4" checked>
+                            <span class="ml-2 text-sm text-gray-700 font-bold">Big5 (Excel 另存/學校系統)</span>
+                        </label>
+                    </div>
+                    <p class="text-[10px] text-gray-500 mt-1">💡 提示：如果學生姓名出現亂碼 (e.g. @)，請切換此選項後重新上傳。</p>
+                </div>
+
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     <div class="bg-red-50 p-4 rounded-lg border-2 border-red-100">
                         <h3 class="text-sm font-bold text-red-700 mb-3 flex items-center"><i class="fas fa-asterisk mr-2"></i>必要資料 (Required)</h3>
@@ -99,7 +135,6 @@
                             <div>
                                 <label class="block text-xs font-semibold text-gray-600 mb-1">1. 分數表 (MARKSHEET.csv)</label>
                                 <input id="marksheet-upload" type="file" accept=".csv" class="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-white file:text-red-700 hover:file:bg-red-50 cursor-pointer border border-red-200 rounded"/>
-                                <p class="text-[10px] text-gray-500 mt-1">格式: Name, Class, Class_No, q1, q2...</p>
                             </div>
                             <div>
                                 <label class="block text-xs font-semibold text-gray-600 mb-1">2. 題目表 (MAP.csv)</label>
@@ -112,16 +147,16 @@
                         <h3 class="text-sm font-bold text-blue-700 mb-3 flex items-center"><i class="fas fa-magic mr-2"></i>進階分析資料 (推薦)</h3>
                         <div class="space-y-4">
                             <div>
-                                <label class="block text-xs font-semibold text-gray-600 mb-1">3. 試卷內容 (Word/Txt) <span class="badge-opt">提升AI精準度</span></label>
+                                <label class="block text-xs font-semibold text-gray-600 mb-1">3. 試卷內容 (Word/Txt)</label>
                                 <input id="exam-paper-upload" type="file" accept=".docx,.txt" class="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-white file:text-blue-700 hover:file:bg-blue-50 cursor-pointer border border-blue-200 rounded"/>
                             </div>
                             <div>
-                                <label class="block text-xs font-semibold text-gray-600 mb-1">4. MC 選項紀錄 (MC.csv) <span class="badge-opt">誘答項分析</span></label>
+                                <label class="block text-xs font-semibold text-gray-600 mb-1">4. MC 選項紀錄 (MC.csv)</label>
                                 <input id="mc-upload" type="file" accept=".csv" class="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-white file:text-blue-700 hover:file:bg-blue-50 cursor-pointer border border-blue-200 rounded"/>
                             </div>
                             <div>
-                                <label class="block text-xs font-semibold text-gray-600 mb-1">5. 課程大綱 (Syllabus) <span class="badge-opt">防止超綱</span></label>
-                                <input id="syllabus-upload" type="file" accept=".docx,.txt,.csv" class="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-white file:text-blue-700 hover:file:bg-blue-50 cursor-pointer border border-blue-200 rounded"/>
+                                <label class="block text-xs font-semibold text-gray-600 mb-1">5. 課程大綱 (Syllabus)</label>
+                                <input id="syllabus-upload" type="file" accept=".docx,.txt" class="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-white file:text-blue-700 hover:file:bg-blue-50 cursor-pointer border border-blue-200 rounded"/>
                             </div>
                         </div>
                     </div>
@@ -212,7 +247,6 @@
                                     <option value="1" selected>1 頁 (約 5 題)</option>
                                     <option value="2">2 頁 (約 10 題)</option>
                                     <option value="3">3 頁 (約 15 題)</option>
-                                    <option value="4">4 頁 (約 20 題)</option>
                                 </select>
                             </div>
                         </div>
@@ -225,7 +259,6 @@
                         </div>
                         <button id="generate-btn" class="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded shadow"><i class="fas fa-play mr-2"></i>生成</button>
                         <button onclick="window.print()" id="print-btn" class="w-full md:w-auto bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded shadow" disabled><i class="fas fa-print mr-2"></i>列印/PDF</button>
-                        <button id="download-btn" class="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded shadow" disabled><i class="fas fa-file-download mr-2"></i>下載HTML</button>
                     </div>
                     <div id="batch-progress" class="hidden mt-6 bg-gray-50 p-4 rounded border"><div class="flex justify-between text-xs font-bold mb-2"><span id="progress-text">生成中...</span><span id="progress-count">0/0</span></div><div class="w-full bg-gray-200 rounded-full h-3"><div id="progress-bar" class="bg-indigo-600 h-3 rounded-full" style="width:0%"></div></div></div>
                 </div>
@@ -271,7 +304,6 @@
         // --- GLOBAL STATE ---
         let marksheetData=[], mapData=[], mcData=[], questionMap={}, totalPaperMark=0, chartInstances={}, analysisCache=null, colMap={name:'',class:'',no:''}, mcDistractors={};
         let examPaperText = "";
-        let studentImages = [];
 
         // --- CORE FUNCTIONS (Top Level) ---
         function analyzeStudent(r){
@@ -440,14 +472,25 @@
             document.getElementById('gemini-config').classList.toggle('hidden', isDeep);
         });
 
+        // --- FILE HANDLING WITH ENCODING FIX ---
         function handleFile(file, type) {
             if(!file) return;
-            Papa.parse(file, {header: type!=='mc', skipEmptyLines:true, complete:(res)=>{
-                if(type==='marksheet') { marksheetData=res.data; detectColumns(res.meta.fields); }
-                else if(type==='map') { mapData=res.data; }
-                else if(type==='mc') { mcData=res.data; }
-                if(marksheetData.length && mapData.length) initSystem();
-            }});
+            // Get selected encoding
+            let encoding = "UTF-8";
+            const encRadio = document.querySelector('input[name="csv_encoding"]:checked');
+            if(encRadio) encoding = encRadio.value;
+
+            Papa.parse(file, {
+                header: type!=='mc', 
+                skipEmptyLines:true, 
+                encoding: encoding, // Apply selected encoding here
+                complete:(res)=>{
+                    if(type==='marksheet') { marksheetData=res.data; detectColumns(res.meta.fields); }
+                    else if(type==='map') { mapData=res.data; }
+                    else if(type==='mc') { mcData=res.data; }
+                    if(marksheetData.length && mapData.length) initSystem();
+                }
+            });
         }
         safeListen('marksheet-upload', 'change', (e)=>handleFile(e.target.files[0],'marksheet'));
         safeListen('map-upload', 'change', (e)=>handleFile(e.target.files[0],'map'));
@@ -467,22 +510,12 @@
         safeListen('syllabus-upload', 'change', (e) => { if(e.target.files[0]) readDocxOrText(e.target.files[0], (txt) => { document.getElementById('syllabus-content').value = txt; saveSyllabusToStorage(); }); });
         safeListen('exam-paper-upload', 'change', (e) => { if(e.target.files[0]) readDocxOrText(e.target.files[0], (txt) => { examPaperText = txt; document.getElementById('paper-status').innerHTML = "✅ 試卷內容已載入"; document.getElementById('paper-status').className = "text-xs text-green-600 mt-1 font-bold ml-2"; }); });
 
-        // --- UPDATED COLUMN DETECTION ---
         function detectColumns(fields) {
             if(!fields) return;
-            // 1. Name: 找 'Name' 或 '姓名'
             colMap.name = fields.find(f => f.trim().match(/^Name$/i) || f.trim().match(/^姓名$/)) || fields.find(f => f.match(/Name/i)) || 'Name';
-            
-            // 2. Class: 必須嚴格匹配 'Class' 或 '班別'，避免選到 Class_No
             colMap.class = fields.find(f => f.trim().match(/^Class$/i) || f.trim().match(/^班別$/)) || 'Class';
-            
-            // 3. No: 優先找 Class_No, Class No, 學號, No.
             colMap.no = fields.find(f => f.trim().match(/^Class[_.\s]?No$/i) || f.trim().match(/^No\.?$/i) || f.trim().match(/學號/)) || 'Class_No';
-            
-            console.log("Column Mapping:", colMap);
-            // Update UI status to show user what was mapped
-            document.getElementById('file-status').innerHTML = 
-                `✅ 檔案已載入 (識別: 姓名=${colMap.name}, 班別=${colMap.class}, 學號=${colMap.no})`;
+            document.getElementById('file-status').innerHTML = `✅ 檔案已載入 (識別: 姓名=${colMap.name}, 班別=${colMap.class}, 學號=${colMap.no})`;
         }
         
         function initSystem() {
@@ -621,11 +654,9 @@
              
              // ... Prepare stats ...
              const stats = { school_name: schoolName, subject: subjectName, mean: document.getElementById('stat-mean').textContent, pass_rate: document.getElementById('stat-pass').textContent, max: document.getElementById('stat-max').textContent, min: document.getElementById('stat-min').textContent, sd: document.getElementById('stat-sd').textContent, full_mark: totalPaperMark };
-             // ... Prepare top/bottom topics ...
              let tAgg={}; marksheetData.forEach(r=>{ if(r[colMap.name]) Object.keys(questionMap).forEach(q=>{ if(r[q]){ let sc=parseFloat(r[q])||0,i=questionMap[q]; if(!tAgg[i.Topic_Name])tAgg[i.Topic_Name]={e:0,m:0}; tAgg[i.Topic_Name].e+=sc;tAgg[i.Topic_Name].m+=i.fullMark;} }) });
              let sortedTopics = Object.keys(tAgg).map(k=>({name:k, pct: tAgg[k].m?tAgg[k].e/tAgg[k].m:0})).sort((a,b)=>b.pct-a.pct);
              stats.top_topics = sortedTopics.slice(0,3).map(t=>`${t.name}`).join(', '); stats.bottom_topics = sortedTopics.slice(-3).map(t=>`${t.name}`).join(', ');
-             // ... Flagged ...
              let flagged = analysisCache.filter(i => i.d < 0.2 || i.p < 0.3).map(i => i.id).join(', '); stats.flagged_questions = flagged || "無";
              
              let mcInfo = "";
@@ -648,14 +679,6 @@
              } catch(e) { showErrorModal(e); }
         });
         
-        safeListen('dl-summary-btn', 'click', () => { 
-            let c = document.getElementById('summary-preview-area').innerHTML;
-            const h=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Summary Report</title><script src="https://cdn.tailwindcss.com"><\/script><style>@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC&display=swap');body{font-family:'Noto Sans TC',sans-serif;padding:20px;background:#f3f4f6;}.report-page-style{width:210mm;min-height:297mm;padding:20mm;background:white;margin:0 auto;box-shadow:0 4px 6px rgba(0,0,0,0.1);}h1{font-size:1.8em;font-weight:bold;margin-bottom:0.5em;}h2{font-size:1.4em;font-weight:bold;margin-top:1em;color:#2563eb;}ul{padding-left:1.5em;list-style:disc;}p{margin-bottom:0.8em;line-height:1.6;}</style></head><body>${c}</body></html>`;
-            const b=new Blob([h],{type:'text/html'}), u=URL.createObjectURL(b), a=document.createElement('a');
-            a.href=u; a.download=`Summary_Report_${new Date().toISOString().slice(0,10)}.html`; document.body.appendChild(a); a.click();
-            setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(u);},100);
-        });
-
         // --- STUDENT REPORT ---
         safeListen('generate-btn', 'click', async()=>{
              const v=document.getElementById('student-select').value; if(!v) return alert("請選擇");
@@ -663,16 +686,6 @@
              if(v==='ALL') await batchGen(); else await singleGen(parseInt(v), false);
         });
         
-        safeListen('download-btn', 'click',()=>{ 
-            let c=document.getElementById('print-container').innerHTML;
-            if(!c.trim()) return;
-            c = c.replace(/<img[^>]*>/g, "");
-            const h=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Report</title><script src="https://cdn.tailwindcss.com"><\/script><style>@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC&display=swap');body{font-family:'Noto Sans TC',sans-serif;background:#f3f4f6;padding:20px;}.report-page-style{width:210mm;min-height:296mm;height:auto;padding:20mm;background:white;margin:0 auto 30px;position:relative;overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.1);border:1px solid #ddd;box-sizing:border-box;}.page-footer{margin-top:40px;padding-top:10px;border-top:1px dashed #ccc;color:#666;font-size:10pt;}@media print{body{background:white;padding:0;}.report-page-style{width:100%;min-height:296mm;height:auto;margin:0;box-shadow:none;border:none;break-after:page;page-break-after:always;overflow:visible;}}h1{font-size:1.6em;color:#1e3a8a;border-bottom:2px solid #ddd;padding-bottom:10px;}h2{font-size:1.3em;color:#2563eb;margin-top:1em;}ul{padding-left:1.5em;list-style:disc;}blockquote{border-left:4px solid #e5e7eb;padding-left:1em;background:#f9fafb;padding:0.5rem;margin:10px 0;}</style></head><body>${c}</body></html>`;
-            const b=new Blob([h],{type:'text/html'}), u=URL.createObjectURL(b), a=document.createElement('a');
-            a.href=u; a.download=`Reports_${new Date().toISOString().slice(0,10)}.html`; document.body.appendChild(a); a.click();
-            setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(u);},100);
-        });
-
         async function batchGen(){
             let validIndices = []; marksheetData.forEach((r, i) => { if(r[colMap.name]) validIndices.push(i); });
             let pb=document.getElementById('progress-bar'), pc=document.getElementById('progress-count');
@@ -692,12 +705,10 @@
             let selectedLang = document.getElementById('report-language').value;
             let syllabus = document.getElementById('syllabus-content').value || "(未提供課程範圍)";
             
-            // --- Page Controls ---
             const len1 = document.getElementById('report-p1-len').value;
             const len2 = document.getElementById('report-p2-len').value;
             const len3 = document.getElementById('report-p3-len').value;
             
-            // Logic Mappings
             const l1Inst = len1 === '0.5' ? "請將「整體表現」控制在半頁內(約250字)，精簡重點。" : "請將「整體表現」寫得較為詳盡(約一頁，400-500字)。";
             let l2Inst = "";
             if(len2 === '0.5') l2Inst = "重點概念請極度精簡，只挑選最重要的 3 個概念解釋，必須控制在半頁內。";
@@ -765,7 +776,6 @@
                 while(printDiv.firstChild) document.getElementById('print-container').appendChild(printDiv.firstChild);
 
                 document.getElementById('print-btn').disabled = false;
-                document.getElementById('download-btn').disabled = false;
 
             } catch(e) { showErrorModal(e); }
         }
