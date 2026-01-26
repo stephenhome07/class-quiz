@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ch 8.7 Energy Lab: V6 Perfect Alignment</title>
+<style>
+    body {
+        font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif;
+        background-color: #f0f2f5;
+        color: #333;
+        margin: 0;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .container {
+        max-width: 800px;
+        width: 100%;
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        overflow: hidden;
+        margin-bottom: 20px;
+    }
+
+    header {
+        background: linear-gradient(135deg, #2c3e50, #4ca1af);
+        color: white;
+        padding: 20px;
+        text-align: center;
+    }
+    header h1 { margin: 0; font-size: 1.4rem; }
+    header p { margin: 5px 0 0; font-size: 0.9rem; opacity: 0.9; }
+
+    .tabs { display: flex; border-bottom: 1px solid #ddd; }
+    .tab-btn {
+        flex: 1; padding: 15px; text-align: center; cursor: pointer;
+        background: #f9f9f9; border: none; font-weight: bold; color: #7f8c8d;
+        transition: 0.3s; font-size: 1rem;
+    }
+    .tab-btn.active { background: white; color: #2c3e50; border-bottom: 3px solid #4ca1af; }
+
+    .section { display: none; padding: 20px; }
+    .section.active { display: block; }
+
+    /* Calculator Styles */
+    .calc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 600px) { .calc-grid { grid-template-columns: 1fr; } }
+    .input-group { margin-bottom: 15px; }
+    .input-group label { display: block; font-weight: bold; margin-bottom: 5px; color: #555; }
+    .input-wrapper { display: flex; gap: 5px; }
+    input[type="number"] { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 5px; font-size: 1rem; }
+    select { padding: 10px; border: 1px solid #ccc; border-radius: 5px; background: #eee; }
+    .result-box { background: #ecf0f1; border-radius: 10px; padding: 15px; border-left: 5px solid #2ecc71; }
+    .result-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.95rem; }
+    .final-cost { font-size: 1.5rem; font-weight: bold; color: #27ae60; text-align: right; margin-top: 10px; }
+
+    /* Visualizer Styles */
+    .viz-controls {
+        background: #fff8e1; padding: 15px; border-radius: 10px; margin-bottom: 20px;
+        border: 1px solid #ffe082; display: flex; flex-direction: column; gap: 15px;
+    }
+    .control-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .slider-container { flex-grow: 1; }
+    input[type=range] { width: 100%; cursor: pointer; }
+
+    .sankey-container {
+        position: relative;
+        width: 100%;
+        height: 420px; /* Increased height for vertical drop */
+        background: #fff;
+        border: 1px solid #eee;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    svg { width: 100%; height: 100%; overflow: visible; }
+    
+    .label-text { font-size: 16px; font-weight: bold; text-anchor: middle; }
+    .value-text { font-size: 14px; font-weight: normal; text-anchor: middle; }
+
+    path, polygon { transition: all 0.2s ease-out; }
+    text { transition: all 0.2s ease-out; }
+
+</style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>⚡ Energy Lab (能量實驗室)</h1>
+        <p>Power, Energy & Efficiency (功率、能量與效率)</p>
+    </header>
+
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('calc')">🧮 Calculator (計算機)</button>
+        <button class="tab-btn" onclick="switchTab('viz')">📊 Efficiency (效率圖)</button>
+    </div>
+
+    <div id="calc" class="section active">
+        <div class="calc-grid">
+            <div>
+                <div class="input-group">
+                    <label>Power (功率)</label>
+                    <div class="input-wrapper">
+                        <input type="number" id="p-val" value="1500" oninput="calculateBill()">
+                        <select id="p-unit" onchange="calculateBill()"><option value="W">W</option><option value="kW">kW</option></select>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label>Time (時間)</label>
+                    <div class="input-wrapper">
+                        <input type="number" id="t-val" value="8" oninput="calculateBill()">
+                        <select id="t-unit" onchange="calculateBill()"><option value="h">Hours (小時)</option><option value="min">Mins (分鐘)</option></select>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label>Unit Price (電費單價)</label>
+                    <div class="input-wrapper"><input type="number" id="price-val" value="1.2" step="0.1" oninput="calculateBill()"></div>
+                </div>
+            </div>
+            <div class="result-box">
+                <div class="result-row"><span>Power (功率):</span><span id="res-kw">0 kW</span></div>
+                <div class="result-row"><span>Time (時間):</span><span id="res-time">0 h</span></div>
+                <div class="result-row" style="border-top:1px dashed #ccc; padding-top:5px; font-weight:bold; color:#2980b9;">
+                    <span>Energy (能量):</span><span id="res-kwh">0 kWh</span>
+                </div>
+                <div class="final-cost" id="res-cost">$0.00</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="viz" class="section">
+        <div class="viz-controls">
+            <div class="control-row">
+                <div style="width:120px;">Input (輸入):</div>
+                <div class="slider-container"><input type="range" id="sl-input" min="50" max="150" value="100" oninput="updateViz()"></div>
+                <div style="width:70px; text-align:right;"><span id="disp-input">100</span> J</div>
+            </div>
+            <div class="control-row">
+                <div style="width:120px;">Efficiency (效率):</div>
+                <div class="slider-container"><input type="range" id="sl-eff" min="5" max="95" value="20" oninput="updateViz()"></div>
+                <div style="width:70px; text-align:right; font-weight:bold; color:#27ae60;"><span id="disp-eff">20</span>%</div>
+            </div>
+        </div>
+
+        <div class="sankey-container">
+            <svg viewBox="0 0 600 420">
+                <path id="path-in" stroke="#3498db" fill="none" />
+                <text x="80" class="label-text" fill="#3498db" id="lbl-in">Input (輸入)</text>
+                <text x="80" class="value-text" fill="#555" id="txt-in">100 J</text>
+
+                <path id="path-use" stroke="#2ecc71" fill="none" />
+                <text class="label-text" fill="#27ae60" id="lbl-use">Useful (有效)</text>
+                <text class="value-text" fill="#27ae60" id="txt-use">20 J</text>
+                <polygon id="arrow-use" fill="#2ecc71" />
+
+                <path id="path-waste" stroke="#95a5a6" fill="none" />
+                <text class="label-text" fill="#7f8c8d" id="lbl-waste">Wasted (浪費)</text>
+                <text class="value-text" fill="#7f8c8d" id="txt-waste">80 J</text>
+                <polygon id="arrow-waste" fill="#95a5a6" />
+            </svg>
+        </div>
+    </div>
+</div>
+
+<script>
+    function switchTab(tabId) {
+        document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+        if(tabId === 'calc') document.querySelector('.tab-btn:first-child').classList.add('active');
+        else document.querySelector('.tab-btn:last-child').classList.add('active');
+        if(tabId === 'viz') updateViz(); 
+    }
+
+    function calculateBill() {
+        let p = parseFloat(document.getElementById('p-val').value) || 0;
+        let pUnit = document.getElementById('p-unit').value;
+        let t = parseFloat(document.getElementById('t-val').value) || 0;
+        let tUnit = document.getElementById('t-unit').value;
+        let price = parseFloat(document.getElementById('price-val').value) || 0;
+
+        let kw = (pUnit === 'W') ? p / 1000 : p;
+        let h = (tUnit === 'min') ? t / 60 : t;
+        let kwh = kw * h;
+        
+        document.getElementById('res-kw').textContent = kw + " kW";
+        document.getElementById('res-time').textContent = h.toFixed(2) + " h";
+        document.getElementById('res-kwh').textContent = kwh.toFixed(3) + " kWh";
+        document.getElementById('res-cost').textContent = "$" + (kwh * price).toFixed(2);
+    }
+
+    function updateViz() {
+        // 1. Fetch Values
+        let inputVal = parseInt(document.getElementById('sl-input').value);
+        let effVal = parseInt(document.getElementById('sl-eff').value);
+
+        // 2. Calculations
+        let usefulVal = Math.round(inputVal * (effVal / 100));
+        let wastedVal = inputVal - usefulVal;
+
+        // 3. Update Text Content
+        document.getElementById('disp-input').textContent = inputVal;
+        document.getElementById('disp-eff').textContent = effVal;
+        
+        document.getElementById('txt-in').textContent = inputVal + " J";
+        document.getElementById('txt-use').textContent = usefulVal + " J";
+        document.getElementById('txt-waste').textContent = wastedVal + " J";
+
+        // 4. Geometry & Coordinates
+        // Fixed Center for Input
+        let centerY = 200; 
+        let startX = 150; // Split point
+        
+        // Scale Factor
+        let scale = 0.8; 
+        
+        let wTotal = inputVal * scale;
+        let wUse = usefulVal * scale;
+        let wWaste = wastedVal * scale;
+        
+        // Min width for visibility
+        if(wUse < 1 && effVal > 0) wUse = 1; 
+        if(wWaste < 1 && effVal < 100) wWaste = 1;
+
+        // --- INPUT PATH (Blue) ---
+        // Center aligned
+        document.getElementById('path-in').setAttribute('stroke-width', wTotal);
+        document.getElementById('path-in').setAttribute('d', `M 50 ${centerY} L ${startX} ${centerY}`);
+        
+        // Label follows Input top edge
+        let yInTop = centerY - (wTotal/2);
+        document.getElementById('lbl-in').setAttribute('y', yInTop - 15);
+        document.getElementById('txt-in').setAttribute('y', yInTop + 5);
+
+        // --- USEFUL PATH (Green - Horizontal) ---
+        // Top edge matches Input top edge
+        let topEdge = centerY - (wTotal / 2);
+        let yUse = topEdge + (wUse / 2); // Center of Green beam
+        let endX_Use = 450;
+        
+        document.getElementById('path-use').setAttribute('stroke-width', wUse);
+        document.getElementById('path-use').setAttribute('d', `M ${startX} ${yUse} L ${endX_Use} ${yUse}`);
+
+        // Green Arrow (Points RIGHT)
+        // Arrow sits at the end of the line (endX_Use)
+        // Width based on wUse
+        let aLenUse = Math.max(wUse * 0.8, 8); 
+        let aBaseUse = wUse / 2;
+        
+        // Triangle: Top-Base, Bottom-Base, Tip (Right)
+        let ptsUse = `${endX_Use},${yUse - aBaseUse} 
+                      ${endX_Use},${yUse + aBaseUse} 
+                      ${endX_Use + aLenUse},${yUse}`;
+        document.getElementById('arrow-use').setAttribute('points', ptsUse);
+        document.getElementById('arrow-use').style.display = (effVal > 0) ? 'block' : 'none';
+
+        // Green Label (Centered on Arrow Tip X)
+        document.getElementById('lbl-use').setAttribute('x', endX_Use + 30);
+        document.getElementById('lbl-use').setAttribute('y', yUse - 10);
+        document.getElementById('txt-use').setAttribute('x', endX_Use + 30);
+        document.getElementById('txt-use').setAttribute('y', yUse + 10);
+
+
+        // --- WASTED PATH (Grey - Curves DOWN) ---
+        // Starts below Green beam
+        let yWasteStart = topEdge + wUse + (wWaste / 2); // Center of Grey beam start
+        let endX_Waste = 350; // Ends closer horizontally
+        let endY_Waste = 350; // Ends near bottom
+        
+        // Bezier Curve Logic for PERFECT VERTICAL DROP
+        // CP1: Go right from start
+        // CP2: Go UP from end (to create vertical entry)
+        let cp1x = startX + 100; 
+        let cp1y = yWasteStart; 
+        let cp2x = endX_Waste; // Align X with end
+        let cp2y = yWasteStart + 50; // Control point above end
+
+        let dWaste = `M ${startX} ${yWasteStart} 
+                      L ${startX + 10} ${yWasteStart} 
+                      C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${endX_Waste} ${endY_Waste}`;
+        
+        document.getElementById('path-waste').setAttribute('stroke-width', wWaste);
+        document.getElementById('path-waste').setAttribute('d', dWaste);
+
+        // Grey Arrow (Points DOWN)
+        // Arrow sits at the end of the line (endX_Waste, endY_Waste)
+        let aLenWaste = Math.max(wWaste * 0.8, 8);
+        let aBaseWaste = wWaste / 2;
+
+        // Triangle: Left-Base, Right-Base, Tip (Down)
+        // Base is horizontal centered at endX_Waste
+        let ptsWaste = `${endX_Waste - aBaseWaste},${endY_Waste} 
+                        ${endX_Waste + aBaseWaste},${endY_Waste} 
+                        ${endX_Waste},${endY_Waste + aLenWaste}`;
+        
+        document.getElementById('arrow-waste').setAttribute('points', ptsWaste);
+        document.getElementById('arrow-waste').style.display = (effVal < 100) ? 'block' : 'none';
+
+        // Grey Label (Below the Arrow)
+        let labelY_Waste = endY_Waste + aLenWaste + 20;
+        document.getElementById('lbl-waste').setAttribute('x', endX_Waste);
+        document.getElementById('lbl-waste').setAttribute('y', labelY_Waste);
+        document.getElementById('txt-waste').setAttribute('x', endX_Waste);
+        document.getElementById('txt-waste').setAttribute('y', labelY_Waste + 20);
+    }
+
+    window.onload = function() {
+        calculateBill();
+        updateViz();
+    };
+</script>
+</body>
+</html>
