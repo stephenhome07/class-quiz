@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Connection Gym</title>
+<style>
+    /* 基礎設定 */
+    body { 
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+        background-color: #2c3e50; 
+        color: white; 
+        text-align: center; 
+        padding: 10px; 
+        margin: 0;
+    }
+
+    .container { 
+        max-width: 400px; 
+        margin: 20px auto; 
+        background: white; 
+        color: #333; 
+        border-radius: 15px; 
+        padding: 20px; 
+        box-shadow: 0 10px 25px rgba(0,0,0,0.4); 
+    }
+    
+    h2 { color: #e67e22; margin-top: 0; }
+    
+    .instruction { 
+        font-size: 1.1rem; 
+        margin-bottom: 15px; 
+        min-height: 3.5em; 
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+    }
+    
+    .stage { 
+        height: 220px; 
+        background: #ecf0f1; 
+        border-radius: 10px; 
+        margin-bottom: 20px; 
+        position: relative; 
+        border: 3px dashed #bdc3c7; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center; 
+        overflow: hidden;
+    }
+
+    .btn-group { display: flex; gap: 10px; }
+    
+    .btn { 
+        flex: 1; 
+        padding: 15px; 
+        border: none; 
+        border-radius: 10px; 
+        font-size: 1rem; 
+        font-weight: bold; 
+        cursor: pointer; 
+        color: white; 
+        transition: transform 0.1s, opacity 0.2s;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    
+    .btn-series { background: #2980b9; } /* Blue */
+    .btn-parallel { background: #e74c3c; } /* Red */
+    .btn:active { transform: scale(0.95); }
+
+    /* 結果訊息樣式 */
+    .correct-msg { color: #27ae60; font-weight: bold; font-size: 1.2rem; }
+    .wrong-msg { color: #c0392b; font-weight: bold; font-size: 1.2rem; }
+
+    /* SVG 樣式 */
+    svg { width: 100%; height: 100%; overflow: visible; }
+    text { font-family: sans-serif; }
+
+    /* 下一關按鈕 */
+    #next-btn {
+        background: #27ae60; 
+        display: none; 
+        width: 100%; 
+        margin-top: 15px;
+    }
+</style>
+</head>
+<body>
+
+<div class="container">
+    <h2>⚡ Connection Gym ⚡</h2>
+    
+    <div class="instruction" id="msg">
+        <div>Round 1: <b style="color:#2980b9">Ammeter (A)</b></div>
+        <div style="font-size: 0.9em; color:#555;">How should it connect?<br>(安培計如何連接？)</div>
+    </div>
+
+    <div class="stage" id="stage">
+        </div>
+
+    <div class="btn-group" id="controls">
+        <button class="btn btn-series" onclick="checkAnswer('series')">
+            🤝 Series<br><small>手拉手</small>
+        </button>
+        <button class="btn btn-parallel" onclick="checkAnswer('parallel')">
+            🤗 Parallel<br><small>擁抱/並聯</small>
+        </button>
+    </div>
+    
+    <button id="next-btn" class="btn" onclick="nextRound()">Next Round (下一關)</button>
+</div>
+
+<script>
+    let currentRound = 'A'; // 'A' = Ammeter, 'V' = Voltmeter
+
+    // 繪圖函數
+    function drawCircuit(type, device) {
+        // SVG 開頭
+        let svg = `<svg viewBox="0 0 200 120">`;
+        
+        // 畫電池 (左側)
+        svg += `<rect x="20" y="40" width="10" height="40" fill="#7f8c8d"/> <text x="10" y="35" font-size="14">-</text>`;
+        svg += `<rect x="30" y="30" width="10" height="60" fill="#f39c12"/> <text x="45" y="35" font-size="14">+</text>`;
+        
+        // 畫燈泡 (右側) - 圓圈與交叉
+        svg += `<circle cx="160" cy="60" r="15" fill="none" stroke="black" stroke-width="2"/>`;
+        svg += `<path d="M152,52 L168,68 M168,52 L152,68" stroke="black" stroke-width="2"/>`;
+
+        // 根據不同狀態畫線路
+        if (type === 'initial') {
+            // 只有底部電線
+            svg += `<path d="M40,60 L145,60" stroke="black" stroke-width="2"/>`;
+            // 飄浮在空中的儀器 (提示用)
+            let color = device === 'A' ? '#2980b9' : '#c0392b';
+            svg += `<circle cx="100" cy="30" r="18" fill="white" stroke="${color}" stroke-width="3"/>`;
+            svg += `<text x="100" y="36" text-anchor="middle" font-weight="bold" font-size="20" fill="${color}">${device}</text>`;
+            svg += `<text x="100" y="105" text-anchor="middle" font-size="12" fill="#7f8c8d">Where should I go?</text>`;
+        } 
+        else if (type === 'series') {
+            // 串聯：電線斷開，儀器塞中間
+            svg += `<line x1="40" y1="60" x2="82" y2="60" stroke="black" stroke-width="2"/>`;
+            
+            let color = device === 'A' ? '#2980b9' : '#c0392b';
+            svg += `<circle cx="100" cy="60" r="18" fill="white" stroke="${color}" stroke-width="3"/>`;
+            svg += `<text x="100" y="66" text-anchor="middle" font-weight="bold" font-size="20" fill="${color}">${device}</text>`;
+            
+            svg += `<line x1="118" y1="60" x2="145" y2="60" stroke="black" stroke-width="2"/>`;
+            
+            if(device === 'A') {
+                svg += `<text x="100" y="100" text-anchor="middle" font-size="14" fill="#2980b9" font-weight="bold">🤝 Holding Hands!</text>`;
+            }
+        } 
+        else if (type === 'parallel') {
+            // 並聯：原電線保留，另外拉線包圍
+            svg += `<line x1="40" y1="60" x2="145" y2="60" stroke="black" stroke-width="2"/>`; // 原線
+            
+            // 跨接線 (ㄇ字型)
+            svg += `<path d="M80,60 L80,95 L180,95 L180,60" fill="none" stroke="black" stroke-width="2"/>`;
+            
+            let color = device === 'A' ? '#2980b9' : '#c0392b';
+            svg += `<circle cx="130" cy="95" r="18" fill="white" stroke="${color}" stroke-width="3"/>`;
+            svg += `<text x="130" y="101" text-anchor="middle" font-weight="bold" font-size="20" fill="${color}">${device}</text>`;
+            
+            if(device === 'V') {
+                svg += `<text x="80" y="115" text-anchor="middle" font-size="14" fill="#c0392b" font-weight="bold">🤗 Hugging!</text>`;
+            }
+        }
+
+        svg += `</svg>`;
+        return svg;
+    }
+
+    // 初始化
+    function init() {
+        document.getElementById('stage').innerHTML = drawCircuit('initial', 'A');
+    }
+
+    // 檢查答案
+    function checkAnswer(choice) {
+        const msg = document.getElementById('msg');
+        const stage = document.getElementById('stage');
+        const nextBtn = document.getElementById('next-btn');
+        const controls = document.getElementById('controls');
+
+        if (currentRound === 'A') {
+            if (choice === 'series') {
+                stage.innerHTML = drawCircuit('series', 'A');
+                msg.innerHTML = "<div class='correct-msg'>✅ Correct!</div><div>Ammeter holds hands (Series).<br>安培計要「手拉手」串聯。</div>";
+                controls.style.display = 'none';
+                nextBtn.style.display = 'block';
+                // 成功震動
+                if(navigator.vibrate) navigator.vibrate(50);
+            } else {
+                stage.innerHTML = drawCircuit('parallel', 'A');
+                // 並聯安培計短路特效
+                stage.innerHTML = stage.innerHTML.replace('</svg>', '<text x="100" y="50" text-anchor="middle" font-size="40">💥</text></svg>');
+                msg.innerHTML = "<div class='wrong-msg'>❌ Short Circuit!</div><div>It will burn!<br>安培計並聯會短路燒壞！</div>";
+                // 失敗震動
+                if(navigator.vibrate) navigator.vibrate([100,50,100]);
+            }
+        } 
+        else if (currentRound === 'V') {
+             if (choice === 'parallel') {
+                stage.innerHTML = drawCircuit('parallel', 'V');
+                msg.innerHTML = "<div class='correct-msg'>✅ Correct!</div><div>Voltmeter hugs (Parallel).<br>伏特計要「擁抱」並聯。</div>";
+                controls.style.display = 'none';
+                nextBtn.innerText = "Finish (完成)";
+                nextBtn.style.display = 'block';
+                if(navigator.vibrate) navigator.vibrate(50);
+                nextBtn.onclick = function() { location.reload(); };
+            } else {
+                stage.innerHTML = drawCircuit('series', 'V');
+                // 串聯伏特計斷路
+                msg.innerHTML = "<div class='wrong-msg'>❌ Blocked!</div><div>Resistance is too high.<br>伏特計電阻大，串聯會斷路。</div>";
+                if(navigator.vibrate) navigator.vibrate([100,50,100]);
+            }
+        }
+    }
+
+    // 切換到下一關
+    function nextRound() {
+        currentRound = 'V';
+        const msg = document.getElementById('msg');
+        msg.innerHTML = "<div>Round 2: <b style='color:#c0392b'>Voltmeter (V)</b></div><div style='font-size: 0.9em; color:#555;'>How should it connect?<br>(伏特計如何連接？)</div>";
+        
+        document.getElementById('stage').innerHTML = drawCircuit('initial', 'V');
+        document.getElementById('controls').style.display = 'flex';
+        document.getElementById('next-btn').style.display = 'none';
+    }
+
+    // 啟動
+    window.onload = init;
+
+</script>
+</body>
+</html>
