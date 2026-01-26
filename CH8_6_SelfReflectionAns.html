@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ch 8.6 Diagnostic Answers</title>
+    <style>
+        body { 
+            font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif; 
+            background-color: #f4f7f6; margin: 0; padding: 20px; color: #333;
+        }
+        .container { 
+            max-width: 600px; margin: 0 auto; background: white; 
+            border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); overflow: hidden;
+        }
+        .header { background: #e67e22; color: white; padding: 20px; text-align: center; }
+        .header h1 { margin: 0; font-size: 1.4rem; }
+        
+        .q-card { padding: 20px; border-bottom: 1px solid #eee; }
+        .question { font-weight: bold; margin-bottom: 15px; color: #2c3e50; }
+        .answer-box { background-color: #e8f8f5; border-left: 5px solid #1abc9c; padding: 15px; border-radius: 5px; }
+        .correct-ans { font-size: 1.1rem; font-weight: bold; color: #16a085; display: block; margin-bottom: 5px; }
+        
+        .explanation { font-size: 0.9rem; color: #555; margin-top: 8px; }
+        .tag { display: inline-block; background: #95a5a6; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; margin-right: 5px; }
+        .tag.safe { background: #27ae60; }
+        .tag.warn { background: #d35400; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>Ch 8.6 Diagnostic Answers</h1>
+        <p>Household Electricity (家居用電)</p>
+    </div>
+
+    <div class="q-card">
+        <div class="question">1. Color of Earth Wire (地線顏色)</div>
+        <div class="answer-box">
+            <span class="correct-ans">✅ (C) Yellow/Green (黃綠色)</span>
+            <div class="explanation">
+                <span class="tag">Memory</span><br>
+                • <b>Brown</b> = Live (Burning/Fire) 🔥<br>
+                • <b>Blue</b> = Neutral (Ocean) 🌊<br>
+                • <b>Yellow/Green</b> = Earth (Grass) 🌱
+            </div>
+        </div>
+    </div>
+
+    <div class="q-card">
+        <div class="question">2. Earth Wire connects to... (地線連接...)</div>
+        <div class="answer-box">
+            <span class="correct-ans">✅ (B) Metal case (金屬外殼)</span>
+            <div class="explanation">
+                <span class="tag safe">Safety</span><br>
+                If the Live wire touches the metal case, the Earth wire takes the current away to the ground, blowing the fuse to save you!<br>
+                如果火線意外碰到金屬外殼，地線會把電流帶走，並熔斷保險絲，保護你免受觸電。
+            </div>
+        </div>
+    </div>
+
+    <div class="q-card">
+        <div class="question">3. Fuse for 4 A current (4A 電流用甚麼保險絲？)</div>
+        <div class="answer-box">
+            <span class="correct-ans">✅ (B) 5 A</span>
+            <div class="explanation">
+                <span class="tag warn">Logic</span><br>
+                Rule: Fuse > Operating Current.<br>
+                規則：保險絲 > 運作電流。<br><br>
+                • 3 A is too small (It will melt immediately! ❌)<br>
+                • 5 A is just right (Protects properly ✅)<br>
+                • 13 A is too big (Unsafe ❌)
+            </div>
+        </div>
+    </div>
+
+</div>
+
+</body>
+</html>
