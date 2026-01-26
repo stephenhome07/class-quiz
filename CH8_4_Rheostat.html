@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Rheostat Lab V4 - Dual Mode</title>
+<style>
+    body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #2c3e50;
+        color: white;
+        text-align: center;
+        padding: 10px;
+        margin: 0;
+        overflow-x: hidden;
+    }
+    .container {
+        max-width: 650px;
+        margin: 0 auto;
+        background: #34495e;
+        border-radius: 20px;
+        padding: 20px;
+        box-shadow: 0 15px 35px rgba(0,0,0,0.6);
+    }
+    h2 { color: #f1c40f; margin: 0 0 5px 0; }
+    .subtitle { color: #bdc3c7; font-size: 0.9rem; margin-bottom: 15px; }
+
+    /* --- 模式切換按鈕 --- */
+    .mode-tabs { display: flex; justify-content: center; gap: 10px; margin-bottom: 15px; }
+    .tab-btn {
+        padding: 8px 16px; border: 2px solid #7f8c8d; background: transparent; color: #bdc3c7;
+        border-radius: 20px; cursor: pointer; font-size: 0.95rem; transition: 0.2s;
+    }
+    .tab-btn.active { background: #3498db; border-color: #3498db; color: white; font-weight: bold; box-shadow: 0 0 10px rgba(52, 152, 219, 0.5); }
+
+    /* --- 顯示區域 (燈泡) --- */
+    .display-area {
+        height: 120px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: #22313f;
+        border-radius: 15px;
+        margin-bottom: 15px;
+        border: 2px solid #555;
+    }
+    .bulb-glass {
+        font-size: 70px; color: #444;
+        transition: color 0.1s, text-shadow 0.1s;
+        filter: drop-shadow(0 5px 5px rgba(0,0,0,0.3));
+    }
+
+    /* --- 模擬器畫布容器 --- */
+    .sim-container {
+        background: #ecf0f1;
+        border-radius: 15px;
+        padding: 10px;
+        position: relative;
+        margin-bottom: 15px;
+        border: 4px solid #bdc3c7;
+        box-shadow: inset 0 0 10px rgba(0,0,0,0.1);
+        overflow: hidden;
+        height: 280px; /* 固定高度以防跳動 */
+    }
+
+    /* 隱藏的互動滑桿 (覆蓋在整個畫布上) */
+    #hidden-slider {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        opacity: 0; cursor: pointer; z-index: 50;
+    }
+    
+    /* 兩個模式的 SVG 容器 */
+    #svg-linear, #svg-rotary { width: 100%; height: 100%; display: none; }
+    /* 默認顯示 */
+    #svg-linear { display: block; } 
+
+    svg { overflow: visible; }
+
+    /* --- SVG 樣式定義 --- */
+    
+    /* 共用動畫 */
+    .current-flow {
+        fill: none; stroke: #fff; stroke-width: 2; stroke-dasharray: 6 12;
+        animation: flowAnimation 0.5s linear infinite; opacity: 0.9;
+    }
+    @keyframes flowAnimation { to { stroke-dashoffset: -18; } }
+
+    /* Linear Mode Styles (保留 V3 樣式) */
+    .coil-wire-base { fill: none; stroke: #95a5a6; stroke-width: 4; stroke-linecap: round; }
+    .coil-wire-active { fill: none; stroke: #e74c3c; stroke-width: 5; stroke-linecap: round; filter: drop-shadow(0 0 3px #e74c3c); }
+    .metal-rod { fill: url(#rod-grad); stroke: #7f8c8d; stroke-width: 1; }
+    .slider-handle { fill: #2c3e50; stroke: #1a252f; }
+    .slider-contact { fill: #f39c12; stroke: #d35400; }
+
+    /* Rotary Mode Styles (新樣式) */
+    .pot-body { fill: #d5dbdb; stroke: #bdc3c7; stroke-width: 2; }
+    .track-base { fill: none; stroke: #333; stroke-width: 20; stroke-linecap: round; } /* 碳膜底色 */
+    .track-active { fill: none; stroke: #e74c3c; stroke-width: 20; stroke-linecap: round; filter: drop-shadow(0 0 5px #e74c3c); } /* 通電紅色 */
+    .wiper-arm { stroke: #f39c12; stroke-width: 8; stroke-linecap: round; }
+    .center-hub { fill: #bdc3c7; stroke: #7f8c8d; }
+    .term-pin { fill: #f1c40f; stroke: #d4ac0d; stroke-width: 1; }
+    .knob-cap { fill: rgba(44, 62, 80, 0.3); stroke: #2c3e50; stroke-width: 2; stroke-dasharray: 5 5; } /* 半透明旋鈕蓋 */
+
+    /* 外部導線 */
+    .wire-blue { fill: none; stroke: #2980b9; stroke-width: 4; stroke-linecap: round; }
+    .wire-red { fill: none; stroke: #c0392b; stroke-width: 4; stroke-linecap: round; }
+
+    /* --- 儀表板 --- */
+    .dashboard {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+        background: rgba(0,0,0,0.2); padding: 10px; border-radius: 10px;
+    }
+    .metric { text-align: left; font-size: 0.9rem; color: #bdc3c7; }
+    .val { float: right; font-weight: bold; color: #f1c40f; }
+
+    text { font-family: Arial, sans-serif; font-weight: bold; pointer-events: none; text-anchor: middle;}
+
+</style>
+</head>
+<body>
+
+<div class="container">
+    <h2>⚡ Rheostat Lab V4</h2>
+    
+    <div class="mode-tabs">
+        <button class="tab-btn active" id="btn-linear" onclick="switchMode('linear')">Sliding Rheostat<br>(滑動變阻器)</button>
+        <button class="tab-btn" id="btn-rotary" onclick="switchMode('rotary')">Rotary Potentiometer<br>(旋鈕式變阻器)</button>
+    </div>
+
+    <div class="display-area">
+        <div id="bulb-obj"><div class="bulb-glass" id="bulb-icon">💡</div></div>
+    </div>
+
+    <div class="sim-container">
+        <input type="range" min="0" max="100" value="50" id="hidden-slider" oninput="updateSim(this.value)">
+
+        <svg id="svg-linear" viewBox="0 0 600 280">
+            <defs>
+                <linearGradient id="rod-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" style="stop-color:#bdc3c7" /><stop offset="50%" style="stop-color:#ecf0f1" /><stop offset="100%" style="stop-color:#95a5a6" />
+                </linearGradient>
+            </defs>
+            <path d="M 20 200 L 50 200 L 50 180" class="wire-blue" />
+            <text x="25" y="220" fill="#2980b9" font-size="14">Input (+)</text>
+            <path d="M 550 60 L 550 40 L 580 40" class="wire-blue" />
+            <text x="570" y="30" fill="#2980b9" font-size="14">Output (-)</text>
+            
+            <rect x="50" y="80" width="500" height="100" rx="10" fill="#e0e0e0" stroke="#bdc3c7" />
+            <rect x="50" y="65" width="500" height="15" fill="url(#rod-grad)" stroke="#7f8c8d" />
+            
+            <rect x="40" y="160" width="20" height="30" fill="#34495e" /> <text x="35" y="210" fill="#333" font-size="16">A</text>
+            <rect x="540" y="160" width="20" height="30" fill="#34495e" /> <text x="565" y="210" fill="#333" font-size="16">B</text>
+            <rect x="540" y="60" width="20" height="30" fill="#34495e" /> <text x="565" y="55" fill="#333" font-size="16">C</text>
+
+            <path id="coil-base" class="coil-wire-base" d="" />
+            <path id="coil-active" class="coil-wire-active" d="" />
+            <path id="coil-flow" class="current-flow" d="" />
+
+            <g id="slider-group" transform="translate(300, 0)">
+                <rect x="-15" y="40" width="30" height="50" rx="5" class="slider-handle" />
+                <line x1="0" y1="45" x2="0" y2="85" stroke="#555" stroke-width="2"/>
+                <path d="M -5 90 L 5 90 L 0 100 Z" class="slider-contact" />
+                <line x1="0" y1="100" x2="0" y2="72" stroke="#e74c3c" stroke-width="4" id="lin-internal-up"/>
+                <line x1="0" y1="72" x2="250" y2="72" stroke="#e74c3c" stroke-width="3" id="lin-rod-out" />
+            </g>
+        </svg>
+
+        <svg id="svg-rotary" viewBox="0 0 600 280">
+            <path d="M 50 200 L 200 200 L 220 220" class="wire-blue" /> 
+            <text x="60" y="190" fill="#2980b9" font-size="14">Input (+)</text>
+
+            <path d="M 300 220 L 300 250 L 550 250" class="wire-blue" />
+            <text x="540" y="240" fill="#2980b9" font-size="14">Output (-)</text>
+
+            <g transform="translate(300, 120)">
+                <rect x="-90" y="80" width="20" height="40" class="term-pin" /> <text x="-80" y="140" fill="#555" font-size="14">Pin 1</text>
+                <rect x="-10" y="80" width="20" height="40" class="term-pin" /> <text x="0" y="140" fill="#555" font-size="14">Pin 2 (Out)</text>
+                <rect x="70" y="80" width="20" height="40" class="term-pin" /> <text x="80" y="140" fill="#555" font-size="14">Pin 3</text>
+
+                <circle cx="0" cy="0" r="90" class="pot-body" />
+                
+                <path id="rot-track-base" class="track-base" d="" />
+
+                <path id="rot-track-active" class="track-active" d="" />
+                <path id="rot-track-flow" class="current-flow" d="" />
+
+                <g id="rot-wiper-group">
+                    <line x1="0" y1="0" x2="0" y2="-60" class="wiper-arm" />
+                    <line x1="0" y1="-60" x2="0" y2="0" class="current-flow" style="animation-direction: reverse;" />
+                    <circle cx="0" cy="-60" r="8" fill="#e74c3c" />
+                </g>
+
+                <circle cx="0" cy="0" r="15" class="center-hub" />
+                
+                <path d="M 0 0 L 0 100" stroke="#e74c3c" stroke-width="4" stroke-dasharray="4 4" opacity="0.5" />
+
+                <circle cx="0" cy="0" r="95" class="knob-cap" />
+                <text x="0" y="-105" fill="#7f8c8d" font-size="12">Turn Knob</text>
+            </g>
+        </svg>
+
+    </div>
+
+    <div class="dashboard">
+        <div class="metric">Current Path Length (路徑長度)</div>
+        <div class="val" id="len-display">50 %</div>
+        
+        <div class="metric">Resistance (電阻值)</div>
+        <div class="val" id="res-display">High</div>
+        
+        <div class="metric">Current Flow (電流強度)</div>
+        <div class="val" id="curr-display">Medium</div>
+        
+        <div class="metric">Output (燈泡亮度)</div>
+        <div class="val" id="bright-display">50%</div>
+    </div>
+
+</div>
+
+<script>
+    // Global State
+    let currentMode = 'linear';
+    let currentVal = 50;
+
+    // --- LINEAR MODE SETUP (V3 Logic) ---
+    const coilBase = document.getElementById('coil-base');
+    const coilActive = document.getElementById('coil-active');
+    const coilFlow = document.getElementById('coil-flow');
+    const sliderGroup = document.getElementById('slider-group');
+    const linRodOut = document.getElementById('lin-rod-out');
+    const startX = 50, endX = 550, coilYTop = 100, coilYBot = 160, loops = 40;
+
+    function generateCoilPath(limitX) {
+        let d = `M ${startX} ${coilYBot} `;
+        const step = (endX - startX) / loops;
+        for (let i = 0; i < loops; i++) {
+            let x = startX + (i * step);
+            if (limitX !== null && x > limitX) break;
+            d += `L ${x + step/2} ${coilYTop} L ${x + step} ${coilYBot} `;
+        }
+        return d;
+    }
+    // Init Linear Static
+    coilBase.setAttribute('d', generateCoilPath(null));
+
+
+    // --- ROTARY MODE SETUP (New!) ---
+    const rotTrackBase = document.getElementById('rot-track-base');
+    const rotTrackActive = document.getElementById('rot-track-active');
+    const rotTrackFlow = document.getElementById('rot-track-flow');
+    const rotWiperGroup = document.getElementById('rot-wiper-group');
+    const radius = 60;
+    
+    // Helper to calculate Arc Path
+    function polarToCartesian(centerX, centerY, radius, angleInDegrees) {
+        var angleInRadians = (angleInDegrees - 90) * Math.PI / 180.0;
+        return {
+            x: centerX + (radius * Math.cos(angleInRadians)),
+            y: centerY + (radius * Math.sin(angleInRadians))
+        };
+    }
+
+    function describeArc(x, y, radius, startAngle, endAngle) {
+        var start = polarToCartesian(x, y, radius, endAngle);
+        var end = polarToCartesian(x, y, radius, startAngle);
+        var largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
+        var d = [
+            "M", start.x, start.y, 
+            "A", radius, radius, 0, largeArcFlag, 0, end.x, end.y
+        ].join(" ");
+        return d;
+    }
+
+    // Init Rotary Static (Full Base Track from -135 to +135)
+    rotTrackBase.setAttribute('d', describeArc(0, 0, radius, -135, 135));
+
+
+    // --- MAIN UPDATE FUNCTION ---
+    function switchMode(mode) {
+        currentMode = mode;
+        document.getElementById('svg-linear').style.display = mode === 'linear' ? 'block' : 'none';
+        document.getElementById('svg-rotary').style.display = mode === 'rotary' ? 'block' : 'none';
+        
+        document.getElementById('btn-linear').className = mode === 'linear' ? 'tab-btn active' : 'tab-btn';
+        document.getElementById('btn-rotary').className = mode === 'rotary' ? 'tab-btn active' : 'tab-btn';
+        
+        updateSim(currentVal); // Refresh view
+    }
+
+    function updateSim(val) {
+        currentVal = val; // Store value
+        const outputLevel = 100 - val; // High Val = High Res = Low Output
+        
+        // --- 1. LINEAR UPDATE ---
+        if (currentMode === 'linear') {
+            const rangeWidth = endX - startX;
+            const sliderX = startX + (val / 100 * rangeWidth);
+            
+            sliderGroup.setAttribute('transform', `translate(${sliderX}, 0)`);
+            const activeD = generateCoilPath(sliderX);
+            coilActive.setAttribute('d', activeD);
+            coilFlow.setAttribute('d', activeD);
+            linRodOut.setAttribute('x2', 550 - sliderX); // Adjust rod length visual
+        }
+        
+        // --- 2. ROTARY UPDATE ---
+        if (currentMode === 'rotary') {
+            // Map 0-100 to Angle -135 to +135
+            // Note: In typical pot, clockwise = higher resistance if we tap specific pins
+            // Let's assume: Pin 1 (Left) is Input. Wiper moves clockwise away from Pin 1.
+            // So Clockwise = Longer Path = Higher Resistance.
+            
+            const totalAngle = 270;
+            const startAng = -135;
+            const currentAng = startAng + (val / 100 * totalAngle);
+
+            // Rotate the Wiper Group
+            rotWiperGroup.setAttribute('transform', `rotate(${currentAng})`);
+
+            // Draw Red Active Track (From startAng to currentAng)
+            // Need small offset to prevent SVG error if angles are equal
+            const safeCurrentAng = Math.max(currentAng, startAng + 0.1);
+            const arcPath = describeArc(0, 0, radius, startAng, safeCurrentAng);
+            
+            rotTrackActive.setAttribute('d', arcPath);
+            rotTrackFlow.setAttribute('d', arcPath);
+        }
+
+        // --- 3. DASHBOARD & BULB UPDATE (Shared) ---
+        document.getElementById('len-display').innerText = val + " %"; // Use % for generic length
+        
+        const brightText = document.getElementById('bright-display');
+        const resText = document.getElementById('res-display');
+        const currText = document.getElementById('curr-display');
+        const bulbIcon = document.getElementById('bulb-icon');
+
+        brightText.innerText = outputLevel + "%";
+        
+        if (val < 20) {
+            resText.innerText = "Very Low (極小)";
+            currText.innerText = "Very High (極大)";
+        } else if (val > 80) {
+            resText.innerText = "High (大)";
+            currText.innerText = "Low (小)";
+        } else {
+            resText.innerText = "Medium (中)";
+            currText.innerText = "Medium (中)";
+        }
+
+        // Bulb Visual
+        const brightness = outputLevel / 100;
+        const glow = outputLevel * 2;
+        if (brightness < 0.1) {
+            bulbIcon.style.color = "#333";
+            bulbIcon.style.textShadow = "none";
+        } else {
+            bulbIcon.style.color = `rgba(241, 196, 15, ${0.3 + brightness * 0.7})`;
+            bulbIcon.style.textShadow = `0 0 ${glow}px #f1c40f`;
+        }
+    }
+
+    // Init
+    switchMode('linear');
+    updateSim(50);
+
+</script>
+</body>
+</html>
