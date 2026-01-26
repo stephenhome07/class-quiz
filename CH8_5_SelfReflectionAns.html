@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ch 8.5 Diagnostic Answers</title>
+    <style>
+        body { 
+            font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif; 
+            background-color: #f4f7f6; 
+            margin: 0; 
+            padding: 20px; 
+            color: #333;
+        }
+        .container { 
+            max-width: 600px; 
+            margin: 0 auto; 
+            background: white; 
+            border-radius: 15px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1); 
+            overflow: hidden;
+        }
+        .header { 
+            background: #2c3e50; 
+            color: white; 
+            padding: 20px; 
+            text-align: center; 
+        }
+        .header h1 { margin: 0; font-size: 1.4rem; }
+        .header p { margin: 5px 0 0; color: #bdc3c7; font-size: 0.9rem; }
+
+        .q-card { 
+            padding: 20px; 
+            border-bottom: 1px solid #eee; 
+        }
+        .q-card:last-child { border-bottom: none; }
+        
+        .question { 
+            font-weight: bold; 
+            margin-bottom: 15px; 
+            font-size: 1.1rem;
+            color: #2c3e50;
+        }
+
+        .answer-box {
+            background-color: #d4edda;
+            border-left: 5px solid #28a745;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+        .correct-ans { 
+            font-size: 1.2rem; 
+            font-weight: bold; 
+            color: #155724; 
+            display: block; 
+            margin-bottom: 5px;
+        }
+
+        .explanation {
+            font-size: 0.95rem;
+            color: #555;
+            background: #fff;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 8px;
+            border: 1px dashed #ccc;
+        }
+        .pizza-tag {
+            display: inline-block;
+            background: #e67e22;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.8rem;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .highlight { color: #d35400; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>Ch 8.5 Diagnostic Check</h1>
+        <p>Series & Parallel (串聯與並聯)</p>
+    </div>
+
+    <div class="q-card">
+        <div class="question">
+            1. In Parallel, if I add more branches (bulbs), the Voltage of each bulb...<br>
+            (在並聯電路加更多支路，每個燈泡的電壓...)
+        </div>
+        
+        <div class="answer-box">
+            <span class="correct-ans">✅ Answer: (B) Stays Same (不變)</span>
+            
+            <div class="explanation">
+                <span class="pizza-tag">🍕 Pizza Model (薄餅模型)</span><br>
+                In Parallel, every branch connects directly to the battery. It's like having more customers calling for delivery.<br>
+                在並聯電路，每條支路都直接連接電池。就像有更多客人叫外賣：<br><br>
+                
+
+[Image of parallel circuit voltage diagram]
+
+                <br><br>
+                Does the shop give them less pizza? <b>No!</b><br>
+                Every customer still gets a <span class="highlight">FULL Pizza (Full Voltage)</span>.<br>
+                店舖不會因為人多就給少點，每個客人依然得到<b>完整的薄餅 (完整電壓)</b>。
+            </div>
+        </div>
+    </div>
+
+    <div class="q-card">
+        <div class="question">
+            2. Household lights are connected in Parallel because...<br>
+            (家居電燈使用並聯，因為...)
+        </div>
+
+        <div class="answer-box">
+            <span class="correct-ans">✅ Answer: (B) Independent control (獨立開關)</span>
+            
+            <div class="explanation">
+                <span class="pizza-tag">🏠 Real Life (生活應用)</span><br>
+                Parallel circuits provide independent paths for the current.<br>
+                並聯電路提供獨立的電流路徑。<br><br>
+                
+
+[Image of household lighting circuit diagram]
+
+                <br><br>
+                If the kitchen light breaks (or is switched off), the living room light <span class="highlight">STAYS ON</span>.<br>
+                如果廚房燈壞了（或關了），客廳的燈<span class="highlight">仍然亮著</span>，不會受影響。
+            </div>
+        </div>
+    </div>
+
+</div>
+
+</body>
+</html>
