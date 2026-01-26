@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Circuit Builder V2</title>
+<title>Circuit Builder V3 - Electron Flow</title>
 <style>
     body {
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -20,147 +20,172 @@
         background: #34495e;
         border-radius: 20px;
         padding: 20px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        box-shadow: 0 15px 40px rgba(0,0,0,0.6);
     }
-    h2 { color: #f1c40f; margin: 0 0 10px 0; }
+    h2 { color: #f1c40f; margin: 0 0 10px 0; text-shadow: 0 2px 0px rgba(0,0,0,0.3); }
     
     .mission-box {
-        background: #e67e22; color: white; padding: 10px; border-radius: 10px;
-        margin-bottom: 20px; font-weight: bold; animation: popIn 0.5s; border: 2px solid #d35400;
+        background: #e67e22; color: white; padding: 12px; border-radius: 10px;
+        margin-bottom: 20px; font-weight: bold; border: 2px solid #d35400;
+        box-shadow: 0 5px 15px rgba(230, 126, 34, 0.3);
     }
 
     /* --- 電路畫布區域 --- */
     .circuit-board {
         background: #ecf0f1; 
         border-radius: 15px; 
-        height: 250px;
+        height: 280px;
         position: relative; 
         margin-bottom: 20px;
         border: 4px solid #bdc3c7;
         display: flex;
         justify-content: center;
         align-items: center;
-        overflow: hidden;
+        overflow: hidden; /* 重要：隱藏超出範圍的電子 */
     }
 
     /* 電路迴路容器 (會隨長度變寬) */
     .circuit-loop {
         position: relative;
-        width: 200px; /* 初始寬度 (Short) */
-        height: 160px;
+        width: 220px; /* 初始寬度 (Short) */
+        height: 180px;
         transition: width 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     }
 
-    /* 標準導線 (黑線) */
-    .wire-std {
+    /* 導線基礎樣式 */
+    .wire-path {
         position: absolute;
-        background: #333;
+        background: #2c3e50;
+        box-shadow: inset 0 0 5px rgba(0,0,0,0.5);
         z-index: 1;
     }
-    /* 左邊豎線 */
-    .wire-left { width: 4px; height: 100%; left: 0; top: 0; }
-    /* 右邊豎線 */
-    .wire-right { width: 4px; height: 100%; right: 0; top: 0; }
-    /* 底部橫線 */
-    .wire-bottom { width: 100%; height: 4px; bottom: 0; left: 0; }
-    /* 頂部左小段 (連接測試線) */
-    .wire-top-l { width: 10px; height: 4px; top: 0; left: 0; }
-    /* 頂部右小段 */
-    .wire-top-r { width: 10px; height: 4px; top: 0; right: 0; }
+    
+    /* 四邊導線 */
+    .w-left { width: 10px; height: 100%; left: 0; top: 0; }
+    .w-right { width: 10px; height: 100%; right: 0; top: 0; }
+    .w-bottom { width: 100%; height: 10px; bottom: 0; left: 0; }
+    .w-top-L { width: 30px; height: 10px; top: 0; left: 0; } /* 左上角連接處 */
+    .w-top-R { width: 30px; height: 10px; top: 0; right: 0; } /* 右上角連接處 */
 
-    /* --- 測試導線 (User Wire) --- */
+    /* --- 測試導線 (主要互動區) --- */
+    .test-wire-container {
+        position: absolute; top: 0; left: 30px; right: 30px; height: 40px;
+        display: flex; align-items: center; justify-content: center; z-index: 2;
+    }
     .test-wire {
-        position: absolute;
-        top: 0; left: 10px; right: 10px; /* 撐滿中間 */
-        height: 20px; /* 初始 (Thick) */
-        background: #95a5a6;
+        width: 100%; 
+        height: 25px; /* 初始 Thick */
+        background: linear-gradient(180deg, #bdc3c7 0%, #95a5a6 100%);
         border: 2px solid #7f8c8d;
-        transform: translateY(-50%); /* 居中對齊線路 */
-        transition: height 0.3s ease, background-color 0.3s;
-        z-index: 2;
-        box-shadow: inset 0 0 5px rgba(0,0,0,0.2);
-        display: flex;
-        align-items: center;
-        overflow: hidden;
+        transition: height 0.3s ease, background 0.3s;
+        box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        display: flex; align-items: center; justify-content: center;
+    }
+    .wire-label { font-size: 10px; color: #555; font-weight: bold; letter-spacing: 1px; }
+
+    /* --- 元件 --- */
+    .battery {
+        position: absolute; bottom: -20px; left: 50%; transform: translateX(-50%);
+        font-size: 40px; z-index: 10;
+        filter: drop-shadow(0 2px 5px rgba(0,0,0,0.3));
     }
     
-    /* 元件 */
-    .battery {
-        position: absolute; bottom: -15px; left: 50%; transform: translateX(-50%);
-        font-size: 30px; background: #ecf0f1; padding: 0 5px; z-index: 5;
-    }
-    .bulb-container {
-        position: absolute; top: 50%; right: -25px; transform: translateY(-50%);
-        z-index: 5; text-align: center;
+    .bulb-pos {
+        position: absolute; top: 50%; right: -30px; transform: translateY(-50%);
+        z-index: 10;
     }
     .bulb {
-        font-size: 50px; color: #444;
-        transition: color 0.3s, text-shadow 0.3s;
-        filter: drop-shadow(0 2px 2px rgba(0,0,0,0.2));
+        font-size: 60px; color: #555;
+        transition: color 0.2s, text-shadow 0.2s, transform 0.2s;
     }
 
-    /* 電子動畫點 */
-    .electron-dot {
+    /* 安培計 (新增) */
+    .ammeter {
+        position: absolute; top: 50%; left: -25px; transform: translateY(-50%);
+        width: 50px; height: 50px; background: white; border: 3px solid #333;
+        border-radius: 50%; z-index: 10; display: flex; justify-content: center; align-items: center;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+    .ammeter-face { font-weight: bold; font-size: 14px; color: #333; margin-top: 10px;}
+    .ammeter-pointer {
+        position: absolute; top: 25%; left: 50%; height: 25px; width: 2px; background: red;
+        transform-origin: bottom center; transform: rotate(-45deg); transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .ammeter-label { position: absolute; top: 5px; font-size: 10px; color: #333; font-weight: bold; }
+
+    /* --- 電子流動畫 --- */
+    .electron {
         position: absolute;
-        width: 6px; height: 6px; 
-        background: #f1c40f; 
+        width: 8px; height: 8px;
+        background: #f1c40f;
         border-radius: 50%;
-        opacity: 0;
-        z-index: 10;
-        box-shadow: 0 0 4px #f1c40f;
+        box-shadow: 0 0 6px #f1c40f, 0 0 10px orange;
+        z-index: 5;
+        pointer-events: none;
+        will-change: left, top;
     }
 
     /* --- 控制面板 --- */
-    .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+    .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px; }
     .control-group { background: rgba(0,0,0,0.2); padding: 10px; border-radius: 10px; }
-    .control-label { font-size: 0.9rem; color: #bdc3c7; margin-bottom: 5px; display: block; }
+    .control-label { font-size: 0.9rem; color: #bdc3c7; margin-bottom: 8px; display: block; font-weight: bold; }
     
-    .btn-group { display: flex; gap: 5px; }
+    .btn-group { display: flex; gap: 8px; }
     .btn {
-        flex: 1; padding: 10px; border: none; border-radius: 8px; cursor: pointer;
-        font-weight: bold; font-size: 0.9rem; transition: 0.2s;
-        background: #2c3e50; color: white; border: 2px solid #2c3e50;
+        flex: 1; padding: 12px; border: none; border-radius: 8px; cursor: pointer;
+        font-weight: bold; font-size: 1rem; transition: 0.2s;
+        background: #2c3e50; color: #ecf0f1; border: 2px solid #34495e;
     }
-    .btn.active { background: #3498db; border-color: #3498db; }
-    
-    /* 數值顯示 */
-    .stats {
-        display: flex; justify-content: space-around; margin-top: 20px;
-        background: #22313f; padding: 10px; border-radius: 10px;
-    }
-    .stat-val { font-size: 1.2rem; font-weight: bold; color: #f1c40f; }
+    .btn:active { transform: scale(0.95); }
+    .btn.active { background: #3498db; border-color: #5dade2; color: white; box-shadow: 0 0 10px rgba(52, 152, 219, 0.4); }
 
-    @keyframes popIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    /* 儀表板 */
+    .dashboard {
+        display: flex; justify-content: space-between; margin-top: 20px;
+        background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px;
+    }
+    .stat-box { text-align: left; }
+    .stat-title { font-size: 0.8rem; color: #bdc3c7; text-transform: uppercase; }
+    .stat-val { font-size: 1.4rem; font-weight: bold; color: #f1c40f; }
 
 </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>⚡ Circuit Builder V2</h2>
+    <h2>⚡ Circuit Builder V3</h2>
     
     <div class="mission-box" id="mission-text">
-        Mission 1: Make the bulb BRIGHTEST!<br>任務 1：讓燈泡變得最亮！
+        Mission: Make the electrons flow FAST!<br>任務：讓電子流動得最快！
     </div>
 
     <div class="circuit-board">
         <div class="circuit-loop" id="loop-container">
-            <div class="wire-std wire-left"></div>
-            <div class="wire-std wire-bottom"></div>
-            <div class="wire-std wire-right"></div>
-            <div class="wire-std wire-top-l"></div>
-            <div class="wire-std wire-top-r"></div>
+            <div class="wire-path w-left"></div>
+            <div class="wire-path w-bottom"></div>
+            <div class="wire-path w-right"></div>
+            <div class="wire-path w-top-L"></div>
+            <div class="wire-path w-top-R"></div>
 
-            <div class="test-wire" id="test-wire">
-                <div style="width:100%; text-align:center; color:#555; font-size:10px; font-weight:bold;">TEST WIRE</div>
+            <div class="test-wire-container">
+                <div class="test-wire" id="test-wire">
+                    <span class="wire-label">RESISTANCE WIRE</span>
+                </div>
             </div>
 
             <div class="battery">🔋</div>
-            <div class="bulb-container">
+            
+            <div class="bulb-pos">
                 <div class="bulb" id="bulb-obj">💡</div>
             </div>
+
+            <div class="ammeter">
+                <div class="ammeter-label">A</div>
+                <div class="ammeter-pointer" id="pointer"></div>
+                <div class="ammeter-face">.</div>
+            </div>
             
-            <div id="electron-layer"></div>
+            <div id="electron-container"></div>
         </div>
     </div>
 
@@ -182,32 +207,56 @@
         </div>
     </div>
 
-    <div class="stats">
-        <div>Resistance: <span class="stat-val" id="res-val">Low</span></div>
-        <div>Current: <span class="stat-val" id="curr-val">High</span></div>
+    <div class="dashboard">
+        <div class="stat-box">
+            <div class="stat-title">Resistance (電阻)</div>
+            <div class="stat-val" id="res-val">Low</div>
+        </div>
+        <div class="stat-box" style="text-align:right;">
+            <div class="stat-title">Current Speed (流速)</div>
+            <div class="stat-val" id="curr-val">High</div>
+        </div>
     </div>
 
-    <button onclick="checkMission()" style="width:100%; margin-top:20px; padding:15px; background:#27ae60; color:white; border:none; border-radius:10px; font-size:1.1rem; font-weight:bold; cursor:pointer;">Check Mission (檢查任務)</button>
+    <button onclick="checkMission()" style="width:100%; margin-top:20px; padding:15px; background:#27ae60; color:white; border:none; border-radius:10px; font-size:1.1rem; font-weight:bold; cursor:pointer; box-shadow: 0 5px 0 #1e8449; transition:0.1s;">Check Mission (檢查任務)</button>
 </div>
 
 <script>
-    // 狀態
+    // 參數狀態
     let currentLen = 'short';
     let currentThick = 'thick';
-    let missionStage = 1;
     let electrons = [];
-    let animationId;
+    const numElectrons = 15; // 電子數量
+    let speed = 4; // 像素/幀
 
+    // DOM 元素
     const loopContainer = document.getElementById('loop-container');
     const testWire = document.getElementById('test-wire');
     const bulb = document.getElementById('bulb-obj');
     const resVal = document.getElementById('res-val');
     const currVal = document.getElementById('curr-val');
+    const pointer = document.getElementById('pointer');
+    const eContainer = document.getElementById('electron-container');
     const missionText = document.getElementById('mission-text');
-    const electronLayer = document.getElementById('electron-layer');
+
+    // 初始化電子
+    function initElectrons() {
+        eContainer.innerHTML = '';
+        electrons = [];
+        for (let i = 0; i < numElectrons; i++) {
+            let el = document.createElement('div');
+            el.className = 'electron';
+            eContainer.appendChild(el);
+            // 平均分佈在軌道上 (0% to 100%)
+            electrons.push({
+                el: el,
+                pos: (i / numElectrons) * 100 // 0-100 percentage of loop
+            });
+        }
+    }
 
     function setProp(type, val, btn) {
-        // 切換按鈕
+        // UI 更新
         const parent = btn.parentElement;
         Array.from(parent.children).forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
@@ -219,180 +268,189 @@
     }
 
     function updateCircuit() {
-        // 1. 視覺變化 (幾何)
-        // 長度變化 -> 改變整個迴路的寬度
-        if (currentLen === 'short') {
-            loopContainer.style.width = "200px";
-        } else {
-            loopContainer.style.width = "350px"; // 拉長迴路
-        }
+        // 1. 幾何變形
+        let loopWidth = 220;
+        if (currentLen === 'long') loopWidth = 360; // 拉長
+        
+        loopContainer.style.width = loopWidth + 'px';
 
-        // 粗幼變化 -> 改變 Test Wire 的高度
         if (currentThick === 'thick') {
             testWire.style.height = "25px";
-            testWire.style.background = "#bdc3c7"; // 粗線顏色淺一點
+            testWire.style.background = "linear-gradient(180deg, #bdc3c7 0%, #95a5a6 100%)";
         } else {
             testWire.style.height = "6px";
-            testWire.style.background = "#7f8c8d"; // 幼線顏色深一點
+            testWire.style.background = "#555";
         }
 
-        // 2. 物理量計算
+        // 2. 物理計算 (Resistance Score)
+        // Short(0) Long(1) + Thick(0) Thin(1)
         let rScore = 0;
-        if (currentLen === 'long') rScore += 2;
-        if (currentThick === 'thin') rScore += 2;
+        if (currentLen === 'long') rScore += 1;
+        if (currentThick === 'thin') rScore += 1;
 
-        let speed = 2; // 像素/幀
-        let density = 50; // 產生頻率
+        // 設定效果
         let brightness = 1;
-
+        let pointerAngle = 45; // Max current
+        
         if (rScore === 0) { // Short Thick (Best)
-            resVal.innerText = "Very Low"; currVal.innerText = "Max";
-            brightness = 1; speed = 3; density = 10; 
-        } else if (rScore === 2) { // Mixed
-            resVal.innerText = "Medium"; currVal.innerText = "Medium";
-            brightness = 0.5; speed = 1.5; density = 30;
+            speed = 5.5; // Fast
+            resVal.innerText = "Very Low";
+            currVal.innerText = "Max Speed";
+            brightness = 1;
+            pointerAngle = 45; // Right
+        } else if (rScore === 1) { // Mixed
+            speed = 2.5; // Medium
+            resVal.innerText = "Medium";
+            currVal.innerText = "Medium";
+            brightness = 0.5;
+            pointerAngle = 0; // Center
         } else { // Long Thin (Worst)
-            resVal.innerText = "Very High"; currVal.innerText = "Tiny";
-            brightness = 0.1; speed = 0.5; density = 60;
+            speed = 0.8; // Very Slow (Traffic Jam)
+            resVal.innerText = "Very High";
+            currVal.innerText = "Crawling";
+            brightness = 0.2;
+            pointerAngle = -45; // Left
         }
 
-        // 3. 燈泡亮度
+        // 3. 視覺反饋
+        // 燈泡
         if (brightness > 0.8) {
-            bulb.style.color = "#f1c40f"; bulb.style.textShadow = "0 0 30px #f1c40f, 0 0 60px orange";
+            bulb.style.color = "#f1c40f"; 
+            bulb.style.textShadow = "0 0 30px #f1c40f, 0 0 60px orange";
+            bulb.style.transform = "scale(1.2)";
         } else if (brightness > 0.4) {
-            bulb.style.color = "#f39c12"; bulb.style.textShadow = "0 0 10px #f39c12";
+            bulb.style.color = "#f39c12"; 
+            bulb.style.textShadow = "0 0 10px #f39c12";
+            bulb.style.transform = "scale(1.0)";
         } else {
-            bulb.style.color = "#444"; bulb.style.textShadow = "none";
+            bulb.style.color = "#444"; 
+            bulb.style.textShadow = "none";
+            bulb.style.transform = "scale(0.9)";
         }
 
-        // 重啟電子動畫
-        startElectronFlow(speed, density);
+        // 安培計指針
+        pointer.style.transform = `rotate(${pointerAngle}deg)`;
     }
 
-    // --- 電子流動動畫系統 ---
-    function startElectronFlow(speed, spawnRate) {
-        // 清除舊電子
-        electronLayer.innerHTML = '';
-        electrons = [];
-        if (animationId) cancelAnimationFrame(animationId);
+    // --- 動畫核心循環 ---
+    function animate() {
+        const w = loopContainer.offsetWidth;
+        const h = loopContainer.offsetHeight;
+        const wireThick = 10;
+        
+        // 計算總周長 (近似值，用於標準化速度)
+        const perimeter = 2 * (w + h);
+        
+        // 每一幀移動的百分比 (確保速度在不同長度下視覺上一致)
+        // speed 是 pixel per frame, 轉換成 perimeter percentage
+        const stepPercent = (speed / perimeter) * 100;
 
-        let frameCount = 0;
+        electrons.forEach(p => {
+            p.pos += stepPercent;
+            if (p.pos >= 100) p.pos -= 100;
 
-        function loop() {
-            frameCount++;
-            const w = loopContainer.offsetWidth;
-            const h = loopContainer.offsetHeight;
+            // 根據百分比計算 XY 座標 (逆時針流動：電池 -> 燈泡(右) -> 測試線(上) -> 安培計(左) -> 電池)
+            // 為了符合物理(電流正->負)，我們模擬 Convention Current (順時針: 左->上->右->下)
+            // 或者是逆時針? 讓我們跟隨電池圖示
+            // 電池：凸起在右邊(正)，平底在左邊(負)
+            // 電流從 正 -> 負。所以是 逆時針 (右 -> 上 -> 左 -> 下)
+            
+            // 定義路徑分段 (以總周長比例劃分)
+            // 1. Right Wall (Bottom to Top)
+            // 2. Top Wall (Right to Left)
+            // 3. Left Wall (Top to Bottom)
+            // 4. Bottom Wall (Left to Right)
+            
+            const pRight = h / perimeter * 100;
+            const pTop = w / perimeter * 100;
+            const pLeft = h / perimeter * 100;
+            // const pBottom = w / perimeter * 100; 
+            
+            let x, y;
+            
+            // 調整座標以置中於導線
+            const offset = wireThick / 2 - 4; // 4 is half electron size
 
-            // 產生新電子
-            if (frameCount % spawnRate === 0) {
-                const el = document.createElement('div');
-                el.className = 'electron-dot';
-                // 起點：電池正極 (底部中間)
-                // 為了視覺效果，我們設定為順時針流動 (真實電流是正->負，電子是負->正，這裡模擬電流方向比較直觀)
-                // 電流：電池正極(右下) -> 燈泡 -> 上方 -> 左方 -> 電池負極
-                // 這裡我們用「電流」方向 (Conventional Current)
-                
-                // 座標定義: 0,0 是左上角
-                // 為了簡單，我們定義路徑：Bottom-Left -> Top-Left -> Top-Right -> Bottom-Right -> Bottom-Left
-                // 這裡是電池出發 (Bottom-Center -> Left)
-                
-                el.dataset.pos = 0; // 0 to TotalPerimeter
-                el.dataset.section = 1; // 1:Bot-Left, 2:Left-Up, 3:Top-Right, 4:Right-Down, 5:Bot-Center
-                
-                // 初始位置：電池左側 (Bottom, 50%)
-                el.style.left = (w/2) + 'px';
-                el.style.top = (h - 2) + 'px'; // 底部線
-                
-                electronLayer.appendChild(el);
-                electrons.push({ dom: el, dist: 0 });
+            if (p.pos < pRight) {
+                // 右側 (向上移) : 0% ~ 
+                const localPct = p.pos / pRight;
+                x = w - wireThick;
+                y = h - (localPct * h); 
+            } else if (p.pos < pRight + pTop) {
+                // 頂部 (向左移)
+                const localPct = (p.pos - pRight) / pTop;
+                x = w - (localPct * w);
+                y = 0;
+            } else if (p.pos < pRight + pTop + pLeft) {
+                // 左側 (向下移)
+                const localPct = (p.pos - (pRight + pTop)) / pLeft;
+                x = 0;
+                y = localPct * h;
+            } else {
+                // 底部 (向右移)
+                const localPct = (p.pos - (pRight + pTop + pLeft)) / (100 - (pRight + pTop + pLeft));
+                x = localPct * w;
+                y = h - wireThick;
             }
 
-            // 移動電子
-            for (let i = 0; i < electrons.length; i++) {
-                let e = electrons[i];
-                e.dist += speed;
-                
-                // 計算座標 (逆時針：電池->左->上->右->電池)
-                // 1. Bottom (Center to Left)
-                // 2. Left (Bottom to Top)
-                // 3. Top (Left to Right)
-                // 4. Right (Top to Bottom)
-                // 5. Bottom (Right to Center)
-                
-                let x, y;
-                const halfW = w / 2;
-                
-                if (e.dist < halfW) { // 底部向左
-                    x = halfW - e.dist;
-                    y = h - 2;
-                } else if (e.dist < halfW + h) { // 左側向上
-                    x = 0;
-                    y = (h - 2) - (e.dist - halfW);
-                } else if (e.dist < halfW + h + w) { // 頂部向右 (經過測試線!)
-                    x = (e.dist - (halfW + h));
-                    y = 0;
-                } else if (e.dist < halfW + h + w + h) { // 右側向下 (經過燈泡)
-                    x = w - 4; // 線寬修正
-                    y = (e.dist - (halfW + h + w));
-                } else if (e.dist < halfW + h + w + h + halfW) { // 底部向左 (回電池)
-                    x = w - (e.dist - (halfW + h + w + h));
-                    y = h - 2;
-                } else {
-                    // 跑完一圈
-                    e.dom.remove();
-                    electrons.splice(i, 1);
-                    i--;
-                    continue;
-                }
-                
-                e.dom.style.left = x + 'px';
-                e.dom.style.top = y + 'px';
-            }
+            // 修正座標使電子在導線中間
+            // Top/Bottom wires: y needs fix. Left/Right wires: x needs fix.
+            if (p.pos < pRight) { x = w - 15; /* Right wire padding */ } 
+            else if (p.pos < pRight + pTop) { y = 8; /* Top wire padding */ } 
+            else if (p.pos < pRight + pTop + pLeft) { x = 6; /* Left wire padding */ } 
+            else { y = h - 15; /* Bottom wire padding */ }
 
-            animationId = requestAnimationFrame(loop);
-        }
-        loop();
+            p.el.style.left = x + 'px';
+            p.el.style.top = y + 'px';
+        });
+
+        requestAnimationFrame(animate);
     }
 
+    // 任務檢查
+    let stage = 1;
     function checkMission() {
         let success = false;
         let msg = "";
-
-        if (missionStage === 1) {
+        
+        // Stage 1: Fast (Low R)
+        if (stage === 1) {
             if (currentLen === 'short' && currentThick === 'thick') {
                 success = true;
-                msg = "Correct! Short & Thick = Low Resistance = Bright Bulb!<br>答對了！短而粗 = 電阻小 = 燈泡最亮！";
+                msg = "Correct! Short & Thick wires let current flow fastest! \n(短而粗的導線電阻最小，電流最快！)";
             } else {
-                msg = "Not quite! Look at the current flow.<br>It's too slow! Make the path easier (Short & Thick).";
+                msg = "Not quite. Look at the speed. Is it fast? \n(還不夠快。試著把路變短、路面變闊。)";
             }
-        } else if (missionStage === 2) {
+        } 
+        // Stage 2: Slow (High R)
+        else {
             if (currentLen === 'long' && currentThick === 'thin') {
                 success = true;
-                msg = "Correct! Long & Thin = High Resistance = Dim Bulb.<br>答對了！長而幼 = 電阻大 = 燈泡最暗。";
+                msg = "Correct! Long & Thin wires cause a 'traffic jam'. \n(長而幼的導線電阻最大，電流最慢！)";
             } else {
-                msg = "Not quite! We need to make it harder for current to flow.<br>Make the path longer and narrower.";
+                msg = "Not quite. We want to slow them down. \n(還不夠慢。試著把路拉長、路面收窄。)";
             }
         }
 
         if (success) {
-            alert("🎉 " + msg.replace(/<br>/g, "\n"));
-            if (missionStage === 1) {
-                missionStage = 2;
-                missionText.innerHTML = "Mission 2: Make the bulb DIMMEST!<br>任務 2：讓燈泡變得最暗！";
+            alert("🎉 " + msg);
+            if (stage === 1) {
+                stage = 2;
+                missionText.innerText = "Mission 2: Make the electrons flow SLOWEST (High R).";
                 missionText.style.background = "#34495e";
-                missionText.style.border = "2px solid #2c3e50";
             } else {
-                missionText.innerHTML = "🏆 Circuit Master!<br>你是電路大師！";
+                missionText.innerText = "🏆 Current Master! You understand Resistance!";
                 missionText.style.background = "#27ae60";
-                missionText.style.border = "none";
             }
         } else {
-            alert("❌ " + msg.replace(/<br>/g, "\n"));
+            alert("❌ " + msg);
         }
     }
 
-    // Init
-    updateCircuit();
+    // 啟動
+    initElectrons();
+    updateCircuit(); // Apply initial settings
+    animate();
 
 </script>
 </body>
