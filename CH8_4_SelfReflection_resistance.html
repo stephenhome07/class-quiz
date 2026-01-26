@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Wire Builder Challenge</title>
+<title>Circuit Builder V2</title>
 <style>
     body {
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -12,58 +12,105 @@
         text-align: center;
         padding: 10px;
         margin: 0;
+        overflow-x: hidden;
     }
     .container {
-        max-width: 500px;
+        max-width: 600px;
         margin: 0 auto;
         background: #34495e;
         border-radius: 20px;
         padding: 20px;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
     }
-    h2 { color: #f1c40f; margin-top: 0; }
+    h2 { color: #f1c40f; margin: 0 0 10px 0; }
     
     .mission-box {
         background: #e67e22; color: white; padding: 10px; border-radius: 10px;
-        margin-bottom: 20px; font-weight: bold; animation: popIn 0.5s;
-    }
-    
-    /* 顯示區域 */
-    .viewport {
-        background: #ecf0f1; border-radius: 15px; height: 180px;
-        position: relative; overflow: hidden; margin-bottom: 20px;
-        border: 4px solid #bdc3c7;
-        display: flex; align-items: center; justify-content: flex-start; /* 左對齊 */
-        padding-left: 20px;
+        margin-bottom: 20px; font-weight: bold; animation: popIn 0.5s; border: 2px solid #d35400;
     }
 
-    /* 導線 (動態變化) */
-    .wire {
+    /* --- 電路畫布區域 --- */
+    .circuit-board {
+        background: #ecf0f1; 
+        border-radius: 15px; 
+        height: 250px;
+        position: relative; 
+        margin-bottom: 20px;
+        border: 4px solid #bdc3c7;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        overflow: hidden;
+    }
+
+    /* 電路迴路容器 (會隨長度變寬) */
+    .circuit-loop {
+        position: relative;
+        width: 200px; /* 初始寬度 (Short) */
+        height: 160px;
+        transition: width 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    /* 標準導線 (黑線) */
+    .wire-std {
+        position: absolute;
+        background: #333;
+        z-index: 1;
+    }
+    /* 左邊豎線 */
+    .wire-left { width: 4px; height: 100%; left: 0; top: 0; }
+    /* 右邊豎線 */
+    .wire-right { width: 4px; height: 100%; right: 0; top: 0; }
+    /* 底部橫線 */
+    .wire-bottom { width: 100%; height: 4px; bottom: 0; left: 0; }
+    /* 頂部左小段 (連接測試線) */
+    .wire-top-l { width: 10px; height: 4px; top: 0; left: 0; }
+    /* 頂部右小段 */
+    .wire-top-r { width: 10px; height: 4px; top: 0; right: 0; }
+
+    /* --- 測試導線 (User Wire) --- */
+    .test-wire {
+        position: absolute;
+        top: 0; left: 10px; right: 10px; /* 撐滿中間 */
+        height: 20px; /* 初始 (Thick) */
         background: #95a5a6;
         border: 2px solid #7f8c8d;
-        position: relative;
-        transition: all 0.5s ease;
+        transform: translateY(-50%); /* 居中對齊線路 */
+        transition: height 0.3s ease, background-color 0.3s;
+        z-index: 2;
+        box-shadow: inset 0 0 5px rgba(0,0,0,0.2);
+        display: flex;
+        align-items: center;
         overflow: hidden;
-        /* 默認值 */
-        width: 100px; height: 20px; 
     }
     
-    /* 電子動畫 */
-    .electron {
-        width: 8px; height: 8px; background: #f1c40f; border-radius: 50%;
-        position: absolute; top: 50%; transform: translateY(-50%);
-        box-shadow: 0 0 5px #f1c40f;
-        animation: moveRight linear infinite;
+    /* 元件 */
+    .battery {
+        position: absolute; bottom: -15px; left: 50%; transform: translateX(-50%);
+        font-size: 30px; background: #ecf0f1; padding: 0 5px; z-index: 5;
+    }
+    .bulb-container {
+        position: absolute; top: 50%; right: -25px; transform: translateY(-50%);
+        z-index: 5; text-align: center;
+    }
+    .bulb {
+        font-size: 50px; color: #444;
+        transition: color 0.3s, text-shadow 0.3s;
+        filter: drop-shadow(0 2px 2px rgba(0,0,0,0.2));
     }
 
-    @keyframes moveRight {
-        0% { left: -10px; opacity: 0; }
-        10% { opacity: 1; }
-        90% { opacity: 1; }
-        100% { left: 100%; opacity: 0; }
+    /* 電子動畫點 */
+    .electron-dot {
+        position: absolute;
+        width: 6px; height: 6px; 
+        background: #f1c40f; 
+        border-radius: 50%;
+        opacity: 0;
+        z-index: 10;
+        box-shadow: 0 0 4px #f1c40f;
     }
 
-    /* 控制面板 */
+    /* --- 控制面板 --- */
     .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
     .control-group { background: rgba(0,0,0,0.2); padding: 10px; border-radius: 10px; }
     .control-label { font-size: 0.9rem; color: #bdc3c7; margin-bottom: 5px; display: block; }
@@ -76,19 +123,12 @@
     }
     .btn.active { background: #3498db; border-color: #3498db; }
     
-    /* 結果顯示 */
+    /* 數值顯示 */
     .stats {
         display: flex; justify-content: space-around; margin-top: 20px;
         background: #22313f; padding: 10px; border-radius: 10px;
     }
-    .stat-item { font-size: 0.9rem; }
-    .stat-val { font-size: 1.2rem; font-weight: bold; color: #f1c40f; display: block; }
-
-    /* 燈泡 */
-    .bulb {
-        position: absolute; right: 20px; font-size: 50px; color: #444;
-        transition: color 0.3s, text-shadow 0.3s;
-    }
+    .stat-val { font-size: 1.2rem; font-weight: bold; color: #f1c40f; }
 
     @keyframes popIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
@@ -97,19 +137,31 @@
 <body>
 
 <div class="container">
-    <h2>🛠️ Wire Builder (導線建造師)</h2>
+    <h2>⚡ Circuit Builder V2</h2>
     
     <div class="mission-box" id="mission-text">
         Mission 1: Make the bulb BRIGHTEST!<br>任務 1：讓燈泡變得最亮！
     </div>
 
-    <div class="viewport">
-        <div style="font-size:30px; margin-right:10px;">🔋</div>
-        
-        <div class="wire" id="wire-obj">
+    <div class="circuit-board">
+        <div class="circuit-loop" id="loop-container">
+            <div class="wire-std wire-left"></div>
+            <div class="wire-std wire-bottom"></div>
+            <div class="wire-std wire-right"></div>
+            <div class="wire-std wire-top-l"></div>
+            <div class="wire-std wire-top-r"></div>
+
+            <div class="test-wire" id="test-wire">
+                <div style="width:100%; text-align:center; color:#555; font-size:10px; font-weight:bold;">TEST WIRE</div>
             </div>
 
-        <div class="bulb" id="bulb-obj">💡</div>
+            <div class="battery">🔋</div>
+            <div class="bulb-container">
+                <div class="bulb" id="bulb-obj">💡</div>
+            </div>
+            
+            <div id="electron-layer"></div>
+        </div>
     </div>
 
     <div class="controls">
@@ -131,8 +183,8 @@
     </div>
 
     <div class="stats">
-        <div class="stat-item">Resistance (電阻)<span class="stat-val" id="res-val">Low</span></div>
-        <div class="stat-item">Current (電流)<span class="stat-val" id="curr-val">High</span></div>
+        <div>Resistance: <span class="stat-val" id="res-val">Low</span></div>
+        <div>Current: <span class="stat-val" id="curr-val">High</span></div>
     </div>
 
     <button onclick="checkMission()" style="width:100%; margin-top:20px; padding:15px; background:#27ae60; color:white; border:none; border-radius:10px; font-size:1.1rem; font-weight:bold; cursor:pointer;">Check Mission (檢查任務)</button>
@@ -143,15 +195,19 @@
     let currentLen = 'short';
     let currentThick = 'thick';
     let missionStage = 1;
+    let electrons = [];
+    let animationId;
 
-    const wire = document.getElementById('wire-obj');
+    const loopContainer = document.getElementById('loop-container');
+    const testWire = document.getElementById('test-wire');
     const bulb = document.getElementById('bulb-obj');
     const resVal = document.getElementById('res-val');
     const currVal = document.getElementById('curr-val');
     const missionText = document.getElementById('mission-text');
+    const electronLayer = document.getElementById('electron-layer');
 
     function setProp(type, val, btn) {
-        // 更新按鈕樣式
+        // 切換按鈕
         const parent = btn.parentElement;
         Array.from(parent.children).forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
@@ -159,68 +215,143 @@
         if (type === 'len') currentLen = val;
         if (type === 'thick') currentThick = val;
 
-        updateWireVisuals();
+        updateCircuit();
     }
 
-    function updateWireVisuals() {
-        // 1. 改變幾何形狀
-        // Length: Short=100px, Long=250px
-        const width = currentLen === 'short' ? 100 : 250;
-        // Thickness: Thin=10px, Thick=40px
-        const height = currentThick === 'thin' ? 10 : 40;
-        
-        wire.style.width = width + 'px';
-        wire.style.height = height + 'px';
+    function updateCircuit() {
+        // 1. 視覺變化 (幾何)
+        // 長度變化 -> 改變整個迴路的寬度
+        if (currentLen === 'short') {
+            loopContainer.style.width = "200px";
+        } else {
+            loopContainer.style.width = "350px"; // 拉長迴路
+        }
 
-        // 2. 計算物理量
-        // Logic: 
-        // Short + Thick = Lowest R (Best)
-        // Long + Thin = Highest R (Worst)
-        
+        // 粗幼變化 -> 改變 Test Wire 的高度
+        if (currentThick === 'thick') {
+            testWire.style.height = "25px";
+            testWire.style.background = "#bdc3c7"; // 粗線顏色淺一點
+        } else {
+            testWire.style.height = "6px";
+            testWire.style.background = "#7f8c8d"; // 幼線顏色深一點
+        }
+
+        // 2. 物理量計算
         let rScore = 0;
         if (currentLen === 'long') rScore += 2;
         if (currentThick === 'thin') rScore += 2;
-        // rScore: 0 (Best), 2 (Med), 4 (Worst)
 
-        let rText = "Low";
-        let cText = "High";
-        let bulbBrightness = 1;
-        let electronSpeed = 1;
+        let speed = 2; // 像素/幀
+        let density = 50; // 產生頻率
+        let brightness = 1;
 
-        if (rScore === 0) { // Short Thick
-            rText = "Very Low"; cText = "Max"; bulbBrightness = 1; electronSpeed = 0.8;
+        if (rScore === 0) { // Short Thick (Best)
+            resVal.innerText = "Very Low"; currVal.innerText = "Max";
+            brightness = 1; speed = 3; density = 10; 
         } else if (rScore === 2) { // Mixed
-            rText = "Medium"; cText = "Medium"; bulbBrightness = 0.5; electronSpeed = 1.5;
-        } else { // Long Thin
-            rText = "Very High"; cText = "Tiny"; bulbBrightness = 0.1; electronSpeed = 3; // Slow speed (duration high)
+            resVal.innerText = "Medium"; currVal.innerText = "Medium";
+            brightness = 0.5; speed = 1.5; density = 30;
+        } else { // Long Thin (Worst)
+            resVal.innerText = "Very High"; currVal.innerText = "Tiny";
+            brightness = 0.1; speed = 0.5; density = 60;
         }
 
-        resVal.innerText = rText;
-        currVal.innerText = cText;
-
-        // 3. 更新燈泡
-        if (bulbBrightness > 0.8) {
-            bulb.style.color = "#f1c40f"; bulb.style.textShadow = "0 0 30px #f1c40f";
-        } else if (bulbBrightness > 0.4) {
-            bulb.style.color = "#95a5a6"; bulb.style.textShadow = "0 0 10px #f1c40f";
+        // 3. 燈泡亮度
+        if (brightness > 0.8) {
+            bulb.style.color = "#f1c40f"; bulb.style.textShadow = "0 0 30px #f1c40f, 0 0 60px orange";
+        } else if (brightness > 0.4) {
+            bulb.style.color = "#f39c12"; bulb.style.textShadow = "0 0 10px #f39c12";
         } else {
-            bulb.style.color = "#333"; bulb.style.textShadow = "none";
+            bulb.style.color = "#444"; bulb.style.textShadow = "none";
         }
 
-        // 4. 更新電子動畫 (數量與速度)
-        wire.innerHTML = ''; // 清空
-        // Thick = 多電子, Thin = 少電子
-        const electronCount = currentThick === 'thick' ? 8 : 2; 
-        
-        for(let i=0; i<electronCount; i++) {
-            let e = document.createElement('div');
-            e.className = 'electron';
-            // 隨機錯開位置
-            e.style.top = Math.random() * 80 + 10 + "%"; 
-            e.style.animationDuration = electronSpeed + "s";
-            e.style.animationDelay = Math.random() * electronSpeed + "s";
-            wire.appendChild(e);
+        // 重啟電子動畫
+        startElectronFlow(speed, density);
+    }
+
+    // --- 電子流動動畫系統 ---
+    function startElectronFlow(speed, spawnRate) {
+        // 清除舊電子
+        electronLayer.innerHTML = '';
+        electrons = [];
+        if (animationId) cancelAnimationFrame(animationId);
+
+        let frameCount = 0;
+
+        function loop() {
+            frameCount++;
+            const w = loopContainer.offsetWidth;
+            const h = loopContainer.offsetHeight;
+
+            // 產生新電子
+            if (frameCount % spawnRate === 0) {
+                const el = document.createElement('div');
+                el.className = 'electron-dot';
+                // 起點：電池正極 (底部中間)
+                // 為了視覺效果，我們設定為順時針流動 (真實電流是正->負，電子是負->正，這裡模擬電流方向比較直觀)
+                // 電流：電池正極(右下) -> 燈泡 -> 上方 -> 左方 -> 電池負極
+                // 這裡我們用「電流」方向 (Conventional Current)
+                
+                // 座標定義: 0,0 是左上角
+                // 為了簡單，我們定義路徑：Bottom-Left -> Top-Left -> Top-Right -> Bottom-Right -> Bottom-Left
+                // 這裡是電池出發 (Bottom-Center -> Left)
+                
+                el.dataset.pos = 0; // 0 to TotalPerimeter
+                el.dataset.section = 1; // 1:Bot-Left, 2:Left-Up, 3:Top-Right, 4:Right-Down, 5:Bot-Center
+                
+                // 初始位置：電池左側 (Bottom, 50%)
+                el.style.left = (w/2) + 'px';
+                el.style.top = (h - 2) + 'px'; // 底部線
+                
+                electronLayer.appendChild(el);
+                electrons.push({ dom: el, dist: 0 });
+            }
+
+            // 移動電子
+            for (let i = 0; i < electrons.length; i++) {
+                let e = electrons[i];
+                e.dist += speed;
+                
+                // 計算座標 (逆時針：電池->左->上->右->電池)
+                // 1. Bottom (Center to Left)
+                // 2. Left (Bottom to Top)
+                // 3. Top (Left to Right)
+                // 4. Right (Top to Bottom)
+                // 5. Bottom (Right to Center)
+                
+                let x, y;
+                const halfW = w / 2;
+                
+                if (e.dist < halfW) { // 底部向左
+                    x = halfW - e.dist;
+                    y = h - 2;
+                } else if (e.dist < halfW + h) { // 左側向上
+                    x = 0;
+                    y = (h - 2) - (e.dist - halfW);
+                } else if (e.dist < halfW + h + w) { // 頂部向右 (經過測試線!)
+                    x = (e.dist - (halfW + h));
+                    y = 0;
+                } else if (e.dist < halfW + h + w + h) { // 右側向下 (經過燈泡)
+                    x = w - 4; // 線寬修正
+                    y = (e.dist - (halfW + h + w));
+                } else if (e.dist < halfW + h + w + h + halfW) { // 底部向左 (回電池)
+                    x = w - (e.dist - (halfW + h + w + h));
+                    y = h - 2;
+                } else {
+                    // 跑完一圈
+                    e.dom.remove();
+                    electrons.splice(i, 1);
+                    i--;
+                    continue;
+                }
+                
+                e.dom.style.left = x + 'px';
+                e.dom.style.top = y + 'px';
+            }
+
+            animationId = requestAnimationFrame(loop);
         }
+        loop();
     }
 
     function checkMission() {
@@ -228,20 +359,18 @@
         let msg = "";
 
         if (missionStage === 1) {
-            // Target: Brightest (Short + Thick)
             if (currentLen === 'short' && currentThick === 'thick') {
                 success = true;
-                msg = "Correct! Short & Thick wire has the LEAST resistance.<br>答對了！短而粗的導線電阻最小。";
+                msg = "Correct! Short & Thick = Low Resistance = Bright Bulb!<br>答對了！短而粗 = 電阻小 = 燈泡最亮！";
             } else {
-                msg = "Try again! We need LESS resistance.<br>再試試！我們需要減少電阻（路要短、要闊）。";
+                msg = "Not quite! Look at the current flow.<br>It's too slow! Make the path easier (Short & Thick).";
             }
         } else if (missionStage === 2) {
-            // Target: Dimmest (Long + Thin)
             if (currentLen === 'long' && currentThick === 'thin') {
                 success = true;
-                msg = "Correct! Long & Thin wire has the HIGHEST resistance.<br>答對了！長而幼的導線電阻最大。";
+                msg = "Correct! Long & Thin = High Resistance = Dim Bulb.<br>答對了！長而幼 = 電阻大 = 燈泡最暗。";
             } else {
-                msg = "Try again! We need MORE resistance.<br>再試試！我們需要增加電阻（路要長、要窄）。";
+                msg = "Not quite! We need to make it harder for current to flow.<br>Make the path longer and narrower.";
             }
         }
 
@@ -250,10 +379,12 @@
             if (missionStage === 1) {
                 missionStage = 2;
                 missionText.innerHTML = "Mission 2: Make the bulb DIMMEST!<br>任務 2：讓燈泡變得最暗！";
-                missionText.style.background = "#34495e"; // Change color
+                missionText.style.background = "#34495e";
+                missionText.style.border = "2px solid #2c3e50";
             } else {
-                missionText.innerHTML = "🏆 You are a Wire Master!<br>你已完全掌握導線特性！";
+                missionText.innerHTML = "🏆 Circuit Master!<br>你是電路大師！";
                 missionText.style.background = "#27ae60";
+                missionText.style.border = "none";
             }
         } else {
             alert("❌ " + msg.replace(/<br>/g, "\n"));
@@ -261,7 +392,7 @@
     }
 
     // Init
-    updateWireVisuals();
+    updateCircuit();
 
 </script>
 </body>
