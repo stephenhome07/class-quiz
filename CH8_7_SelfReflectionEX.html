@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Ch 8.7 Basic Revision</title>
+<style>
+    body {
+        font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif;
+        background-color: #ecf0f1;
+        color: #2c3e50;
+        text-align: center;
+        padding: 20px;
+        margin: 0;
+        user-select: none;
+    }
+
+    .container { max-width: 600px; margin: 0 auto; padding-bottom: 50px; }
+
+    h1 { color: #e67e22; margin-bottom: 5px; font-size: 1.6rem; }
+    .subtitle { color: #7f8c8d; font-size: 0.95rem; margin-bottom: 25px; }
+
+    /* 練習卡片 */
+    .card {
+        background: white;
+        border-radius: 15px;
+        padding: 20px;
+        margin-bottom: 25px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        text-align: left;
+        border-left: 6px solid #bdc3c7;
+        transition: transform 0.3s;
+    }
+    .card.done { border-left-color: #2ecc71; opacity: 0.8; }
+
+    .card-title {
+        font-weight: bold; font-size: 1.1rem; margin-bottom: 10px;
+        display: flex; align-items: center; gap: 10px; color: #2c3e50;
+    }
+    .icon-box {
+        width: 32px; height: 32px; background: #ecf0f1; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center; font-size: 1.2rem;
+    }
+
+    /* 視覺圖解區 */
+    .visual {
+        background: #f8f9fa; border-radius: 10px; padding: 15px;
+        text-align: center; margin-bottom: 15px; border: 1px dashed #bdc3c7;
+    }
+    svg { width: 100%; max-width: 180px; height: auto; display: block; margin: 0 auto; }
+
+    /* 按鈕選項 */
+    .options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .btn {
+        padding: 12px; border: 2px solid #e0e0e0; background: white;
+        border-radius: 8px; font-size: 1rem; cursor: pointer; color: #555;
+        transition: 0.2s; font-weight: bold;
+    }
+    .btn:hover { background: #f0f0f0; }
+    
+    .btn.correct { background: #d4edda; border-color: #28a745; color: #155724; }
+    .btn.wrong { background: #f8d7da; border-color: #dc3545; color: #721c24; opacity: 0.6; }
+
+    .feedback {
+        margin-top: 12px; font-size: 0.9rem; line-height: 1.4; display: none;
+        padding: 10px; border-radius: 8px; background: #eee; color: #333;
+    }
+    .highlight { color: #d35400; font-weight: bold; }
+
+</style>
+</head>
+<body>
+
+<div class="container">
+    <h1>⚡ Basic Booster 基礎補底</h1>
+    <p class="subtitle">Understand the core concepts before calculating.<br>計算前，先弄懂核心概念。</p>
+
+    <div class="card" id="card-1">
+        <div class="card-title">
+            <div class="icon-box">⏰</div>
+            <div>Time Conversion (時間轉換)</div>
+        </div>
+        <div class="visual">
+            <svg viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="45" fill="none" stroke="#bdc3c7" stroke-width="2"/>
+                <path d="M 50 50 L 50 5 A 45 45 0 0 1 50 95 Z" fill="#3498db" opacity="0.3"/>
+                <line x1="50" y1="50" x2="50" y2="5" stroke="#333" stroke-width="2"/>
+                <line x1="50" y1="50" x2="50" y2="95" stroke="#333" stroke-width="2"/>
+                <text x="50" y="55" text-anchor="middle" font-size="12" fill="#333">30 mins</text>
+            </svg>
+            <p style="margin:5px 0 0 0; font-size:0.9rem;">To calculate electricity bill (kWh),<br><b>30 minutes</b> = ? Hours</p>
+        </div>
+        <div class="options">
+            <button class="btn" onclick="check(1, false, this)">30 Hours</button>
+            <button class="btn" onclick="check(1, true, this)">0.5 Hours</button>
+        </div>
+        <div class="feedback" id="fb-1">
+            <b>💡 Concept:</b><br>
+            Use Hours for bills.<br>
+            $30 \div 60 = 0.5 \text{ h}$<br>
+            (算電費要用「小時」。30分鐘是半小時，即 0.5。)
+        </div>
+    </div>
+
+    <div class="card" id="card-2">
+        <div class="card-title">
+            <div class="icon-box">🔥</div>
+            <div>Wasted Energy (浪費的能量)</div>
+        </div>
+        <div class="visual">
+            <svg viewBox="0 0 100 120">
+                <path d="M 30 70 Q 10 50 30 20 Q 50 0 70 20 Q 90 50 70 70 L 60 90 L 40 90 Z" fill="#f1c40f" stroke="#f39c12" stroke-width="2"/>
+                <path d="M 80 40 Q 90 30 100 40" stroke="#e74c3c" stroke-width="2" fill="none"/>
+                <path d="M 80 50 Q 90 40 100 50" stroke="#e74c3c" stroke-width="2" fill="none"/>
+                <text x="50" y="115" text-anchor="middle" font-size="12" fill="#555">Touch a lit bulb...</text>
+            </svg>
+            <p style="margin:5px 0 0 0; font-size:0.9rem;">Why does an old light bulb feel <b>HOT</b>?<br>為什麼舊燈泡摸起來很<b>熱</b>？</p>
+        </div>
+        <div class="options" style="grid-template-columns: 1fr;">
+            <button class="btn" onclick="check(2, false, this)">It means it is powerful (代表它夠光)</button>
+            <button class="btn" onclick="check(2, true, this)">It is wasting energy as Heat (它在浪費能量變熱)</button>
+        </div>
+        <div class="feedback" id="fb-2">
+            <b>💡 Concept:</b><br>
+            A lamp is for LIGHT, not heat.<br>
+            Heat = Wasted Energy.<br>
+            (燈是用來照明的。變熱代表能量被浪費了。)
+        </div>
+    </div>
+
+    <div class="card" id="card-3">
+        <div class="card-title">
+            <div class="icon-box">💰</div>
+            <div>Running Cost (運作成本)</div>
+        </div>
+        <div class="visual">
+            <div style="display:flex; justify-content:space-around; align-items:end; height:80px;">
+                <div style="text-align:center;">
+                    <div style="font-size:2rem;">🏷️</div>
+                    <div style="font-size:0.8rem;">Price Tag<br>(售價)</div>
+                </div>
+                <div style="font-size:1.5rem;">VS</div>
+                <div style="text-align:center;">
+                    <div style="font-size:2rem;">⚡</div>
+                    <div style="font-size:0.8rem;">Electricity Bill<br>(電費)</div>
+                </div>
+            </div>
+            <p style="margin:10px 0 0 0; font-size:0.9rem;">If you use an air-conditioner for 5 years, which cost is usually higher?<br>冷氣機用5年，哪筆錢通常更貴？</p>
+        </div>
+        <div class="options" style="grid-template-columns: 1fr;">
+            <button class="btn" onclick="check(3, false, this)">The Price Tag (買機的錢)</button>
+            <button class="btn" onclick="check(3, true, this)">The Electricity Bill (5年的電費)</button>
+        </div>
+        <div class="feedback" id="fb-3">
+            <b>💡 Concept:</b><br>
+            Electricity is expensive over time!<br>
+            This is called <span class="highlight">Running Cost (運作成本)</span>.<br>
+            (電費長遠來說很貴！這就是運作成本。)
+        </div>
+    </div>
+
+    <div id="final-msg" style="display:none; margin-top:30px; color:#27ae60; font-weight:bold;">
+        🎉 Good Job! You are ready for calculations!<br>做得好！你準備好進行計算了！
+    </div>
+
+</div>
+
+<script>
+    let correctCount = 0;
+
+    function check(id, isCorrect, btn) {
+        const fb = document.getElementById('fb-' + id);
+        const card = document.getElementById('card-' + id);
+        const parent = btn.parentElement;
+        const btns = parent.getElementsByClassName('btn');
+
+        // Disable buttons
+        for(let b of btns) {
+            b.onclick = null;
+            b.style.cursor = 'default';
+            if(b !== btn) b.style.opacity = 0.5;
+        }
+
+        fb.style.display = 'block';
+
+        if(isCorrect) {
+            btn.classList.add('correct');
+            card.classList.add('done');
+            correctCount++;
+        } else {
+            btn.classList.add('wrong');
+            // Auto highlight correct one conceptually (optional, but let's keep it simple)
+        }
+
+        if(correctCount === 3) {
+            document.getElementById('final-msg').style.display = 'block';
+            window.scrollTo(0, document.body.scrollHeight);
+        }
+    }
+</script>
+</body>
+</html>
