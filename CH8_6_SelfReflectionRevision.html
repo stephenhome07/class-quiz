@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Ch 8.5 Revision Challenge</title>
+<title>Ch 8.6 Revision Challenge</title>
 <style>
     body {
         font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif;
@@ -49,7 +49,7 @@
         text-align: left;
         transition: transform 0.3s, border-color 0.3s;
         position: relative;
-        opacity: 0.5; /* 初始鎖定狀態 */
+        opacity: 0.5;
         pointer-events: none;
     }
 
@@ -65,7 +65,6 @@
         background: #273c49;
     }
 
-    /* 標題區 */
     .card-header {
         display: flex;
         align-items: center;
@@ -97,7 +96,7 @@
     .topic-title { font-weight: bold; font-size: 1.1rem; color: #ecf0f1; }
     .topic-desc { font-size: 0.85rem; color: #bdc3c7; }
 
-    /* SVG 區域 */
+    /* SVG Visuals */
     .visual-area {
         background: #2c3e50;
         border-radius: 10px;
@@ -105,17 +104,16 @@
         text-align: center;
         margin-bottom: 15px;
     }
-    svg { width: 100%; max-width: 200px; height: auto; display: block; margin: 0 auto; }
+    svg { width: 100%; max-width: 200px; height: auto; display: block; margin: 0 auto; overflow: visible; }
     
-    .wire { fill: none; stroke: #bdc3c7; stroke-width: 3; stroke-linecap: round; }
-    .bulb { fill: #555; stroke: #bdc3c7; stroke-width: 2; }
-    .bulb.on { fill: #f1c40f; stroke: #f39c12; filter: drop-shadow(0 0 5px #f1c40f); }
-    .bulb-x { stroke: #e74c3c; stroke-width: 4; display: none; }
+    .plug-face { fill: #ecf0f1; stroke: #bdc3c7; stroke-width: 2; }
+    .pin { fill: #333; }
+    .wire-demo { stroke-width: 8; stroke-linecap: round; }
 
-    /* 選項按鈕 */
+    /* Options */
     .options-grid {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: 1fr;
         gap: 10px;
     }
     .btn-opt {
@@ -127,6 +125,8 @@
         font-size: 0.95rem;
         cursor: pointer;
         transition: 0.2s;
+        text-align: left;
+        display: flex; justify-content: space-between; align-items: center;
     }
     .btn-opt:hover { background: #7f8c8d; }
     .btn-opt:active { transform: scale(0.98); }
@@ -144,7 +144,6 @@
         margin-top: 10px; font-size: 0.9rem; font-weight: bold; min-height: 1.2em; text-align: center;
     }
 
-    /* 最後成功訊息 */
     #final-success {
         display: none;
         margin-top: 30px;
@@ -160,8 +159,8 @@
 <body>
 
 <div class="container">
-    <h1>⚡ Ch 8.5 Revision Challenge</h1>
-    <p class="subtitle">Prove your skills to check the boxes!<br>通過考驗來獲取你的學習認證！</p>
+    <h1>⚡ Ch 8.6 Revision Challenge</h1>
+    <p class="subtitle">Complete the tasks to check the boxes!<br>完成任務以勾選反思項目！</p>
 
     <div class="progress-container">
         <div class="progress-bar" id="progress"></div>
@@ -172,18 +171,23 @@
             <div class="checkbox-circle">✔</div>
             <div>
                 <div class="topic-title">1. Identification (辨識)</div>
-                <div class="topic-desc">Can you identify this circuit?<br>你能分辨這是什麼電路嗎？</div>
+                <div class="topic-desc">I can identify the 3 wires.<br>我能辨識三條電線。</div>
             </div>
         </div>
         <div class="visual-area">
-            <svg viewBox="0 0 200 100">
-                <path d="M 20 50 L 60 50" class="wire"/> <path d="M 140 50 L 180 50" class="wire"/> <path d="M 60 50 L 60 20 L 140 20 L 140 50" class="wire"/> <path d="M 60 50 L 60 80 L 140 80 L 140 50" class="wire"/> <circle cx="100" cy="20" r="12" class="bulb on"/>
-                <circle cx="100" cy="80" r="12" class="bulb on"/>
+            <svg viewBox="0 0 150 100">
+                <rect x="25" y="10" width="100" height="80" rx="10" class="plug-face"/>
+                <rect x="70" y="20" width="10" height="15" class="pin"/> <rect x="40" y="55" width="10" height="15" class="pin"/> <rect x="100" y="55" width="10" height="15" class="pin"/> <text x="75" y="45" text-anchor="middle" font-size="10" fill="#7f8c8d">E</text>
+                <text x="105" y="80" text-anchor="middle" font-size="10" fill="#7f8c8d">L</text>
+                
+                <path d="M 110 60 L 140 80" stroke="#f1c40f" stroke-width="3" marker-end="url(#arrow)"/>
             </svg>
+            <p style="margin:5px 0 0 0; font-size:0.9rem;">Which wire connects to the <b>Live (L)</b> pin?<br>哪條線連接<b>火線 (L)</b>？</p>
         </div>
         <div class="options-grid">
-            <button class="btn-opt" onclick="checkAnswer(1, false, this)">Series (串聯)</button>
-            <button class="btn-opt" onclick="checkAnswer(1, true, this)">Parallel (並聯)</button>
+            <button class="btn-opt" onclick="checkAnswer(1, false, this)"><span>Blue (藍色)</span> <span style="font-size:1.2rem; color:#3498db">■</span></button>
+            <button class="btn-opt" onclick="checkAnswer(1, true, this)"><span>Brown (啡色)</span> <span style="font-size:1.2rem; color:#8d6e63">■</span></button>
+            <button class="btn-opt" onclick="checkAnswer(1, false, this)"><span>Yellow/Green (黃綠色)</span> <span style="font-size:1.2rem; color:#2ecc71">■</span></button>
         </div>
         <div class="feedback" id="fb-1"></div>
     </div>
@@ -192,17 +196,22 @@
         <div class="card-header">
             <div class="checkbox-circle">✔</div>
             <div>
-                <div class="topic-title">2. Real Life (生活應用)</div>
-                <div class="topic-desc">Why are household lights Parallel?<br>為什麼家居電燈用並聯？</div>
+                <div class="topic-title">2. Safety (安全)</div>
+                <div class="topic-desc">The Earth Wire protects me by connecting to...<br>地線透過連接______來保護我。</div>
             </div>
         </div>
         <div class="visual-area">
-            <div style="font-size: 3rem;">🏠💡</div>
+            <svg viewBox="0 0 200 120">
+                <rect x="50" y="40" width="100" height="60" rx="5" fill="none" stroke="#bdc3c7" stroke-width="2"/>
+                <text x="100" y="75" text-anchor="middle" fill="#bdc3c7" font-size="12">Appliance</text>
+                
+                <path d="M 10 20 L 50 20 L 50 40" fill="none" stroke="#2ecc71" stroke-width="4" stroke-dasharray="4,2"/>
+                <text x="30" y="15" text-anchor="middle" fill="#2ecc71" font-size="10">Earth Wire</text>
+            </svg>
         </div>
-        <div class="options-grid" style="grid-template-columns: 1fr;">
-            <button class="btn-opt" onclick="checkAnswer(2, false, this)">To make them dimmer (令燈暗一點)</button>
-            <button class="btn-opt" onclick="checkAnswer(2, true, this)">Independent Control (獨立開關)</button>
-            <button class="btn-opt" onclick="checkAnswer(2, false, this)">To use less wire (節省電線)</button>
+        <div class="options-grid">
+            <button class="btn-opt" onclick="checkAnswer(2, false, this)">The Plastic Handle (塑膠手柄)</button>
+            <button class="btn-opt" onclick="checkAnswer(2, true, this)">The Metal Case (金屬外殼)</button>
         </div>
         <div class="feedback" id="fb-2"></div>
     </div>
@@ -211,31 +220,28 @@
         <div class="card-header">
             <div class="checkbox-circle">✔</div>
             <div>
-                <div class="topic-title">3. Logic (邏輯)</div>
-                <div class="topic-desc">Predict: This is a <b>Series</b> circuit.<br>預測：這是<b>串聯</b>電路。</div>
+                <div class="topic-title">3. Fuse (保險絲)</div>
+                <div class="topic-desc">Rule: Slightly higher than operating current.<br>規則：略高於運作電流。</div>
             </div>
         </div>
         <div class="visual-area">
-            <svg viewBox="0 0 200 60">
-                <path d="M 10 30 L 190 30" class="wire"/>
-                <circle cx="60" cy="30" r="12" class="bulb on" id="bulb-3a"/>
-                <circle cx="140" cy="30" r="12" class="bulb on" id="bulb-3b"/>
-                
-                <path d="M 52 22 L 68 38 M 68 22 L 52 38" class="bulb-x" id="x-mark"/>
-            </svg>
-            <p style="margin:5px 0 0 0; font-size:0.9rem;">If Bulb A breaks (X), Bulb B will...<br>如果燈泡 A 壞了，燈泡 B 會...</p>
+            <div style="background:#2c3e50; padding:10px; border:1px solid #7f8c8d; border-radius:5px; display:inline-block;">
+                <div style="color:#bdc3c7; font-size:0.8rem;">Specification</div>
+                <div style="color:#fff; font-weight:bold; font-size:1.2rem;">Current: 4.2 A</div>
+            </div>
+            <p style="margin:10px 0 0 0; font-size:0.9rem;">Which fuse is best?<br>哪個保險絲最合適？</p>
         </div>
         <div class="options-grid">
-            <button class="btn-opt" onclick="checkLogic(false, this)">Stay ON (繼續亮)</button>
-            <button class="btn-opt" onclick="checkLogic(true, this)">Go OFF (熄滅)</button>
+            <button class="btn-opt" onclick="checkAnswer(3, false, this)"><span>3 A</span> <span style="font-size:0.8rem; color:#e74c3c">(Too low)</span></button>
+            <button class="btn-opt" onclick="checkAnswer(3, true, this)"><span>5 A</span> <span style="font-size:0.8rem; color:#2ecc71">(Best fit)</span></button>
+            <button class="btn-opt" onclick="checkAnswer(3, false, this)"><span>13 A</span> <span style="font-size:0.8rem; color:#f1c40f">(Too high)</span></button>
         </div>
         <div class="feedback" id="fb-3"></div>
     </div>
 
     <div id="final-success">
-        <h2>🎉 Mission Accomplished!</h2>
-        <p>You have mastered the basics of Series & Parallel circuits.<br>你已掌握了串聯與並聯的基礎！</p>
-        <p>Ready for Ch 8.6! 🚀</p>
+        <h2>🎉 All Safety Checks Passed!</h2>
+        <p>You are now a qualified Safety Inspector.<br>你現在是合格的安全檢查員了。</p>
     </div>
 
 </div>
@@ -253,7 +259,6 @@
         const card = document.getElementById('card-' + id);
         if(card) {
             card.classList.add('active');
-            // Smooth scroll
             card.scrollIntoView({behavior: 'smooth', block: 'center'});
         }
     }
@@ -261,7 +266,6 @@
     function markCompleted(id) {
         const card = document.getElementById('card-' + id);
         card.classList.add('completed');
-        // Disable all buttons in this card
         const btns = card.getElementsByClassName('btn-opt');
         for(let btn of btns) {
             btn.style.opacity = 0.6;
@@ -269,54 +273,34 @@
         }
     }
 
-    // Question 1 & 2 Handler
     function checkAnswer(qId, isCorrect, btn) {
         const fb = document.getElementById('fb-' + qId);
         
         if (isCorrect) {
             btn.classList.add('correct');
-            fb.innerText = "Correct! ✅";
+            // Feedback Text Logic
+            if(qId === 1) fb.innerText = "Correct! Brown is Burning/Live. ✅";
+            if(qId === 2) fb.innerText = "Correct! It creates a path for leakage current. ✅";
+            if(qId === 3) fb.innerText = "Correct! 5A is slightly higher than 4.2A. ✅";
+            
             fb.style.color = "#2ecc71";
             markCompleted(qId);
             updateProgress();
             
-            // Unlock next or finish
             if(qId < 3) unlockCard(qId + 1);
+            else {
+                setTimeout(() => {
+                    document.getElementById('final-success').style.display = 'block';
+                    document.getElementById('final-success').scrollIntoView({behavior: 'smooth'});
+                }, 500);
+            }
         } else {
             btn.classList.add('wrong');
-            fb.innerText = "Try again! ❌";
-            fb.style.color = "#e74c3c";
-            setTimeout(() => btn.classList.remove('wrong'), 500);
-        }
-    }
+            
+            if(qId === 1) fb.innerText = "Remember: Brown is Fire (Live)! 🔥";
+            if(qId === 2) fb.innerText = "Plastic doesn't conduct electricity! ❌";
+            if(qId === 3) fb.innerText = "Too low (blows instantly) or Too high (unsafe). ❌";
 
-    // Question 3 Logic Handler (Special visual effect)
-    function checkLogic(isCorrect, btn) {
-        const fb = document.getElementById('fb-3');
-        
-        // Visualize the scenario first
-        document.getElementById('x-mark').style.display = 'block'; // Break bulb A
-        
-        if (isCorrect) {
-            // Correct logic: Series break = All off
-            document.getElementById('bulb-3a').classList.remove('on');
-            document.getElementById('bulb-3b').classList.remove('on'); // B goes off
-            
-            btn.classList.add('correct');
-            fb.innerText = "Correct! The path is broken. ✅";
-            fb.style.color = "#2ecc71";
-            markCompleted(3);
-            updateProgress();
-            
-            setTimeout(() => {
-                document.getElementById('final-success').style.display = 'block';
-                document.getElementById('final-success').scrollIntoView({behavior: 'smooth'});
-            }, 500);
-            
-        } else {
-            // Wrong logic assumption
-            btn.classList.add('wrong');
-            fb.innerText = "Think about the Pizza/Road model! No path! ❌";
             fb.style.color = "#e74c3c";
             setTimeout(() => btn.classList.remove('wrong'), 500);
         }
