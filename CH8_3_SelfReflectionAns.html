@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ch 8.3 Diagnostic Check</title>
+<style>
+    body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; padding: 20px; }
+    .card { background: white; max-width: 500px; margin: 0 auto 20px auto; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+    h3 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+    .question { font-weight: bold; font-size: 1.1rem; margin-bottom: 15px; }
+    .options button {
+        display: block; width: 100%; margin: 8px 0; padding: 12px;
+        border: 2px solid #bdc3c7; background: white; border-radius: 8px;
+        text-align: left; cursor: pointer; font-size: 1rem; transition: 0.2s;
+    }
+    .options button:hover { background: #ecf0f1; }
+    .result { margin-top: 15px; padding: 15px; border-radius: 8px; display: none; }
+    .correct { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    .wrong { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    .next-btn { 
+        display: none; width: 100%; padding: 12px; background: #3498db; 
+        color: white; border: none; border-radius: 8px; font-size: 1.1rem; 
+        cursor: pointer; margin-top: 20px; 
+    }
+</style>
+</head>
+<body>
+
+<div class="card" id="q1-card">
+    <h3>Question 1 / 2</h3>
+    <div class="question">Which instrument must be connected in Parallel (Hugging)?<br>哪種儀器必須並聯/擁抱連接？</div>
+    <div class="options">
+        <button onclick="checkQ1('A')">(A) Ammeter (安培計)</button>
+        <button onclick="checkQ1('B')">(B) Voltmeter (伏特計)</button>
+    </div>
+    <div class="result" id="res1"></div>
+    <button class="next-btn" id="btn1" onclick="showQ2()">Next Question (下一題)</button>
+</div>
+
+<div class="card" id="q2-card" style="display:none;">
+    <h3>Question 2 / 2</h3>
+    <div class="question">Three 1.5V cells are connected in series. Total Voltage?<br>三枚 1.5V 電池串聯，總電壓是？</div>
+    <div class="options">
+        <button onclick="checkQ2('A')">(A) 1.5 V</button>
+        <button onclick="checkQ2('B')">(B) 3.0 V</button>
+        <button onclick="checkQ2('C')">(C) 4.5 V</button>
+    </div>
+    <div class="result" id="res2"></div>
+</div>
+
+<script>
+    function checkQ1(ans) {
+        const res = document.getElementById('res1');
+        res.style.display = 'block';
+        if (ans === 'B') {
+            res.className = 'result correct';
+            res.innerHTML = "✅ <b>Correct!</b><br>Voltmeter must 'HUG' the component (Parallel) to measure the energy difference.<br>答對了！伏特計必須「擁抱」(並聯) 元件來量度能量差。";
+            document.getElementById('btn1').style.display = 'block';
+        } else {
+            res.className = 'result wrong';
+            res.innerHTML = "❌ <b>Wrong.</b><br>Ammeter is for 'Holding Hands' (Series).<br>For Voltage, we need the Voltmeter.<br>錯了，安培計是「手拉手」(串聯) 的。";
+        }
+    }
+
+    function showQ2() {
+        document.getElementById('q1-card').style.display = 'none';
+        document.getElementById('q2-card').style.display = 'block';
+    }
+
+    function checkQ2(ans) {
+        const res = document.getElementById('res2');
+        res.style.display = 'block';
+        if (ans === 'C') {
+            res.className = 'result correct';
+            res.innerHTML = "✅ <b>Correct!</b><br>In Series: 1.5V + 1.5V + 1.5V = 4.5V.<br>答對了！串聯電池電壓相加。";
+        } else {
+            res.className = 'result wrong';
+            res.innerHTML = "❌ <b>Wrong.</b><br>When cells are in series (helping hands), we ADD them up.<br>1.5 + 1.5 + 1.5 = ?<br>當電池串聯(手拉手)時，我們要將電壓相加。";
+        }
+    }
+</script>
+</body>
+</html>
