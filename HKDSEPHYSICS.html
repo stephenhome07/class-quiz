@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HKDSE Physics Performance Analyzer Pro (v1.4)</title>
+    <title>HKDSE Physics Performance Analyzer Pro (v1.5)</title>
     
     <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -70,7 +70,7 @@
             if (!isOpen) return null;
             return (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-                    <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 transform transition-all flex flex-col max-h-[90vh]">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl p-6 transform transition-all flex flex-col max-h-[90vh]">
                         <div className="flex items-center gap-3 mb-4 flex-shrink-0">
                             {type === 'danger' && <Icon name="AlertTriangle" className="text-red-500" size={24}/>}
                             {type === 'success' && <Icon name="CheckCircle" className="text-green-500" size={24}/>}
@@ -78,10 +78,8 @@
                             <h3 className="text-lg font-bold text-gray-800">{title}</h3>
                         </div>
                         
-                        {/* Text Message */}
                         {message && <p className="text-gray-600 mb-4 text-sm whitespace-pre-line flex-shrink-0">{message}</p>}
                         
-                        {/* Custom Content (e.g. Prompt Textarea) */}
                         {content && <div className="flex-1 overflow-hidden flex flex-col mb-4">{content}</div>}
 
                         <div className="flex justify-end gap-3 flex-shrink-0 pt-2 border-t mt-auto">
@@ -234,7 +232,7 @@
 
             // Backup
             const exportData = () => {
-                const data = { exams, history, exportedAt: new Date().toISOString(), version: "1.4" };
+                const data = { exams, history, exportedAt: new Date().toISOString(), version: "1.5" };
                 const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
@@ -389,12 +387,31 @@
                 const [selectedTopics, setSelectedTopics] = useState([]);
                 const [difficulty, setDifficulty] = useState('Medium');
                 const [count, setCount] = useState(5);
-                const [promptText, setPromptText] = useState('');
                 const [isGenerating, setIsGenerating] = useState(false);
+                
+                // New Prompt Settings State (Persistent)
+                const [promptSettings, setPromptSettings] = useState({
+                    language: 'English',
+                    role: 'Experienced HKDSE Physics Marker',
+                    questionType: 'Mixed (MC + SQ)',
+                    weaknessFocusRatio: 20, // percentage
+                    customInstructions: 'Provide full marking scheme. Explain answers in Cantonese style.'
+                });
+
+                // Load Settings
+                useEffect(() => {
+                    const savedSettings = localStorage.getItem('hkdse_prompt_settings');
+                    if (savedSettings) setPromptSettings(JSON.parse(savedSettings));
+                }, []);
+
+                // Save Settings
+                useEffect(() => {
+                    localStorage.setItem('hkdse_prompt_settings', JSON.stringify(promptSettings));
+                }, [promptSettings]);
                 
                 const latestExamReport = studentTrend && studentTrend.length > 0 ? studentTrend[studentTrend.length - 1] : null;
 
-                useEffect(() => { setSelectedTopics([]); setPromptText(''); }, [selectedStudentId]);
+                useEffect(() => { setSelectedTopics([]); }, [selectedStudentId]);
 
                 const toggleTopic = (id) => {
                     if (selectedTopics.includes(id)) setSelectedTopics(selectedTopics.filter(t => t !== id));
@@ -426,21 +443,36 @@
                         
                         const topicNames = targetTopics.map(t => t.name);
                         
-                        // Robust Weakness Filtering: Match by Name inclusion
+                        // Extract specific weaknesses (Concept Detail) for the selected topics
                         const relevantWeaknesses = latestExamReport.weaknesses
-                            .filter(w => topicNames.some(tName => tName.includes(w.topic) || w.topic.includes(tName)))
-                            .map(w => w.concept);
+                            .filter(w => topicNames.some(tName => tName.includes(w.topic) || w.topic.includes(tName)));
                         
-                        const uniqueWeaknesses = [...new Set(relevantWeaknesses)];
+                        // Deduplicate based on concept text
+                        const uniqueWeaknesses = [...new Set(relevantWeaknesses.map(w => w.concept))];
 
-                        const prompt = `You are a Physics Tutor. Generate ${count} ${difficulty} questions for HKDSE Physics.
-Topics: ${topicNames.join(', ')}
-Student Weaknesses (Focus here): 
-${uniqueWeaknesses.length > 0 ? uniqueWeaknesses.map(w => `- ${w}`).join('\n') : "None detected for selected topics."}
+                        // Calculate number of targeted questions
+                        const targetedCount = Math.max(1, Math.ceil(count * (promptSettings.weaknessFocusRatio / 100)));
 
-Provide questions, answers, and explanations.`;
+                        const prompt = `Role: ${promptSettings.role}
+Language: ${promptSettings.language}
+Task: Generate ${count} HKDSE Physics practice questions.
+Difficulty: ${difficulty}
+Question Type: ${promptSettings.questionType}
+Selected Topics: ${topicNames.join(', ')}
 
-                        setPromptText(prompt);
+[CRITICAL REQUIREMENT - TARGETED REMEDIAL]
+The student has specific misconceptions/weaknesses in these areas:
+${uniqueWeaknesses.length > 0 ? uniqueWeaknesses.map(w => `- ${w}`).join('\n') : "(No specific weakness recorded for selected topics, focus on general practice)"}
+
+Constraint: You MUST ensure at least ${promptSettings.weaknessFocusRatio}% (approx. ${targetedCount} questions) explicitly address the misconceptions listed above to verify conceptual correction.
+
+Custom Instructions:
+${promptSettings.customInstructions}
+
+Output Format:
+1. Question
+2. Answer & Detailed Marking Scheme
+3. Concept Explanation (Why this is the answer)`;
 
                         const newEntry = {
                             id: Date.now(),
@@ -479,7 +511,7 @@ Provide questions, answers, and explanations.`;
                                 },
                                 onCancel: closeModal
                             });
-                        }, 500); // Fake delay for UX
+                        }, 500); 
 
                     } catch (err) {
                         setIsGenerating(false);
@@ -493,8 +525,9 @@ Provide questions, answers, and explanations.`;
 
                 return (
                     <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
+                        {/* Left Column: Basic Settings */}
                         <div className="card p-6 flex flex-col h-full overflow-y-auto">
-                            <h2 className="text-xl font-bold mb-4">1. 設定參數</h2>
+                            <h2 className="text-xl font-bold mb-4">1. 練習範圍</h2>
                             <div className="mb-4 p-2 bg-blue-50 text-blue-800 rounded font-medium">{students.find(s => s.id === selectedStudentId)?.label}</div>
                             <div className="mb-4 flex-1 overflow-hidden flex flex-col">
                                 <div className="flex justify-between items-center mb-2"><label className="font-bold text-gray-700">選擇課題</label><button onClick={autoSelectWeak} className="text-xs bg-red-50 text-red-600 px-2 py-1 rounded border border-red-200">載入弱項</button></div>
@@ -504,16 +537,68 @@ Provide questions, answers, and explanations.`;
                             </div>
                             <div className="grid grid-cols-2 gap-4 mt-4">
                                 <select value={difficulty} onChange={e => setDifficulty(e.target.value)} className="border p-2 rounded"><option value="High">High (拔尖)</option><option value="Medium">Medium (鞏固)</option><option value="Low">Low (補底)</option></select>
-                                <input type="number" value={count} onChange={e => setCount(e.target.value)} className="border p-2 rounded" min="1" max="20" />
+                                <input type="number" value={count} onChange={e => setCount(e.target.value)} className="border p-2 rounded" min="1" max="20" placeholder="題數" />
                             </div>
                             <button onClick={handleGenerate} disabled={isGenerating} className={`mt-6 btn-primary py-3 rounded-lg font-bold flex justify-center items-center gap-2 ${isGenerating ? 'opacity-75 cursor-wait' : ''}`}>
-                                {isGenerating ? <><Icon name="Loader2" className="animate-spin"/> 生成中...</> : <><Icon name="Cpu" /> 生成並記錄</>}
+                                {isGenerating ? <><Icon name="Loader2" className="animate-spin"/> 生成中...</> : <><Icon name="Cpu" /> 生成 Prompt</>}
                             </button>
                         </div>
-                        <div className="card p-6 flex flex-col h-full">
-                            <h2 className="text-xl font-bold mb-4">2. AI Prompt</h2>
-                            <textarea className="flex-1 w-full bg-slate-900 text-slate-200 p-4 rounded-lg font-mono text-sm resize-none mb-4" readOnly value={promptText || "請先生成..."}></textarea>
-                            <button onClick={() => { navigator.clipboard.writeText(promptText); alert('已複製'); }} disabled={!promptText} className="bg-slate-700 hover:bg-slate-600 text-white py-3 rounded-lg flex justify-center gap-2"><Icon name="Copy" /> 複製</button>
+                        
+                        {/* Right Column: Advanced Settings (Persistent) */}
+                        <div className="card p-6 flex flex-col h-full bg-slate-50 border border-slate-200">
+                            <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-slate-800">
+                                <Icon name="Sliders" /> AI 提示詞進階設定
+                            </h2>
+                            <p className="text-xs text-gray-500 mb-4">此處設定會自動儲存 (Auto-save)，無需每次重複輸入。</p>
+                            
+                            <div className="space-y-4 overflow-y-auto flex-1 custom-scrollbar pr-2">
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1">AI 角色 (Role)</label>
+                                    <input type="text" className="w-full p-2 border rounded text-sm" value={promptSettings.role} onChange={e => setPromptSettings({...promptSettings, role: e.target.value})} />
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1">語言 (Language)</label>
+                                    <select className="w-full p-2 border rounded text-sm" value={promptSettings.language} onChange={e => setPromptSettings({...promptSettings, language: e.target.value})}>
+                                        <option value="English">English</option>
+                                        <option value="Traditional Chinese">繁體中文</option>
+                                        <option value="Bilingual (Eng/Chi)">中英對照</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1">題型 (Type)</label>
+                                    <select className="w-full p-2 border rounded text-sm" value={promptSettings.questionType} onChange={e => setPromptSettings({...promptSettings, questionType: e.target.value})}>
+                                        <option value="Mixed (MC + SQ)">混合 (MC + 長題目)</option>
+                                        <option value="MC Only">純 MC</option>
+                                        <option value="Long Questions Only">純長題目</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <div className="flex justify-between items-center mb-1">
+                                        <label className="text-sm font-semibold text-gray-700">弱項針對比例 (Weakness Focus)</label>
+                                        <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">{promptSettings.weaknessFocusRatio}%</span>
+                                    </div>
+                                    <input 
+                                        type="range" min="0" max="100" step="10" 
+                                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                                        value={promptSettings.weaknessFocusRatio} 
+                                        onChange={e => setPromptSettings({...promptSettings, weaknessFocusRatio: Number(e.target.value)})} 
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">AI 將確保至少 {promptSettings.weaknessFocusRatio}% 的題目直接對應學生的 Concept Detail 弱點。</p>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1">自訂指令 (Custom Instructions)</label>
+                                    <textarea 
+                                        className="w-full p-2 border rounded text-sm h-32 resize-none" 
+                                        placeholder="例如: 解釋請用廣東話口語 / 必須包含 Marking Scheme..."
+                                        value={promptSettings.customInstructions} 
+                                        onChange={e => setPromptSettings({...promptSettings, customInstructions: e.target.value})} 
+                                    />
+                                </div>
+                            </div>
                         </div>
                     </div>
                 );
