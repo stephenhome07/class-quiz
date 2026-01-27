@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HKDSE Physics Performance Analyzer Pro</title>
+    <title>HKDSE Physics Performance Analyzer Pro (v1.2)</title>
     
     <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -65,7 +65,7 @@
             return <span ref={containerRef} style={{ display: 'inline-flex', alignItems: 'center', verticalAlign: 'middle' }} />;
         };
 
-        // --- Custom Modal Component (Replaces alert/confirm) ---
+        // --- Custom Modal Component ---
         const Modal = ({ isOpen, title, message, type = 'info', onConfirm, onCancel }) => {
             if (!isOpen) return null;
             return (
@@ -77,7 +77,7 @@
                             {type === 'info' && <Icon name="Info" className="text-blue-500" size={24}/>}
                             <h3 className="text-lg font-bold text-gray-800">{title}</h3>
                         </div>
-                        <p className="text-gray-600 mb-6 text-sm">{message}</p>
+                        <p className="text-gray-600 mb-6 text-sm whitespace-pre-line">{message}</p>
                         <div className="flex justify-end gap-3">
                             {onCancel && (
                                 <button onClick={onCancel} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded">
@@ -104,7 +104,6 @@
         const ScoreInput = ({ value, max, onSave }) => {
             const [localVal, setLocalVal] = useState(value);
             
-            // Sync with prop if it changes externally
             useEffect(() => {
                 setLocalVal(value);
             }, [value]);
@@ -168,18 +167,43 @@
             const showModal = (config) => setModalConfig({ ...config, isOpen: true });
             const closeModal = () => setModalConfig({ ...modalConfig, isOpen: false });
 
-            // Load history
+            // --- Persistence Logic (FIXED) ---
+            
+            // Load Data
             useEffect(() => {
-                const savedHistory = localStorage.getItem('hkdse_ex_history_v2');
-                if (savedHistory) setHistory(JSON.parse(savedHistory));
+                try {
+                    const savedHistory = localStorage.getItem('hkdse_ex_history_v2');
+                    if (savedHistory) setHistory(JSON.parse(savedHistory));
+
+                    const savedExams = localStorage.getItem('hkdse_ex_exams_v2');
+                    if (savedExams) setExams(JSON.parse(savedExams));
+                } catch (e) {
+                    console.error("Error loading data from local storage", e);
+                }
             }, []);
 
-            // Save history
+            // Save History
             useEffect(() => {
                 localStorage.setItem('hkdse_ex_history_v2', JSON.stringify(history));
             }, [history]);
 
-            // Update student list
+            // Save Exams (NEW)
+            useEffect(() => {
+                try {
+                    localStorage.setItem('hkdse_ex_exams_v2', JSON.stringify(exams));
+                } catch (e) {
+                    if (e.name === 'QuotaExceededError') {
+                        showModal({ 
+                            title: '儲存空間不足', 
+                            message: '瀏覽器儲存空間已滿 (超過 5MB)。\n新上傳的考試數據無法自動儲存。\n\n建議：請匯出備份，然後清除部分舊考試數據。', 
+                            type: 'danger', 
+                            onConfirm: closeModal 
+                        });
+                    }
+                }
+            }, [exams]);
+
+            // Update student list when exams change
             useEffect(() => {
                 if (exams.length > 0) {
                     const allStudents = {};
@@ -267,7 +291,7 @@
                     exams: exams,
                     history: history,
                     exportedAt: new Date().toISOString(),
-                    version: "1.1"
+                    version: "1.2"
                 };
                 const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
                 const url = URL.createObjectURL(blob);
