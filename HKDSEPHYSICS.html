@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HKDSE Physics Performance Analyzer Pro (v1.3)</title>
+    <title>HKDSE Physics Performance Analyzer Pro (v1.4)</title>
     
     <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -66,19 +66,25 @@
         };
 
         // --- Custom Modal Component ---
-        const Modal = ({ isOpen, title, message, type = 'info', onConfirm, onCancel }) => {
+        const Modal = ({ isOpen, title, message, type = 'info', onConfirm, onCancel, content }) => {
             if (!isOpen) return null;
             return (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-                    <div className="bg-white rounded-lg shadow-xl w-96 p-6 transform transition-all">
-                        <div className="flex items-center gap-3 mb-4">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 transform transition-all flex flex-col max-h-[90vh]">
+                        <div className="flex items-center gap-3 mb-4 flex-shrink-0">
                             {type === 'danger' && <Icon name="AlertTriangle" className="text-red-500" size={24}/>}
                             {type === 'success' && <Icon name="CheckCircle" className="text-green-500" size={24}/>}
                             {type === 'info' && <Icon name="Info" className="text-blue-500" size={24}/>}
                             <h3 className="text-lg font-bold text-gray-800">{title}</h3>
                         </div>
-                        <p className="text-gray-600 mb-6 text-sm whitespace-pre-line">{message}</p>
-                        <div className="flex justify-end gap-3">
+                        
+                        {/* Text Message */}
+                        {message && <p className="text-gray-600 mb-4 text-sm whitespace-pre-line flex-shrink-0">{message}</p>}
+                        
+                        {/* Custom Content (e.g. Prompt Textarea) */}
+                        {content && <div className="flex-1 overflow-hidden flex flex-col mb-4">{content}</div>}
+
+                        <div className="flex justify-end gap-3 flex-shrink-0 pt-2 border-t mt-auto">
                             {onCancel && (
                                 <button onClick={onCancel} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded">
                                     取消
@@ -92,7 +98,7 @@
                                     'bg-blue-600 hover:bg-blue-700'
                                 }`}
                             >
-                                確定
+                                確定 / 複製
                             </button>
                         </div>
                     </div>
@@ -103,21 +109,14 @@
         // --- Optimized Score Input Component ---
         const ScoreInput = ({ value, max, onSave }) => {
             const [localVal, setLocalVal] = useState(value);
-            
-            useEffect(() => {
-                setLocalVal(value);
-            }, [value]);
+            useEffect(() => setLocalVal(value), [value]);
 
             const handleBlur = () => {
-                if (localVal !== value) {
-                    onSave(localVal);
-                }
+                if (localVal !== value) onSave(localVal);
             };
 
             const handleKeyDown = (e) => {
-                if (e.key === 'Enter') {
-                    e.target.blur();
-                }
+                if (e.key === 'Enter') e.target.blur();
             };
 
             return (
@@ -152,54 +151,31 @@
         // --- Main App ---
         const App = () => {
             const [view, setView] = useState('upload'); 
-            
-            // --- Data State ---
             const [exams, setExams] = useState([]); 
             const [students, setStudents] = useState([]);
             const [selectedStudentId, setSelectedStudentId] = useState('');
-            
-            // --- History State ---
             const [history, setHistory] = useState([]);
-
-            // --- UI State (Modal) ---
-            const [modalConfig, setModalConfig] = useState({ isOpen: false, title: '', message: '', type: 'info', onConfirm: null, onCancel: null });
+            const [modalConfig, setModalConfig] = useState({ isOpen: false, title: '', message: '', type: 'info', onConfirm: null, onCancel: null, content: null });
 
             const showModal = (config) => setModalConfig({ ...config, isOpen: true });
             const closeModal = () => setModalConfig({ ...modalConfig, isOpen: false });
 
-            // --- Persistence Logic ---
+            // Persistence
             useEffect(() => {
                 try {
                     const savedHistory = localStorage.getItem('hkdse_ex_history_v2');
                     if (savedHistory) setHistory(JSON.parse(savedHistory));
-
                     const savedExams = localStorage.getItem('hkdse_ex_exams_v2');
                     if (savedExams) setExams(JSON.parse(savedExams));
-                } catch (e) {
-                    console.error("Error loading data", e);
-                }
+                } catch (e) { console.error(e); }
             }, []);
 
-            useEffect(() => {
-                localStorage.setItem('hkdse_ex_history_v2', JSON.stringify(history));
-            }, [history]);
-
-            useEffect(() => {
-                try {
-                    localStorage.setItem('hkdse_ex_exams_v2', JSON.stringify(exams));
-                } catch (e) {
-                    if (e.name === 'QuotaExceededError') {
-                        showModal({ 
-                            title: '儲存空間不足', 
-                            message: '瀏覽器儲存空間已滿。\n無法自動儲存新考試數據。\n建議匯出備份後清除舊資料。', 
-                            type: 'danger', 
-                            onConfirm: closeModal 
-                        });
-                    }
-                }
+            useEffect(() => { localStorage.setItem('hkdse_ex_history_v2', JSON.stringify(history)); }, [history]);
+            useEffect(() => { 
+                try { localStorage.setItem('hkdse_ex_exams_v2', JSON.stringify(exams)); } 
+                catch (e) { if (e.name === 'QuotaExceededError') alert('儲存空間不足，請備份並清除舊資料'); }
             }, [exams]);
 
-            // Update student list
             useEffect(() => {
                 if (exams.length > 0) {
                     const allStudents = {};
@@ -221,59 +197,34 @@
                     });
                     const studList = Object.values(allStudents).sort((a,b) => a.id.localeCompare(b.id));
                     setStudents(studList);
-                    if (studList.length > 0 && !selectedStudentId) {
-                        setSelectedStudentId(studList[0].id);
-                    }
+                    if (studList.length > 0 && !selectedStudentId) setSelectedStudentId(studList[0].id);
                 }
             }, [exams]);
 
-            // --- Analysis Logic ---
+            // Analysis
             const analyzeExam = (exam, studentId) => {
                 const studentRow = exam.markSheetData.find(s => `${s.Class}-${s.ClassNumber}` === studentId);
                 if (!studentRow) return null;
-
                 const analysis = {};
                 const conceptWeaknesses = [];
-                let totalScore = 0;
-                let totalMax = 0;
-
+                let totalScore = 0, totalMax = 0;
                 exam.mapData.forEach(q => {
                     const qId = q.Question_ID;
                     const topicId = q.Topic_ID || 'Unknown';
                     const topicName = q.Topic_Name || 'General';
                     const maxMark = parseFloat(q.Full_Mark) || 1;
                     const studentScore = parseFloat(studentRow[qId]) || 0;
-                    
-                    if (!analysis[topicId]) {
-                        analysis[topicId] = { name: topicName, score: 0, max: 0 };
-                    }
-
+                    if (!analysis[topicId]) analysis[topicId] = { name: topicName, score: 0, max: 0 };
                     analysis[topicId].score += studentScore;
                     analysis[topicId].max += maxMark;
                     totalScore += studentScore;
                     totalMax += maxMark;
-
                     if ((studentScore / maxMark) < 0.5) {
-                        conceptWeaknesses.push({
-                            topic: topicName,
-                            concept: q.Concept_Detail,
-                            difficulty: q.Difficulty,
-                            qId: qId
-                        });
+                        conceptWeaknesses.push({ topic: topicName, concept: q.Concept_Detail, difficulty: q.Difficulty, qId: qId });
                     }
                 });
-
-                Object.values(analysis).forEach(t => {
-                    t.percentage = t.max > 0 ? (t.score / t.max) * 100 : 0;
-                });
-
-                return {
-                    examName: exam.name,
-                    examId: exam.id,
-                    overallPercentage: totalMax > 0 ? (totalScore / totalMax) * 100 : 0,
-                    topics: analysis,
-                    weaknesses: conceptWeaknesses
-                };
+                Object.values(analysis).forEach(t => t.percentage = t.max > 0 ? (t.score / t.max) * 100 : 0);
+                return { examName: exam.name, examId: exam.id, overallPercentage: totalMax > 0 ? (totalScore / totalMax) * 100 : 0, topics: analysis, weaknesses: conceptWeaknesses };
             };
 
             const studentTrend = useMemo(() => {
@@ -281,14 +232,9 @@
                 return exams.map(exam => analyzeExam(exam, selectedStudentId)).filter(Boolean);
             }, [selectedStudentId, exams]);
 
-            // --- Backup Logic ---
+            // Backup
             const exportData = () => {
-                const data = {
-                    exams: exams,
-                    history: history,
-                    exportedAt: new Date().toISOString(),
-                    version: "1.3"
-                };
+                const data = { exams, history, exportedAt: new Date().toISOString(), version: "1.4" };
                 const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
@@ -298,7 +244,6 @@
                 a.click();
                 document.body.removeChild(a);
             };
-
             const importData = (file) => {
                 if (!file) return;
                 const reader = new FileReader();
@@ -308,63 +253,28 @@
                         if (data.exams && data.history) {
                             showModal({
                                 title: '警告：覆蓋數據',
-                                message: `備份日期: ${data.exportedAt || '未知'}\n考試數: ${data.exams.length}\n紀錄數: ${data.history.length}\n確定要還原嗎？這將會清除現有數據。`,
+                                message: `確定要還原嗎？這將會清除現有數據。`,
                                 type: 'danger',
-                                onConfirm: () => {
-                                    setExams(data.exams);
-                                    setHistory(data.history);
-                                    closeModal();
-                                    showModal({ title: '成功', message: '數據已成功還原！', type: 'success', onConfirm: closeModal });
-                                },
+                                onConfirm: () => { setExams(data.exams); setHistory(data.history); closeModal(); },
                                 onCancel: closeModal
                             });
-                        } else {
-                            showModal({ title: '錯誤', message: '無效的備份檔案。', type: 'danger', onConfirm: closeModal });
                         }
-                    } catch (err) {
-                        console.error(err);
-                        showModal({ title: '錯誤', message: '無法讀取檔案。', type: 'danger', onConfirm: closeModal });
-                    }
+                    } catch (err) { alert('無效的備份檔案'); }
                 };
                 reader.readAsText(file);
             };
 
-            // --- Views ---
-
             const Sidebar = () => (
                 <div className="w-64 bg-white h-screen fixed left-0 top-0 border-r flex flex-col z-10 shadow-lg">
                     <div className="p-6 border-b bg-blue-600 text-white">
-                        <h1 className="text-xl font-bold flex items-center gap-2">
-                            <Icon name="Activity" className="text-white"/> 
-                            物理科追蹤系統
-                        </h1>
-                        <p className="text-xs text-blue-100 mt-1 opacity-80">HKDSE Physics Tracker</p>
+                        <h1 className="text-xl font-bold flex items-center gap-2"><Icon name="Activity"/> 物理科追蹤系統</h1>
                     </div>
                     <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-                        <button onClick={() => setView('upload')} className={`w-full flex items-center gap-3 px-4 py-3 text-left rounded-lg transition ${view === 'upload' ? 'bg-blue-50 text-blue-700 font-bold shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}>
-                            <Icon name="Database" size={18} /> 數據庫 (Data)
-                        </button>
-                        <button onClick={() => setView('dashboard')} disabled={exams.length === 0} className={`w-full flex items-center gap-3 px-4 py-3 text-left rounded-lg transition ${view === 'dashboard' ? 'bg-blue-50 text-blue-700 font-bold shadow-sm' : 'text-gray-600 hover:bg-gray-50 disabled:opacity-50'}`}>
-                            <Icon name="LineChart" size={18} /> 成績追蹤 (Trend)
-                        </button>
-                        <button onClick={() => setView('generate')} disabled={exams.length === 0} className={`w-full flex items-center gap-3 px-4 py-3 text-left rounded-lg transition ${view === 'generate' ? 'bg-blue-50 text-blue-700 font-bold shadow-sm' : 'text-gray-600 hover:bg-gray-50 disabled:opacity-50'}`}>
-                            <Icon name="Zap" size={18} /> 練習生成 (AI)
-                        </button>
-                        <button onClick={() => setView('history')} className={`w-full flex items-center gap-3 px-4 py-3 text-left rounded-lg transition ${view === 'history' ? 'bg-blue-50 text-blue-700 font-bold shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}>
-                            <Icon name="ClipboardList" size={18} /> 練習管理 (Tracker)
-                        </button>
+                        <button onClick={() => setView('upload')} className={`w-full flex items-center gap-3 px-4 py-3 text-left rounded-lg transition ${view === 'upload' ? 'bg-blue-50 text-blue-700 font-bold shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}><Icon name="Database" size={18} /> 數據庫</button>
+                        <button onClick={() => setView('dashboard')} disabled={exams.length === 0} className={`w-full flex items-center gap-3 px-4 py-3 text-left rounded-lg transition ${view === 'dashboard' ? 'bg-blue-50 text-blue-700 font-bold shadow-sm' : 'text-gray-600 hover:bg-gray-50 disabled:opacity-50'}`}><Icon name="LineChart" size={18} /> 成績追蹤</button>
+                        <button onClick={() => setView('generate')} disabled={exams.length === 0} className={`w-full flex items-center gap-3 px-4 py-3 text-left rounded-lg transition ${view === 'generate' ? 'bg-blue-50 text-blue-700 font-bold shadow-sm' : 'text-gray-600 hover:bg-gray-50 disabled:opacity-50'}`}><Icon name="Zap" size={18} /> 練習生成</button>
+                        <button onClick={() => setView('history')} className={`w-full flex items-center gap-3 px-4 py-3 text-left rounded-lg transition ${view === 'history' ? 'bg-blue-50 text-blue-700 font-bold shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}><Icon name="ClipboardList" size={18} /> 練習管理</button>
                     </nav>
-                    
-                    <div className="p-4 bg-gray-50 border-t text-xs">
-                        <div className="font-bold text-gray-500 mb-2">已載入考試 ({exams.length})</div>
-                        <ul className="space-y-1 max-h-24 overflow-y-auto">
-                            {exams.map(e => (
-                                <li key={e.id} className="truncate text-gray-600 flex items-center gap-1">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span> {e.name}
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
                 </div>
             );
 
@@ -375,132 +285,43 @@
                 const [examName, setExamName] = useState('');
 
                 const handleParse = (file, setter) => {
-                    Papa.parse(file, {
-                        header: true,
-                        skipEmptyLines: true,
-                        complete: (results) => setter(results.data)
-                    });
+                    Papa.parse(file, { header: true, skipEmptyLines: true, complete: (results) => setter(results.data) });
                 };
-
                 const addExam = () => {
                     if (!tempMap || !tempMarks || !examName) return;
-                    const newExam = {
-                        id: Date.now().toString(),
-                        name: examName,
-                        mapData: tempMap,
-                        markSheetData: tempMarks,
-                        mcData: tempMc || []
-                    };
-                    setExams([...exams, newExam]);
-                    setTempMap(null);
-                    setTempMarks(null);
-                    setTempMc(null);
-                    setExamName('');
+                    setExams([...exams, { id: Date.now().toString(), name: examName, mapData: tempMap, markSheetData: tempMarks, mcData: tempMc || [] }]);
+                    setTempMap(null); setTempMarks(null); setTempMc(null); setExamName('');
                     showModal({ title: '成功', message: `已成功加入考試: ${examName}`, type: 'success', onConfirm: closeModal });
-                };
-
-                const confirmRemoveExam = (id) => {
-                    showModal({
-                        title: '確認刪除',
-                        message: '確定要移除此考試數據嗎？此操作無法復原。',
-                        type: 'danger',
-                        onConfirm: () => {
-                            setExams(exams.filter(x => x.id !== id));
-                            closeModal();
-                        },
-                        onCancel: closeModal
-                    });
                 };
 
                 return (
                     <div className="max-w-4xl mx-auto mt-6 p-6 space-y-8">
                         <div className="card p-6 bg-slate-50 border border-slate-200">
-                            <h2 className="text-lg font-bold text-slate-700 mb-4 flex items-center gap-2">
-                                <Icon name="Save" size={20} /> 系統數據管理
-                            </h2>
-                            <div className="flex flex-col sm:flex-row gap-4">
-                                <button onClick={exportData} className="flex-1 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 py-3 rounded-lg flex justify-center items-center gap-2 shadow-sm transition">
-                                    <Icon name="Download" size={18} /> 匯出備份 (Backup)
-                                </button>
+                            <h2 className="text-lg font-bold text-slate-700 mb-4 flex items-center gap-2"><Icon name="Save" size={20} /> 數據管理</h2>
+                            <div className="flex gap-4">
+                                <button onClick={exportData} className="flex-1 bg-white border border-slate-300 py-3 rounded-lg flex justify-center gap-2 shadow-sm"><Icon name="Download" size={18} /> 匯出備份</button>
                                 <div className="flex-1 relative">
-                                    <input 
-                                        type="file" 
-                                        accept=".json" 
-                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                        onChange={(e) => importData(e.target.files[0])}
-                                    />
-                                    <button className="w-full bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 py-3 rounded-lg flex justify-center items-center gap-2 shadow-sm transition pointer-events-none">
-                                        <Icon name="Upload" size={18} /> 匯入還原 (Restore)
-                                    </button>
+                                    <input type="file" accept=".json" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={(e) => importData(e.target.files[0])} />
+                                    <button className="w-full bg-white border border-slate-300 py-3 rounded-lg flex justify-center gap-2 shadow-sm pointer-events-none"><Icon name="Upload" size={18} /> 匯入還原</button>
                                 </div>
                             </div>
                         </div>
-
                         <div className="card p-8 border-l-4 border-blue-500 shadow-md">
-                            <h2 className="text-2xl font-bold mb-6 text-gray-800 flex items-center gap-2">
-                                <Icon name="PlusCircle" /> 新增考試數據
-                            </h2>
+                            <h2 className="text-2xl font-bold mb-6 text-gray-800 flex items-center gap-2"><Icon name="PlusCircle" /> 新增考試數據</h2>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                                <div className="col-span-2">
-                                    <label className="block text-sm font-bold text-gray-700 mb-1">考試名稱 (如: S5 Mid-Term)</label>
-                                    <input 
-                                        type="text" 
-                                        value={examName}
-                                        onChange={e => setExamName(e.target.value)}
-                                        className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none"
-                                        placeholder="輸入識別名稱..."
-                                    />
-                                </div>
-                                <div>
-                                    <FileUpload id="map-upload" label="1. 題目對照表 (MAP)" onUpload={f => handleParse(f, setTempMap)} />
-                                    {tempMap && <div className="text-xs text-green-600 flex items-center"><Icon name="Check" size={12}/> 已讀取</div>}
-                                </div>
-                                <div>
-                                    <FileUpload id="mark-upload" label="2. 成績表 (Marksheet)" onUpload={f => handleParse(f, setTempMarks)} />
-                                    {tempMarks && <div className="text-xs text-green-600 flex items-center"><Icon name="Check" size={12}/> 已讀取 {tempMarks.length} 學生</div>}
-                                </div>
-                                <div className="col-span-2">
-                                    <FileUpload id="mc-upload" label="3. MC 紀錄 (選填)" onUpload={f => handleParse(f, setTempMc)} />
-                                </div>
+                                <div className="col-span-2"><input type="text" value={examName} onChange={e => setExamName(e.target.value)} className="w-full p-2 border rounded" placeholder="考試名稱 (如: S5 Mid-Term)" /></div>
+                                <div><FileUpload id="map-upload" label="1. 題目對照表 (MAP)" onUpload={f => handleParse(f, setTempMap)} />{tempMap && <div className="text-xs text-green-600">已讀取</div>}</div>
+                                <div><FileUpload id="mark-upload" label="2. 成績表 (Marksheet)" onUpload={f => handleParse(f, setTempMarks)} />{tempMarks && <div className="text-xs text-green-600">已讀取 {tempMarks.length} 學生</div>}</div>
+                                <div className="col-span-2"><FileUpload id="mc-upload" label="3. MC 紀錄 (選填)" onUpload={f => handleParse(f, setTempMc)} /></div>
                             </div>
-                            
-                            <button 
-                                onClick={addExam}
-                                disabled={!tempMap || !tempMarks || !examName}
-                                className="w-full btn-primary py-3 rounded-lg font-bold shadow disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                確認加入此考試
-                            </button>
+                            <button onClick={addExam} disabled={!tempMap || !tempMarks || !examName} className="w-full btn-primary py-3 rounded-lg font-bold shadow disabled:opacity-50">確認加入此考試</button>
                         </div>
-
                         {exams.length > 0 && (
                             <div className="card p-6">
-                                <h3 className="font-bold text-gray-700 mb-4">現有考試列表</h3>
-                                <table className="w-full text-sm">
-                                    <thead className="bg-gray-50 text-left">
-                                        <tr>
-                                            <th className="p-3">名稱</th>
-                                            <th className="p-3">學生人數</th>
-                                            <th className="p-3 text-right">操作</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {exams.map((e) => (
-                                            <tr key={e.id} className="border-t">
-                                                <td className="p-3 font-medium">{e.name}</td>
-                                                <td className="p-3">{e.markSheetData.length}</td>
-                                                <td className="p-3 text-right">
-                                                    <button 
-                                                        onClick={() => confirmRemoveExam(e.id)}
-                                                        className="text-red-500 hover:text-red-700 text-xs underline"
-                                                    >
-                                                        移除
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                                <h3 className="font-bold text-gray-700 mb-4">現有考試</h3>
+                                <table className="w-full text-sm"><tbody>{exams.map(e => (
+                                    <tr key={e.id} className="border-t"><td className="p-3 font-medium">{e.name}</td><td className="p-3">{e.markSheetData.length} 人</td><td className="p-3 text-right"><button onClick={() => setExams(exams.filter(x => x.id !== e.id))} className="text-red-500 underline">移除</button></td></tr>
+                                ))}</tbody></table>
                             </div>
                         )}
                     </div>
@@ -511,132 +332,55 @@
                 const lineChartRef = useRef(null);
                 const barChartRef = useRef(null);
                 const [selectedExamIndex, setSelectedExamIndex] = useState(exams.length - 1); 
-
                 const activeReport = studentTrend ? studentTrend[selectedExamIndex] : null;
 
                 useEffect(() => {
                     if (studentTrend && lineChartRef.current) {
-                        if (lineChartRef.current.chartInstance) {
-                            lineChartRef.current.chartInstance.destroy();
-                        }
+                        if (lineChartRef.current.chartInstance) lineChartRef.current.chartInstance.destroy();
                         const ctx = lineChartRef.current.getContext('2d');
                         lineChartRef.current.chartInstance = new Chart(ctx, {
                             type: 'line',
                             data: {
                                 labels: studentTrend.map(r => r.examName),
-                                datasets: [{
-                                    label: '整體得分率 (%)',
-                                    data: studentTrend.map(r => r.overallPercentage),
-                                    borderColor: '#2563eb',
-                                    backgroundColor: 'rgba(37, 99, 235, 0.1)',
-                                    fill: true,
-                                    tension: 0.3
-                                }]
+                                datasets: [{ label: '整體得分率 (%)', data: studentTrend.map(r => r.overallPercentage), borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', fill: true }]
                             },
-                            options: {
-                                responsive: true,
-                                plugins: { title: { display: true, text: '學生成績趨勢' } },
-                                scales: { y: { min: 0, max: 100 } }
-                            }
+                            options: { responsive: true, scales: { y: { min: 0, max: 100 } } }
                         });
                     }
                 }, [studentTrend]);
 
                 useEffect(() => {
                     if (activeReport && barChartRef.current) {
-                        if (barChartRef.current.chartInstance) {
-                            barChartRef.current.chartInstance.destroy();
-                        }
-                        
-                        const topics = Object.entries(activeReport.topics)
-                            .sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true, sensitivity: 'base' }))
-                            .map(([_, t]) => t);
-
+                        if (barChartRef.current.chartInstance) barChartRef.current.chartInstance.destroy();
+                        const topics = Object.entries(activeReport.topics).sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true, sensitivity: 'base' })).map(([_, t]) => t);
                         const ctx = barChartRef.current.getContext('2d');
                         barChartRef.current.chartInstance = new Chart(ctx, {
                             type: 'bar',
                             data: {
                                 labels: topics.map(t => t.name.substring(0, 10)),
-                                datasets: [{
-                                    label: '課題得分率 (%)',
-                                    data: topics.map(t => t.percentage),
-                                    backgroundColor: topics.map(t => t.percentage < 50 ? '#ef4444' : '#22c55e')
-                                }]
+                                datasets: [{ label: '課題得分率 (%)', data: topics.map(t => t.percentage), backgroundColor: topics.map(t => t.percentage < 50 ? '#ef4444' : '#22c55e') }]
                             },
-                            options: {
-                                responsive: true,
-                                scales: { y: { min: 0, max: 100 } }
-                            }
+                            options: { responsive: true, scales: { y: { min: 0, max: 100 } } }
                         });
                     }
                 }, [activeReport]);
 
-                if (!studentTrend || studentTrend.length === 0) return <div className="p-8 text-center text-gray-500">請先在數據庫上傳考試資料。</div>;
+                if (!studentTrend || studentTrend.length === 0) return <div className="p-8 text-center text-gray-500">請先在數據庫上傳資料。</div>;
 
                 return (
                     <div className="p-6 space-y-6">
-                        <div className="flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-lg shadow-sm">
+                        <div className="flex justify-between items-center bg-white p-4 rounded-lg shadow-sm">
                             <h2 className="text-2xl font-bold text-gray-800">學生成績追蹤</h2>
-                            <div className="flex items-center gap-2 mt-4 md:mt-0">
-                                <Icon name="User" size={20} className="text-gray-500" />
-                                <select 
-                                    className="p-2 border rounded-md min-w-[250px] font-medium"
-                                    value={selectedStudentId}
-                                    onChange={(e) => setSelectedStudentId(e.target.value)}
-                                >
-                                    {students.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-                                </select>
-                            </div>
+                            <div className="flex gap-2"><Icon name="User" className="text-gray-500" /><select className="p-2 border rounded-md" value={selectedStudentId} onChange={(e) => setSelectedStudentId(e.target.value)}>{students.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select></div>
                         </div>
-
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            <div className="card p-6">
-                                <h3 className="font-bold text-gray-700 mb-2">考試趨勢 (Trend)</h3>
-                                <canvas ref={lineChartRef} height="150"></canvas>
-                            </div>
-
+                            <div className="card p-6"><canvas ref={lineChartRef} height="150"></canvas></div>
                             <div className="card p-6 flex flex-col">
-                                <div className="flex justify-between items-center mb-4">
-                                    <h3 className="font-bold text-gray-700">弱項分析 (Weaknesses)</h3>
-                                    <select 
-                                        className="text-sm border rounded p-1"
-                                        value={selectedExamIndex}
-                                        onChange={e => setSelectedExamIndex(Number(e.target.value))}
-                                    >
-                                        {studentTrend.map((r, i) => (
-                                            <option key={i} value={i}>{r.examName}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                
-                                {activeReport && (
-                                    <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar" style={{maxHeight: '250px'}}>
-                                        {activeReport.weaknesses.length === 0 ? (
-                                            <div className="text-center py-10 text-green-600 bg-green-50 rounded">
-                                                <Icon name="Award" size={32} className="mx-auto mb-2"/>
-                                                此考試表現優異，無顯著弱點
-                                            </div>
-                                        ) : (
-                                            activeReport.weaknesses.map((w, idx) => (
-                                                <div key={idx} className="p-3 bg-red-50 border-l-4 border-red-500 rounded text-sm relative group hover:bg-red-100 transition">
-                                                    <div className="font-bold text-red-800">{w.topic}</div>
-                                                    <div className="text-gray-700">{w.concept}</div>
-                                                </div>
-                                            ))
-                                        )}
-                                    </div>
-                                )}
+                                <div className="flex justify-between mb-4"><h3 className="font-bold">弱項分析</h3><select className="text-sm border rounded" value={selectedExamIndex} onChange={e => setSelectedExamIndex(Number(e.target.value))}>{studentTrend.map((r, i) => <option key={i} value={i}>{r.examName}</option>)}</select></div>
+                                {activeReport && <div className="flex-1 overflow-y-auto space-y-2 custom-scrollbar" style={{maxHeight: '250px'}}>{activeReport.weaknesses.map((w, idx) => <div key={idx} className="p-3 bg-red-50 border-l-4 border-red-500 rounded text-sm"><div className="font-bold text-red-800">{w.topic}</div><div>{w.concept}</div></div>)}</div>}
                             </div>
                         </div>
-
-                        <div className="card p-6">
-                            <h3 className="font-bold text-gray-700 mb-4">
-                                {activeReport ? `${activeReport.examName} - 課題詳細表現` : '課題表現'}
-                            </h3>
-                            <div className="h-64 w-full">
-                                <canvas ref={barChartRef}></canvas>
-                            </div>
-                        </div>
+                        <div className="card p-6"><div className="h-64 w-full"><canvas ref={barChartRef}></canvas></div></div>
                     </div>
                 );
             };
@@ -646,14 +390,11 @@
                 const [difficulty, setDifficulty] = useState('Medium');
                 const [count, setCount] = useState(5);
                 const [promptText, setPromptText] = useState('');
+                const [isGenerating, setIsGenerating] = useState(false);
                 
                 const latestExamReport = studentTrend && studentTrend.length > 0 ? studentTrend[studentTrend.length - 1] : null;
 
-                // Reset selection and prompt when student changes
-                useEffect(() => {
-                    setSelectedTopics([]);
-                    setPromptText('');
-                }, [selectedStudentId]);
+                useEffect(() => { setSelectedTopics([]); setPromptText(''); }, [selectedStudentId]);
 
                 const toggleTopic = (id) => {
                     if (selectedTopics.includes(id)) setSelectedTopics(selectedTopics.filter(t => t !== id));
@@ -663,135 +404,116 @@
                 const autoSelectWeak = () => {
                     if (latestExamReport) {
                         const weakTopicNames = new Set(latestExamReport.weaknesses.map(w => w.topic));
-                        const weakTopicIds = Object.entries(latestExamReport.topics)
-                            .filter(([id, t]) => weakTopicNames.has(t.name))
-                            .map(([id]) => id);
+                        const weakTopicIds = Object.entries(latestExamReport.topics).filter(([id, t]) => weakTopicNames.has(t.name)).map(([id]) => id);
                         setSelectedTopics(weakTopicIds);
-                        if(weakTopicIds.length > 0) {
-                            showModal({ title: '已載入', message: `已自動選取 ${weakTopicIds.length} 個弱項課題。`, type: 'info', onConfirm: closeModal });
-                        } else {
-                            showModal({ title: '恭喜', message: '該學生無明顯弱項 (所有課題 >50%)。', type: 'success', onConfirm: closeModal });
-                        }
+                        showModal({ title: '已載入', message: `已選取 ${weakTopicIds.length} 個弱項。`, type: 'info', onConfirm: closeModal });
                     }
                 };
 
                 const handleGenerate = () => {
-                    if (!latestExamReport || selectedTopics.length === 0) {
-                         showModal({ title: '注意', message: '請選擇至少一個課題。', type: 'info', onConfirm: closeModal });
-                         return;
-                    }
+                    try {
+                        if (!latestExamReport || selectedTopics.length === 0) {
+                             showModal({ title: '注意', message: '請選擇至少一個課題。', type: 'info', onConfirm: closeModal });
+                             return;
+                        }
 
-                    const student = getStudentData();
-                    const targetTopics = Object.entries(latestExamReport.topics)
-                        .filter(([id]) => selectedTopics.includes(id))
-                        .map(([_, t]) => t);
-                    
-                    const topicNames = targetTopics.map(t => t.name).join(', ');
+                        setIsGenerating(true);
 
-                    const prompt = `You are a Physics Tutor. Generate ${count} ${difficulty} questions for HKDSE Physics.
-Topics: ${topicNames}
-Student Weaknesses: ${latestExamReport.weaknesses.filter(w => selectedTopics.includes(w.topic) || topicNames.includes(w.topic)).map(w => w.concept).join('; ')}
+                        const student = students.find(s => s.id === selectedStudentId);
+                        const targetTopics = Object.entries(latestExamReport.topics)
+                            .filter(([id]) => selectedTopics.includes(id))
+                            .map(([_, t]) => t);
+                        
+                        const topicNames = targetTopics.map(t => t.name);
+                        
+                        // Robust Weakness Filtering: Match by Name inclusion
+                        const relevantWeaknesses = latestExamReport.weaknesses
+                            .filter(w => topicNames.some(tName => tName.includes(w.topic) || w.topic.includes(tName)))
+                            .map(w => w.concept);
+                        
+                        const uniqueWeaknesses = [...new Set(relevantWeaknesses)];
+
+                        const prompt = `You are a Physics Tutor. Generate ${count} ${difficulty} questions for HKDSE Physics.
+Topics: ${topicNames.join(', ')}
+Student Weaknesses (Focus here): 
+${uniqueWeaknesses.length > 0 ? uniqueWeaknesses.map(w => `- ${w}`).join('\n') : "None detected for selected topics."}
+
 Provide questions, answers, and explanations.`;
 
-                    setPromptText(prompt);
+                        setPromptText(prompt);
 
-                    const newEntry = {
-                        id: Date.now(),
-                        date: new Date().toISOString().split('T')[0],
-                        studentId: selectedStudentId,
-                        studentName: student.label,
-                        topics: topicNames,
-                        difficulty,
-                        count,
-                        status: 'pending',
-                        score: '',
-                        maxScore: count
-                    };
-                    setHistory([newEntry, ...history]);
-                    showModal({ title: '生成成功', message: '練習已生成並添加至進度管理 (Tracker)。\n\n提示詞 (Prompt) 已顯示於右側。', type: 'success', onConfirm: closeModal });
+                        const newEntry = {
+                            id: Date.now(),
+                            date: new Date().toISOString().split('T')[0],
+                            studentId: selectedStudentId,
+                            studentName: student.label,
+                            topics: topicNames.join(', '),
+                            difficulty,
+                            count,
+                            status: 'pending',
+                            score: '',
+                            maxScore: count
+                        };
+                        setHistory([newEntry, ...history]);
+                        
+                        setTimeout(() => {
+                            setIsGenerating(false);
+                            // Show the modal with the prompt content
+                            showModal({ 
+                                title: '生成成功', 
+                                type: 'success',
+                                content: (
+                                    <div className="flex flex-col h-full">
+                                        <p className="text-sm text-gray-500 mb-2">練習已記錄。請複製下方 Prompt 給 AI：</p>
+                                        <textarea 
+                                            className="w-full h-40 p-3 bg-gray-100 rounded text-xs font-mono border focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                                            readOnly
+                                            value={prompt}
+                                        />
+                                    </div>
+                                ),
+                                onConfirm: () => {
+                                    navigator.clipboard.writeText(prompt);
+                                    closeModal();
+                                    alert('已複製到剪貼簿！');
+                                },
+                                onCancel: closeModal
+                            });
+                        }, 500); // Fake delay for UX
+
+                    } catch (err) {
+                        setIsGenerating(false);
+                        console.error(err);
+                        showModal({ title: '錯誤', message: '生成過程中發生錯誤，請檢查數據。', type: 'danger', onConfirm: closeModal });
+                    }
                 };
 
-                const getStudentData = () => students.find(s => s.id === selectedStudentId);
-                
                 if (!latestExamReport) return <div className="p-8 text-center text-gray-500">請先在數據庫加入考試資料。</div>;
-
-                const sortedTopics = Object.entries(latestExamReport.topics).sort((a, b) => {
-                    return a[0].localeCompare(b[0], undefined, { numeric: true, sensitivity: 'base' });
-                });
+                const sortedTopics = Object.entries(latestExamReport.topics).sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true, sensitivity: 'base' }));
 
                 return (
                     <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
                         <div className="card p-6 flex flex-col h-full overflow-y-auto">
-                            <h2 className="text-xl font-bold mb-4">1. 設定練習參數</h2>
-                            <div className="mb-4">
-                                <label className="block text-sm font-bold text-gray-700 mb-2">目標學生</label>
-                                <div className="p-2 bg-blue-50 text-blue-800 rounded border border-blue-200 font-medium">
-                                    {getStudentData().label}
-                                </div>
-                            </div>
-                            
+                            <h2 className="text-xl font-bold mb-4">1. 設定參數</h2>
+                            <div className="mb-4 p-2 bg-blue-50 text-blue-800 rounded font-medium">{students.find(s => s.id === selectedStudentId)?.label}</div>
                             <div className="mb-4 flex-1 overflow-hidden flex flex-col">
-                                <div className="flex justify-between items-center mb-2">
-                                    <label className="block text-sm font-bold text-gray-700">選擇課題 (根據 Topic ID 排序)</label>
-                                    <button 
-                                        onClick={autoSelectWeak}
-                                        className="text-xs bg-red-50 text-red-600 hover:bg-red-100 px-2 py-1 rounded flex items-center gap-1 border border-red-200"
-                                    >
-                                        <Icon name="Sparkles" size={12} /> 載入弱項建議
-                                    </button>
-                                </div>
-                                <div className="border rounded-md overflow-y-auto p-2 space-y-1 flex-1 bg-gray-50 custom-scrollbar">
-                                    {sortedTopics.map(([id, t]) => (
-                                        <label key={id} className={`flex items-center gap-3 p-2 rounded cursor-pointer hover:bg-white border border-transparent hover:border-gray-200 ${selectedTopics.includes(id) ? 'bg-blue-50 border-blue-100' : ''}`}>
-                                            <input 
-                                                type="checkbox" 
-                                                checked={selectedTopics.includes(id)}
-                                                onChange={() => toggleTopic(id)}
-                                                className="rounded text-blue-600 w-4 h-4"
-                                            />
-                                            <div className="flex-1">
-                                                <div className="text-xs font-bold text-gray-500">{id}</div>
-                                                <div className="text-sm">{t.name}</div>
-                                            </div>
-                                            <span className={`text-xs font-mono px-2 py-0.5 rounded ${t.percentage < 50 ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-600'}`}>
-                                                {t.percentage.toFixed(0)}%
-                                            </span>
-                                        </label>
-                                    ))}
-                                </div>
+                                <div className="flex justify-between items-center mb-2"><label className="font-bold text-gray-700">選擇課題</label><button onClick={autoSelectWeak} className="text-xs bg-red-50 text-red-600 px-2 py-1 rounded border border-red-200">載入弱項</button></div>
+                                <div className="border rounded-md overflow-y-auto p-2 space-y-1 flex-1 bg-gray-50 custom-scrollbar">{sortedTopics.map(([id, t]) => (
+                                    <label key={id} className={`flex items-center gap-3 p-2 rounded hover:bg-white cursor-pointer ${selectedTopics.includes(id) ? 'bg-blue-50' : ''}`}><input type="checkbox" checked={selectedTopics.includes(id)} onChange={() => toggleTopic(id)} className="text-blue-600" /><div className="flex-1"><div className="text-xs font-bold text-gray-500">{id}</div><div className="text-sm">{t.name}</div></div><span className={`text-xs px-2 py-0.5 rounded ${t.percentage < 50 ? 'bg-red-100 text-red-800' : 'bg-gray-100'}`}>{t.percentage.toFixed(0)}%</span></label>
+                                ))}</div>
                             </div>
-
                             <div className="grid grid-cols-2 gap-4 mt-4">
-                                <select value={difficulty} onChange={e => setDifficulty(e.target.value)} className="border p-2 rounded">
-                                    <option value="High">High (拔尖)</option>
-                                    <option value="Medium">Medium (鞏固)</option>
-                                    <option value="Low">Low (補底)</option>
-                                </select>
+                                <select value={difficulty} onChange={e => setDifficulty(e.target.value)} className="border p-2 rounded"><option value="High">High (拔尖)</option><option value="Medium">Medium (鞏固)</option><option value="Low">Low (補底)</option></select>
                                 <input type="number" value={count} onChange={e => setCount(e.target.value)} className="border p-2 rounded" min="1" max="20" />
                             </div>
-
-                            <button onClick={handleGenerate} className="mt-6 btn-primary py-3 rounded-lg font-bold flex justify-center items-center gap-2">
-                                <Icon name="Cpu" /> 生成並記錄 (Generate & Track)
+                            <button onClick={handleGenerate} disabled={isGenerating} className={`mt-6 btn-primary py-3 rounded-lg font-bold flex justify-center items-center gap-2 ${isGenerating ? 'opacity-75 cursor-wait' : ''}`}>
+                                {isGenerating ? <><Icon name="Loader2" className="animate-spin"/> 生成中...</> : <><Icon name="Cpu" /> 生成並記錄</>}
                             </button>
                         </div>
-
                         <div className="card p-6 flex flex-col h-full">
-                            <h2 className="text-xl font-bold mb-4">2. AI Prompt & 預覽</h2>
-                            <textarea 
-                                className="flex-1 w-full bg-slate-900 text-slate-200 p-4 rounded-lg font-mono text-sm resize-none mb-4"
-                                readOnly
-                                value={promptText || "請先設定左側參數並點擊生成...\n\n(提示：選擇學生後，可手動選擇課題，或點擊「載入弱項建議」)"}
-                            ></textarea>
-                            <button 
-                                onClick={() => {
-                                    navigator.clipboard.writeText(promptText);
-                                    showModal({ title: '已複製', message: 'Prompt 已複製到剪貼簿。', type: 'info', onConfirm: closeModal });
-                                }} 
-                                disabled={!promptText}
-                                className="bg-slate-700 hover:bg-slate-600 text-white py-3 rounded-lg flex justify-center gap-2"
-                            >
-                                <Icon name="Copy" /> 複製 Prompt 到 ChatGPT/Gemini
-                            </button>
+                            <h2 className="text-xl font-bold mb-4">2. AI Prompt</h2>
+                            <textarea className="flex-1 w-full bg-slate-900 text-slate-200 p-4 rounded-lg font-mono text-sm resize-none mb-4" readOnly value={promptText || "請先生成..."}></textarea>
+                            <button onClick={() => { navigator.clipboard.writeText(promptText); alert('已複製'); }} disabled={!promptText} className="bg-slate-700 hover:bg-slate-600 text-white py-3 rounded-lg flex justify-center gap-2"><Icon name="Copy" /> 複製</button>
                         </div>
                     </div>
                 );
@@ -800,121 +522,28 @@ Provide questions, answers, and explanations.`;
             const HistoryView = () => {
                 const [filter, setFilter] = useState('all'); 
                 const [searchTerm, setSearchTerm] = useState('');
-
-                const updateStatus = (id, newStatus) => {
-                    const updated = history.map(h => h.id === id ? { ...h, status: newStatus } : h);
-                    setHistory(updated);
-                };
-
-                const updateScore = (id, score) => {
-                    const updated = history.map(h => h.id === id ? { ...h, score: score } : h);
-                    setHistory(updated);
-                };
-
-                const confirmDeleteRecord = (id) => {
-                    showModal({
-                        title: '刪除紀錄',
-                        message: '確定要刪除這條練習紀錄嗎？',
-                        type: 'danger',
-                        onConfirm: () => {
-                            setHistory(history.filter(h => h.id !== id));
-                            closeModal();
-                        },
-                        onCancel: closeModal
-                    });
-                };
-
                 const filteredHistory = history.filter(h => {
                     if (filter !== 'all' && h.status !== filter) return false;
                     if (searchTerm && !h.studentName.includes(searchTerm) && !h.topics.includes(searchTerm)) return false;
                     return true;
                 });
-
+                const updateStatus = (id, s) => setHistory(history.map(h => h.id === id ? { ...h, status: s } : h));
+                const updateScore = (id, s) => setHistory(history.map(h => h.id === id ? { ...h, score: s } : h));
+                
                 return (
                     <div className="p-6 h-screen flex flex-col">
                         <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-2xl font-bold text-gray-800">練習進度管理 (Tracker)</h2>
-                            <div className="flex gap-2">
-                                <input 
-                                    type="text" 
-                                    placeholder="搜尋學生/課題..." 
-                                    className="p-2 border rounded-lg text-sm w-64"
-                                    value={searchTerm}
-                                    onChange={e => setSearchTerm(e.target.value)}
-                                />
-                                <select className="p-2 border rounded-lg text-sm" value={filter} onChange={e => setFilter(e.target.value)}>
-                                    <option value="all">顯示全部</option>
-                                    <option value="pending">未完成 (Pending)</option>
-                                    <option value="submitted">已提交 (Submitted)</option>
-                                    <option value="graded">已評分 (Graded)</option>
-                                </select>
-                            </div>
+                            <h2 className="text-2xl font-bold text-gray-800">練習管理</h2>
+                            <div className="flex gap-2"><input type="text" placeholder="搜尋..." className="p-2 border rounded-lg text-sm w-48" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /><select className="p-2 border rounded-lg text-sm" value={filter} onChange={e => setFilter(e.target.value)}><option value="all">全部</option><option value="pending">未完成</option><option value="submitted">已提交</option><option value="graded">已評分</option></select></div>
                         </div>
-
                         <div className="card flex-1 overflow-hidden flex flex-col shadow-md">
                             <div className="overflow-auto flex-1 custom-scrollbar">
-                                <table className="w-full text-sm text-left">
-                                    <thead className="bg-gray-100 text-gray-600 uppercase sticky top-0 z-10 shadow-sm">
-                                        <tr>
-                                            <th className="px-4 py-3">日期</th>
-                                            <th className="px-4 py-3">學生</th>
-                                            <th className="px-4 py-3">課題 & 難度</th>
-                                            <th className="px-4 py-3">狀態 (Status)</th>
-                                            <th className="px-4 py-3">分數 (Score)</th>
-                                            <th className="px-4 py-3 text-right">操作</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-100">
-                                        {filteredHistory.length === 0 ? (
-                                            <tr><td colSpan="6" className="p-8 text-center text-gray-400">暫無相關紀錄</td></tr>
-                                        ) : (
-                                            filteredHistory.map((h) => (
-                                                <tr key={h.id} className="hover:bg-blue-50 transition-colors">
-                                                    <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{h.date}</td>
-                                                    <td className="px-4 py-3 font-medium text-gray-800">{h.studentName}</td>
-                                                    <td className="px-4 py-3">
-                                                        <div className="font-medium text-gray-700 truncate max-w-xs" title={h.topics}>{h.topics}</div>
-                                                        <div className="text-xs text-gray-400 flex gap-2 mt-1">
-                                                            <span className={`px-1.5 rounded ${h.difficulty === 'High' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}>{h.difficulty}</span>
-                                                            <span>{h.count}題</span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 py-3">
-                                                        <select 
-                                                            value={h.status} 
-                                                            onChange={(e) => updateStatus(h.id, e.target.value)}
-                                                            className={`border-none text-xs font-bold px-2 py-1 rounded-full cursor-pointer outline-none focus:ring-2 focus:ring-offset-1 ${
-                                                                h.status === 'pending' ? 'bg-gray-200 text-gray-700' :
-                                                                h.status === 'submitted' ? 'bg-yellow-100 text-yellow-800' :
-                                                                'bg-green-100 text-green-800'
-                                                            }`}
-                                                        >
-                                                            <option value="pending">未完成</option>
-                                                            <option value="submitted">已提交</option>
-                                                            <option value="graded">已評分</option>
-                                                        </select>
-                                                    </td>
-                                                    <td className="px-4 py-3">
-                                                        <ScoreInput 
-                                                            value={h.score} 
-                                                            max={h.maxScore} 
-                                                            onSave={(newScore) => updateScore(h.id, newScore)} 
-                                                        />
-                                                    </td>
-                                                    <td className="px-4 py-3 text-right">
-                                                        <button onClick={() => confirmDeleteRecord(h.id)} className="text-gray-400 hover:text-red-500 p-1">
-                                                            <Icon name="Trash2" size={16} />
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            ))
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                            <div className="p-3 bg-gray-50 border-t text-xs text-gray-500 flex justify-between">
-                                <span>共 {filteredHistory.length} 條紀錄</span>
-                                <span>數據儲存於瀏覽器 LocalStorage</span>
+                                <table className="w-full text-sm text-left"><thead className="bg-gray-100 text-gray-600 uppercase sticky top-0"><tr><th className="px-4 py-3">日期</th><th className="px-4 py-3">學生</th><th className="px-4 py-3">課題</th><th className="px-4 py-3">狀態</th><th className="px-4 py-3">分數</th><th className="px-4 py-3"></th></tr></thead><tbody>{filteredHistory.map(h => (
+                                    <tr key={h.id} className="hover:bg-blue-50 border-b"><td className="px-4 py-3">{h.date}</td><td className="px-4 py-3 font-medium">{h.studentName}</td><td className="px-4 py-3"><div className="truncate max-w-xs">{h.topics}</div></td>
+                                    <td className="px-4 py-3"><select value={h.status} onChange={e => updateStatus(h.id, e.target.value)} className={`text-xs px-2 py-1 rounded-full ${h.status==='pending'?'bg-gray-200':h.status==='submitted'?'bg-yellow-100':'bg-green-100'}`}><option value="pending">未完成</option><option value="submitted">已提交</option><option value="graded">已評分</option></select></td>
+                                    <td className="px-4 py-3"><ScoreInput value={h.score} max={h.maxScore} onSave={s => updateScore(h.id, s)} /></td>
+                                    <td className="px-4 py-3 text-right"><button onClick={() => { if(confirm('刪除?')) setHistory(history.filter(x => x.id !== h.id)) }} className="text-gray-400 hover:text-red-500"><Icon name="Trash2" size={16}/></button></td></tr>
+                                ))}</tbody></table>
                             </div>
                         </div>
                     </div>
@@ -924,13 +553,7 @@ Provide questions, answers, and explanations.`;
             return (
                 <div className="flex min-h-screen bg-gray-100 text-gray-800 relative">
                     <Sidebar />
-                    <div className="flex-1 ml-64 overflow-hidden">
-                        {view === 'upload' && <UploadView />}
-                        {view === 'dashboard' && <DashboardView />}
-                        {view === 'generate' && <GenerateView />}
-                        {view === 'history' && <HistoryView />}
-                    </div>
-                    {/* Modal Overlay */}
+                    <div className="flex-1 ml-64 overflow-hidden">{view === 'upload' && <UploadView />}{view === 'dashboard' && <DashboardView />}{view === 'generate' && <GenerateView />}{view === 'history' && <HistoryView />}</div>
                     <Modal {...modalConfig} />
                 </div>
             );
