@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 試卷分析比較工具 (v5.0 Compat Fix)</title>
+    <title>AI 試卷分析比較工具 (v6.0 Doctor)</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -34,15 +34,18 @@
             SplitSquareHorizontal: (p) => <IconBase {...p}><path d="M8 19H5c-1 0-2-1-2-2V7c0-1 1-2 2-2h3"/><path d="M16 5h3c1 0 2 1 2 2v10c0 1-1 2-2 2h-3"/><line x1="12" x2="12" y1="4" y2="20"/></IconBase>,
             Table: (p) => <IconBase {...p}><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><line x1="3" x2="21" y1="9" y2="9"/><line x1="3" x2="21" y1="15" y2="15"/><line x1="12" x2="12" y1="3" y2="21"/></IconBase>,
             Bug: (p) => <IconBase {...p}><path d="m8 2 1.88 1.88"/><path d="M14.12 3.88 16 2"/><path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9C4.6 8.8 3 7.1 3 5"/><path d="M6 13H2"/><path d="M3 21c0-2.1 1.7-3.9 3.8-4"/></IconBase>,
-            Wifi: (p) => <IconBase {...p}><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></IconBase>,
-            Zap: (p) => <IconBase {...p}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></IconBase>
+            Activity: (p) => <IconBase {...p}><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></IconBase>,
+            CheckCircle: (p) => <IconBase {...p}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></IconBase>,
+            XCircle: (p) => <IconBase {...p}><circle cx="12" cy="12" r="10"/><line x1="15" x2="9" y1="9" y2="15"/><line x1="9" x2="15" y1="9" y2="15"/></IconBase>
         };
 
         const App = () => {
             const [endpoint1, setEndpoint1] = useState("https://apiproxy.k12gpt.ai/hus_eRR");
             const [endpoint2, setEndpoint2] = useState("https://apiproxy.k12gpt.ai/XB3RZRq");
-            const [apiKey1, setApiKey1] = useState('');
-            const [apiKey2, setApiKey2] = useState('');
+            
+            // Load keys from localStorage if available
+            const [apiKey1, setApiKey1] = useState(localStorage.getItem('exam_ai_k1') || '');
+            const [apiKey2, setApiKey2] = useState(localStorage.getItem('exam_ai_k2') || '');
             
             const [file, setFile] = useState(null);
             const [previewImage, setPreviewImage] = useState(null);
@@ -59,68 +62,89 @@
             
             const [logs, setLogs] = useState([]);
             const [viewMode, setViewMode] = useState('comparison');
-            const [connectionMode, setConnectionMode] = useState('direct'); 
-            const [testStatus, setTestStatus] = useState('');
             
-            // 新增: 兼容模式開關 (預設開啟，因為這是最可能的修復)
-            const [compatMode, setCompatMode] = useState(true);
+            // Diagnosis State
+            const [diagnosisResults, setDiagnosisResults] = useState({});
+            const [isDiagnosing, setIsDiagnosing] = useState(false);
+            const [workingStrategy, setWorkingStrategy] = useState('A'); // Default A
 
             useEffect(() => {
                 if (window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL;
-            }, []);
+                // Save keys on change
+                localStorage.setItem('exam_ai_k1', apiKey1);
+                localStorage.setItem('exam_ai_k2', apiKey2);
+            }, [apiKey1, apiKey2]);
 
             const addLog = (msg) => {
                 const time = new Date().toLocaleTimeString();
                 setLogs(prev => [`[${time}] ${msg}`, ...prev]);
             };
 
-            // 1. 純文字連線測試 (關鍵診斷)
-            const testConnection = async () => {
+            // === 核心：連線策略測試 ===
+            const runDiagnosis = async () => {
                 if (!apiKey1) { alert("請先輸入 API Key 1"); return; }
-                setTestStatus('testing');
-                addLog(`=== 純文字測試 (兼容模式: ${compatMode ? 'ON' : 'OFF'}) ===`);
+                setIsDiagnosing(true);
+                setDiagnosisResults({});
+                addLog("=== 開始自動診斷連線策略 ===");
+
+                const strategies = [
+                    { id: 'A', name: '標準直連 (Direct)', url: endpoint1, headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey1}`} },
+                    { id: 'B', name: '追加路徑 (/chat/completions)', url: endpoint1.endsWith('/') ? endpoint1 + 'chat/completions' : endpoint1 + '/chat/completions', headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey1}`} },
+                    { id: 'C', name: '無預檢 (Text/Plain)', url: endpoint1, headers: {'Content-Type': 'text/plain', 'Authorization': `Bearer ${apiKey1}`}, note: '繞過 CORS Preflight' },
+                    { id: 'D', name: 'URL Key (?key=...)', url: `${endpoint1}?key=${apiKey1}`, headers: {'Content-Type': 'application/json'}, note: '無 Auth Header' }
+                ];
+
+                for (let strat of strategies) {
+                    addLog(`測試策略 [${strat.id}]: ${strat.name}...`);
+                    try {
+                        // 使用 XHR 而非 Fetch，有時能獲得不同的錯誤細節或繞過某些 Fetch 限制
+                        const result = await testXHR(strat.url, strat.headers);
+                        if (result.success) {
+                            addLog(`✅ 策略 [${strat.id}] 成功！回應: ${result.data.substring(0, 50)}...`);
+                            setDiagnosisResults(prev => ({...prev, [strat.id]: 'success'}));
+                            setWorkingStrategy(strat.id); // Set as default
+                            alert(`找到可用的連線方式：${strat.name}！\n系統已自動切換至此模式。`);
+                            setIsDiagnosing(false);
+                            return; // Stop after first success
+                        } else {
+                            addLog(`❌ 策略 [${strat.id}] 失敗: ${result.status} ${result.data}`);
+                            setDiagnosisResults(prev => ({...prev, [strat.id]: 'fail'}));
+                        }
+                    } catch (e) {
+                        addLog(`❌ 策略 [${strat.id}] 錯誤: ${e.message}`);
+                        setDiagnosisResults(prev => ({...prev, [strat.id]: 'fail'}));
+                    }
+                }
                 
-                try {
-                    const endpoint = connectionMode === 'proxy' 
-                        ? `https://corsproxy.io/?${encodeURIComponent(endpoint1)}` 
-                        : endpoint1;
-                    
-                    addLog(`目標: ${endpoint}`);
-                    
-                    // 根據相容模式決定 Payload
-                    const payload = {
-                        messages: [{ role: "user", content: "Say Hello" }]
+                addLog("⚠️ 所有策略均失敗。請確認 API Key 是否過期，或嘗試使用 Proxy 插件。");
+                setIsDiagnosing(false);
+            };
+
+            const testXHR = (url, headers) => {
+                return new Promise((resolve) => {
+                    const xhr = new XMLHttpRequest();
+                    xhr.open("POST", url, true);
+                    for (let key in headers) {
+                        xhr.setRequestHeader(key, headers[key]);
+                    }
+                    xhr.onreadystatechange = function () {
+                        if (xhr.readyState === 4) {
+                            if (xhr.status >= 200 && xhr.status < 300) {
+                                resolve({ success: true, data: xhr.responseText, status: xhr.status });
+                            } else {
+                                resolve({ success: false, data: xhr.responseText || 'Connection Failed', status: xhr.status });
+                            }
+                        }
+                    };
+                    xhr.onerror = function () {
+                        resolve({ success: false, data: 'Network Error (CORS/Block)', status: 0 });
                     };
                     
-                    // 只有在非兼容模式下才送 model，因為有些 Proxy 會拒絕自帶 model 的請求
-                    if (!compatMode) {
-                        payload.model = "gpt-4o";
-                        payload.max_tokens = 10;
-                    }
-
-                    const res = await fetch(endpoint, {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                            "Authorization": `Bearer ${apiKey1.trim()}`
-                        },
-                        body: JSON.stringify(payload)
-                    });
-
-                    if (res.ok) {
-                        const data = await res.json();
-                        addLog(`✅ 成功! 回應: ${JSON.stringify(data.choices?.[0]?.message?.content || data)}`);
-                        setTestStatus('success');
-                        alert("連線成功！");
-                    } else {
-                        const txt = await res.text();
-                        addLog(`❌ 失敗 Status: ${res.status}, Body: ${txt}`);
-                        setTestStatus('fail');
-                    }
-                } catch (e) {
-                    addLog(`❌ 錯誤: ${e.message}`);
-                    setTestStatus('fail');
-                }
+                    // Payload: Simple Hello
+                    // Note: 不傳 model 參數以最大化兼容性
+                    const payload = { messages: [{ role: "user", content: "Hi" }] };
+                    xhr.send(JSON.stringify(payload));
+                });
             };
 
             const handleFileChange = async (e) => {
@@ -129,7 +153,6 @@
                 setFile(selectedFile);
                 setResult1(null); setResult2(null);
                 setRawResponse1(''); setRawResponse2('');
-                setLogs([]);
                 
                 if (selectedFile.type === 'application/pdf') {
                     await convertPdfToImage(selectedFile);
@@ -140,8 +163,8 @@
                 }
             };
 
-            // 暴力壓縮
             const processImage = (base64Str) => {
+                // 暴力壓縮: 500px, 0.4 quality
                 resizeImage(base64Str, 500, 0.4).then(({dataUrl, sizeKB}) => { 
                     setPreviewImage(dataUrl);
                     setImageSizeInfo(`已壓縮: ${sizeKB} KB (寬500px)`);
@@ -198,19 +221,35 @@
 { "student_info": { "name": "", "class": "", "student_id": "" }, "analysis": [ { "question_id": "", "question_text": "", "student_answer": "", "teacher_score": "", "is_correct": true } ], "summary": "" }
 若無分數填 "N/A"。`;
 
-            const analyzeImage = async (originalEndpoint, apiKey, setAnalyzing, setResult, setRaw, modelName) => {
+            const performAnalysis = async (baseEndpoint, apiKey, setAnalyzing, setResult, setRaw, modelName) => {
                 if (!previewImage || !apiKey) return;
                 setAnalyzing(true);
                 setResult(null);
                 setRaw('');
 
-                const cleanApiKey = apiKey.trim();
-                let finalEndpoint = originalEndpoint;
-                if (connectionMode === 'proxy') {
-                    finalEndpoint = `https://corsproxy.io/?${encodeURIComponent(originalEndpoint)}`;
-                }
+                addLog(`[${modelName}] 使用策略 [${workingStrategy}] 發送請求...`);
 
-                addLog(`[${modelName}] 發送...`);
+                // 根據診斷出的最佳策略構建請求
+                let url = baseEndpoint;
+                let headers = {};
+                let cleanKey = apiKey.trim();
+
+                switch (workingStrategy) {
+                    case 'A': // Standard
+                        headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cleanKey}` };
+                        break;
+                    case 'B': // Append Path
+                        url = baseEndpoint.endsWith('/') ? baseEndpoint + 'chat/completions' : baseEndpoint + '/chat/completions';
+                        headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cleanKey}` };
+                        break;
+                    case 'C': // Text/Plain trick
+                        headers = { 'Content-Type': 'text/plain', 'Authorization': `Bearer ${cleanKey}` };
+                        break;
+                    case 'D': // URL Key
+                        url = `${baseEndpoint}?key=${cleanKey}`;
+                        headers = { 'Content-Type': 'application/json' };
+                        break;
+                }
 
                 try {
                     const payload = {
@@ -223,50 +262,33 @@
                         ]
                     };
 
-                    // 兼容模式修復：如果開啟，就不送 model 參數
-                    if (!compatMode) {
-                        payload.model = "gpt-4o";
-                        payload.max_tokens = 1000;
-                        payload.temperature = 0.1;
-                    }
-
-                    const response = await fetch(finalEndpoint, {
+                    const response = await fetch(url, {
                         method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                            "Authorization": `Bearer ${cleanApiKey}`
-                        },
+                        headers: headers,
                         body: JSON.stringify(payload)
                     });
 
-                    addLog(`[${modelName}] Status: ${response.status}`);
-
                     if (!response.ok) {
-                        const errorText = await response.text().catch(() => 'No text');
-                        throw new Error(`HTTP ${response.status}: ${errorText.substring(0, 100)}`);
+                        const txt = await response.text().catch(() => '');
+                        throw new Error(`HTTP ${response.status}: ${txt.substring(0, 100)}`);
                     }
 
                     const responseText = await response.text();
+                    const data = JSON.parse(responseText);
+                    const content = data.choices?.[0]?.message?.content;
                     
-                    try {
-                        const data = JSON.parse(responseText);
-                        const content = data.choices?.[0]?.message?.content;
-                        if (!content) throw new Error("無 content");
-                        
-                        setRaw(content);
-                        const jsonString = content.replace(/```json/g, '').replace(/```/g, '').trim();
-                        setResult(JSON.parse(jsonString));
-                        addLog(`[${modelName}] ✅ 成功`);
-                    } catch (parseErr) {
-                        setRaw(responseText);
-                        addLog(`[${modelName}] JSON 解析失敗`);
-                    }
+                    if (!content) throw new Error("無 content");
+                    
+                    setRaw(content);
+                    const jsonString = content.replace(/```json/g, '').replace(/```/g, '').trim();
+                    setResult(JSON.parse(jsonString));
+                    addLog(`[${modelName}] ✅ 解析成功`);
 
                 } catch (err) {
                     let msg = err.message;
-                    if (msg.includes('Failed to fetch')) msg = "CORS 錯誤 (請確認 API Key 或開啟 Proxy 模式)";
+                    if (msg.includes('Failed to fetch')) msg = "連線失敗 (CORS/Network)";
                     setRaw(`Error: ${msg}`);
-                    addLog(`[${modelName}] ❌ ${msg}`);
+                    addLog(`[${modelName}] ❌ 失敗: ${msg}`);
                 } finally {
                     setAnalyzing(false);
                 }
@@ -275,8 +297,8 @@
             const handleStartAnalysis = () => {
                 if (!apiKey1 || !apiKey2) { alert("請輸入兩組 API Key"); return; }
                 if (!previewImage) { alert("請先上傳試卷"); return; }
-                analyzeImage(endpoint1, apiKey1, setAnalyzing1, setResult1, setRawResponse1, "GPT-4o-mini");
-                analyzeImage(endpoint2, apiKey2, setAnalyzing2, setResult2, setRawResponse2, "GPT-4o");
+                performAnalysis(endpoint1, apiKey1, setAnalyzing1, setResult1, setRawResponse1, "GPT-4o-mini");
+                performAnalysis(endpoint2, apiKey2, setAnalyzing2, setResult2, setRawResponse2, "GPT-4o");
             };
 
             const safeRender = (val) => (typeof val === 'object' && val !== null) ? JSON.stringify(val) : val;
@@ -288,13 +310,12 @@
                             <div>
                                 <h1 className="text-2xl font-bold text-indigo-600 flex items-center gap-2">
                                     <Icons.ScanLine className="w-8 h-8" />
-                                    AI 試卷批改分析 (v5.0 Compat Fix)
+                                    AI 試卷批改分析 (v6.0 Doctor)
                                 </h1>
-                                <p className="text-gray-500 mt-1">獨立版 - 自動修正請求參數</p>
+                                <p className="text-gray-500 mt-1">內建自動連線醫生 - 找出最佳路徑</p>
                             </div>
-                            <div className="flex gap-2">
-                                <button onClick={() => setConnectionMode('direct')} className={`px-3 py-1 rounded text-xs font-bold ${connectionMode==='direct' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-600'}`}>直接連線</button>
-                                <button onClick={() => setConnectionMode('proxy')} className={`px-3 py-1 rounded text-xs font-bold ${connectionMode==='proxy' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-600'}`}>Proxy 模式</button>
+                            <div className="text-xs bg-indigo-100 text-indigo-700 px-3 py-1 rounded font-bold">
+                                當前策略: {workingStrategy === 'A' ? '標準直連' : workingStrategy === 'B' ? '追加路徑' : workingStrategy === 'C' ? '無預檢' : 'URL Key'}
                             </div>
                         </header>
 
@@ -303,39 +324,42 @@
                                 <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
                                     
                                     <div className="mb-4">
-                                        <div className="flex items-center gap-2 mb-2 p-2 bg-yellow-50 rounded border border-yellow-200 cursor-pointer" onClick={() => setCompatMode(!compatMode)}>
-                                            <div className={`w-4 h-4 border rounded flex items-center justify-center ${compatMode ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-gray-400'}`}>
-                                                {compatMode && <Icons.Zap className="w-3 h-3 text-white" />}
-                                            </div>
-                                            <div className="text-xs select-none">
-                                                <div className="font-bold text-gray-700">兼容模式 (推薦開啟)</div>
-                                                <div className="text-gray-500">移除 model 參數以避免 Proxy 錯誤</div>
-                                            </div>
-                                        </div>
-
-                                        <button onClick={testConnection} className="w-full bg-teal-600 hover:bg-teal-700 text-white py-2 rounded flex items-center justify-center gap-2 text-sm font-bold">
-                                            <Icons.Wifi className="w-4 h-4" /> 1. 先按此測試連線
+                                        <button 
+                                            onClick={runDiagnosis} 
+                                            disabled={isDiagnosing}
+                                            className={`w-full py-3 rounded flex items-center justify-center gap-2 text-sm font-bold text-white transition
+                                                ${isDiagnosing ? 'bg-gray-400 cursor-not-allowed' : 'bg-teal-600 hover:bg-teal-700 shadow-lg animate-pulse'}
+                                            `}
+                                        >
+                                            <Icons.Activity className="w-4 h-4" /> 
+                                            {isDiagnosing ? "診斷中..." : "1. 點此開始自動診斷"}
                                         </button>
-                                        {testStatus === 'success' && <div className="text-center text-xs text-green-600 mt-1 font-bold">✅ 連線測試通過</div>}
-                                        {testStatus === 'fail' && <div className="text-center text-xs text-red-600 mt-1 font-bold">❌ 連線測試失敗 (請看日誌)</div>}
+
+                                        <div className="mt-3 grid grid-cols-2 gap-2 text-[10px]">
+                                            <div className={`p-2 rounded border text-center ${diagnosisResults['A'] === 'success' ? 'bg-green-100 border-green-300 text-green-700 font-bold' : diagnosisResults['A'] === 'fail' ? 'bg-red-50 border-red-200 text-red-400' : 'bg-gray-50 text-gray-400'}`}>A. 標準</div>
+                                            <div className={`p-2 rounded border text-center ${diagnosisResults['B'] === 'success' ? 'bg-green-100 border-green-300 text-green-700 font-bold' : diagnosisResults['B'] === 'fail' ? 'bg-red-50 border-red-200 text-red-400' : 'bg-gray-50 text-gray-400'}`}>B. 追加路徑</div>
+                                            <div className={`p-2 rounded border text-center ${diagnosisResults['C'] === 'success' ? 'bg-green-100 border-green-300 text-green-700 font-bold' : diagnosisResults['C'] === 'fail' ? 'bg-red-50 border-red-200 text-red-400' : 'bg-gray-50 text-gray-400'}`}>C. 無預檢</div>
+                                            <div className={`p-2 rounded border text-center ${diagnosisResults['D'] === 'success' ? 'bg-green-100 border-green-300 text-green-700 font-bold' : diagnosisResults['D'] === 'fail' ? 'bg-red-50 border-red-200 text-red-400' : 'bg-gray-50 text-gray-400'}`}>D. URL Key</div>
+                                        </div>
                                     </div>
                                     
                                     <div className="p-2 bg-gray-800 text-green-400 text-xs rounded border border-gray-700 font-mono mb-4">
+                                        <div className="flex items-center gap-1 mb-1 border-b border-gray-700 pb-1"><Icons.Bug className="w-3 h-3" /> 診斷日誌:</div>
                                         <div className="h-32 overflow-y-auto">
-                                            {logs.length === 0 ? "系統日誌..." : logs.map((l, i) => <div key={i} className="mb-1">{l}</div>)}
+                                            {logs.length === 0 ? "請先輸入 API Key 並點擊自動診斷..." : logs.map((l, i) => <div key={i} className="mb-1 border-b border-gray-700/50 pb-0.5">{l}</div>)}
                                         </div>
                                     </div>
 
                                     <div className="space-y-4">
                                         <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                                            <label className="block text-xs font-bold text-gray-700 mb-1">MODEL 1 Endpoint</label>
+                                            <label className="block text-xs font-bold text-gray-700 mb-1">MODEL 1 (GPT-4o-mini)</label>
                                             <div className="text-[10px] text-gray-400 break-all mb-1">{endpoint1}</div>
-                                            <input type="password" placeholder="API Key 1" className="w-full p-2 border rounded-lg bg-white outline-none text-xs" value={apiKey1} onChange={(e) => setApiKey1(e.target.value)} />
+                                            <input type="password" placeholder="Key 1" className="w-full p-2 border rounded-lg bg-white outline-none text-xs" value={apiKey1} onChange={(e) => setApiKey1(e.target.value)} />
                                         </div>
                                         <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                                            <label className="block text-xs font-bold text-gray-700 mb-1">MODEL 2 Endpoint</label>
+                                            <label className="block text-xs font-bold text-gray-700 mb-1">MODEL 2 (GPT-4o)</label>
                                             <div className="text-[10px] text-gray-400 break-all mb-1">{endpoint2}</div>
-                                            <input type="password" placeholder="API Key 2" className="w-full p-2 border rounded-lg bg-white outline-none text-xs" value={apiKey2} onChange={(e) => setApiKey2(e.target.value)} />
+                                            <input type="password" placeholder="Key 2" className="w-full p-2 border rounded-lg bg-white outline-none text-xs" value={apiKey2} onChange={(e) => setApiKey2(e.target.value)} />
                                         </div>
                                     </div>
                                 </div>
@@ -343,7 +367,7 @@
                                 <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
                                     <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:bg-gray-50 transition cursor-pointer relative">
                                         <input type="file" accept=".pdf, image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={handleFileChange} />
-                                        {isProcessingPdf ? <div className="text-indigo-600 text-sm">處理中...</div> : file ? 
+                                        {isProcessingPdf ? <div className="text-indigo-600 text-sm">壓縮中...</div> : file ? 
                                             <div><div className="text-green-600 text-sm font-bold">{file.name}</div><div className="text-xs text-red-500 font-bold">{imageSizeInfo}</div></div> : 
                                             <div className="text-gray-500 text-sm">2. 上傳 PDF/圖片</div>
                                         }
