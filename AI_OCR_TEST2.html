@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 試卷分析比較工具 (v7.0 Accuracy Fix)</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
+        body { font-family: 'Noto Sans TC', sans-serif; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-900">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+        const PDFJS_WORKER_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+        // SVG Icons
+        const IconBase = ({ children, className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>
+        );
+        const Icons = {
+            Upload: (p) => <IconBase {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></IconBase>,
+            Play: (p) => <IconBase {...p}><polygon points="5 3 19 12 5 21 5 3"/></IconBase>,
+            ScanLine: (p) => <IconBase {...p}><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" x2="17" y1="12" y2="12"/></IconBase>,
+            SplitSquareHorizontal: (p) => <IconBase {...p}><path d="M8 19H5c-1 0-2-1-2-2V7c0-1 1-2 2-2h3"/><path d="M16 5h3c1 0 2 1 2 2v10c0 1-1 2-2 2h-3"/><line x1="12" x2="12" y1="4" y2="20"/></IconBase>,
+            Table: (p) => <IconBase {...p}><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><line x1="3" x2="21" y1="9" y2="9"/><line x1="3" x2="21" y1="15" y2="15"/><line x1="12" x2="12" y1="3" y2="21"/></IconBase>,
+            Bug: (p) => <IconBase {...p}><path d="m8 2 1.88 1.88"/><path d="M14.12 3.88 16 2"/><path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9C4.6 8.8 3 7.1 3 5"/><path d="M6 13H2"/><path d="M3 21c0-2.1 1.7-3.9 3.8-4"/></IconBase>,
+            Activity: (p) => <IconBase {...p}><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></IconBase>,
+            Image: (p) => <IconBase {...p}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></IconBase>
+        };
+
+        const App = () => {
+            const [endpoint1, setEndpoint1] = useState("https://apiproxy.k12gpt.ai/hus_eRR");
+            const [endpoint2, setEndpoint2] = useState("https://apiproxy.k12gpt.ai/XB3RZRq");
+            
+            const [apiKey1, setApiKey1] = useState(localStorage.getItem('exam_ai_k1') || '');
+            const [apiKey2, setApiKey2] = useState(localStorage.getItem('exam_ai_k2') || '');
+            
+            const [file, setFile] = useState(null);
+            const [previewImage, setPreviewImage] = useState(null);
+            const [imageSizeInfo, setImageSizeInfo] = useState('');
+            
+            const [isProcessingPdf, setIsProcessingPdf] = useState(false);
+            const [analyzing1, setAnalyzing1] = useState(false);
+            const [analyzing2, setAnalyzing2] = useState(false);
+            
+            const [result1, setResult1] = useState(null);
+            const [result2, setResult2] = useState(null);
+            const [rawResponse1, setRawResponse1] = useState('');
+            const [rawResponse2, setRawResponse2] = useState('');
+            
+            const [logs, setLogs] = useState([]);
+            const [viewMode, setViewMode] = useState('comparison');
+            
+            // Diagnosis State
+            const [diagnosisResults, setDiagnosisResults] = useState({});
+            const [isDiagnosing, setIsDiagnosing] = useState(false);
+            // Default to 'D' if not set, as user confirmed it works
+            const [workingStrategy, setWorkingStrategy] = useState(localStorage.getItem('exam_ai_strat') || 'D'); 
+
+            // Image Quality State
+            const [imgQuality, setImgQuality] = useState('medium'); // low (400), medium (800), high (1200)
+
+            useEffect(() => {
+                if (window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL;
+                localStorage.setItem('exam_ai_k1', apiKey1);
+                localStorage.setItem('exam_ai_k2', apiKey2);
+                localStorage.setItem('exam_ai_strat', workingStrategy);
+            }, [apiKey1, apiKey2, workingStrategy]);
+
+            const addLog = (msg) => {
+                const time = new Date().toLocaleTimeString();
+                setLogs(prev => [`[${time}] ${msg}`, ...prev]);
+            };
+
+            const runDiagnosis = async () => {
+                if (!apiKey1) { alert("請先輸入 API Key 1"); return; }
+                setIsDiagnosing(true);
+                setDiagnosisResults({});
+                addLog("=== 開始自動診斷 ===");
+
+                const strategies = [
+                    { id: 'A', name: 'A. 標準直連', url: endpoint1, headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey1}`} },
+                    { id: 'B', name: 'B. 追加路徑', url: endpoint1.endsWith('/') ? endpoint1 + 'chat/completions' : endpoint1 + '/chat/completions', headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey1}`} },
+                    { id: 'C', name: 'C. 無預檢', url: endpoint1, headers: {'Content-Type': 'text/plain', 'Authorization': `Bearer ${apiKey1}`} },
+                    { id: 'D', name: 'D. URL Key', url: `${endpoint1}?key=${apiKey1}`, headers: {'Content-Type': 'application/json'} }
+                ];
+
+                // Prioritize checking D first since it worked for user
+                const sortedStrategies = strategies.sort((a,b) => (a.id === 'D' ? -1 : 1));
+
+                for (let strat of sortedStrategies) {
+                    addLog(`測試 [${strat.id}]...`);
+                    try {
+                        const result = await testXHR(strat.url, strat.headers);
+                        if (result.success) {
+                            addLog(`✅ [${strat.id}] 成功!`);
+                            setDiagnosisResults(prev => ({...prev, [strat.id]: 'success'}));
+                            setWorkingStrategy(strat.id);
+                            setIsDiagnosing(false);
+                            alert(`連線成功！策略 [${strat.id}] 已保存。`);
+                            return; 
+                        } else {
+                            addLog(`❌ [${strat.id}] 失敗: ${result.status}`);
+                            setDiagnosisResults(prev => ({...prev, [strat.id]: 'fail'}));
+                        }
+                    } catch (e) {
+                        setDiagnosisResults(prev => ({...prev, [strat.id]: 'fail'}));
+                    }
+                }
+                setIsDiagnosing(false);
+            };
+
+            const testXHR = (url, headers) => {
+                return new Promise((resolve) => {
+                    const xhr = new XMLHttpRequest();
+                    xhr.open("POST", url, true);
+                    for (let key in headers) xhr.setRequestHeader(key, headers[key]);
+                    xhr.onreadystatechange = function () {
+                        if (xhr.readyState === 4) {
+                            resolve(xhr.status >= 200 && xhr.status < 300 ? {success:true, data:xhr.responseText} : {success:false, status:xhr.status});
+                        }
+                    };
+                    xhr.onerror = () => resolve({success:false, status:0});
+                    xhr.send(JSON.stringify({ messages: [{ role: "user", content: "Hi" }] }));
+                });
+            };
+
+            const handleFileChange = async (e) => {
+                const selectedFile = e.target.files[0];
+                if (!selectedFile) return;
+                setFile(selectedFile);
+                setResult1(null); setResult2(null);
+                setRawResponse1(''); setRawResponse2('');
+                
+                if (selectedFile.type === 'application/pdf') {
+                    await convertPdfToImage(selectedFile);
+                } else if (selectedFile.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = (ev) => processImage(ev.target.result);
+                    reader.readAsDataURL(selectedFile);
+                }
+            };
+
+            // 重新處理圖片 (當畫質改變時)
+            useEffect(() => {
+                if (file) handleFileChange({ target: { files: [file] } });
+            }, [imgQuality]);
+
+            const processImage = (base64Str) => {
+                let width = 800;
+                let quality = 0.6;
+
+                if (imgQuality === 'low') { width = 400; quality = 0.4; }
+                if (imgQuality === 'medium') { width = 800; quality = 0.6; }
+                if (imgQuality === 'high') { width = 1200; quality = 0.8; }
+
+                resizeImage(base64Str, width, quality).then(({dataUrl, sizeKB}) => { 
+                    setPreviewImage(dataUrl);
+                    setImageSizeInfo(`畫質:${imgQuality.toUpperCase()} (${width}px) | 大小:${sizeKB} KB`);
+                    addLog(`圖片處理: ${width}px, ${sizeKB} KB`);
+                });
+            };
+
+            const resizeImage = (base64Str, maxWidth, quality) => {
+                return new Promise((resolve) => {
+                    const img = new Image();
+                    img.src = base64Str;
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        let width = img.width;
+                        let height = img.height;
+                        if (width > maxWidth) {
+                            height = Math.round((height * maxWidth) / width);
+                            width = maxWidth;
+                        }
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        const dataUrl = canvas.toDataURL('image/jpeg', quality); 
+                        const sizeKB = Math.round(dataUrl.length / 1024 * 10) / 10;
+                        resolve({ dataUrl, sizeKB });
+                    };
+                });
+            };
+
+            const convertPdfToImage = async (pdfFile) => {
+                setIsProcessingPdf(true);
+                addLog("轉換 PDF...");
+                try {
+                    const arrayBuffer = await pdfFile.arrayBuffer();
+                    const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    const page = await pdf.getPage(1); 
+                    const viewport = page.getViewport({ scale: 1.5 }); // Use higher scale for better source
+                    const canvas = document.createElement('canvas');
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+                    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+                    processImage(canvas.toDataURL('image/jpeg', 0.8));
+                } catch (err) {
+                    addLog("PDF 錯誤: " + err.message);
+                } finally {
+                    setIsProcessingPdf(false);
+                }
+            };
+
+            // === 核心：防腦補 Prompt ===
+            const SYSTEM_PROMPT = `
+你是一個高精度的 OCR 試卷分析系統。你的任務是從圖片中提取試卷內容。
+
+【絕對嚴格的規則 - 違反將導致錯誤】
+1. 逐字提取 (Verbatim Extraction)：只輸出圖片上肉眼清晰可見的文字。
+2. 禁止腦補 (No Hallucination)：絕對不要嘗試補全句子、推測問題或自行回答問題。如果句子在圖片中切斷了，就讓它切斷，不要續寫。
+3. 區分筆跡：
+   - 題目文字：提取為 question_text
+   - 學生手寫：提取為 student_answer
+   - 紅色/圈選分數：提取為 teacher_score
+4. 處理模糊：如果字跡模糊無法辨識，請填寫 "[模糊]"，不要猜測。
+5. 分數格式：如果沒有看到分數，teacher_score 必須填 "N/A"。
+
+請以純 JSON 格式輸出，結構:
+{ 
+  "student_info": { "name": "學生姓名", "class": "班級", "student_id": "學號" }, 
+  "analysis": [ 
+    { 
+      "question_id": "題號", 
+      "question_text": "題目原文(勿補全)", 
+      "student_answer": "學生手寫原文", 
+      "teacher_score": "分數", 
+      "is_correct": true/false 
+    } 
+  ], 
+  "summary": "簡短評價" 
+}`;
+
+            const performAnalysis = async (baseEndpoint, apiKey, setAnalyzing, setResult, setRaw, modelName) => {
+                if (!previewImage || !apiKey) return;
+                setAnalyzing(true);
+                setResult(null);
+                setRaw('');
+
+                addLog(`[${modelName}] 請求中...`);
+
+                let url = baseEndpoint;
+                let headers = {};
+                let cleanKey = apiKey.trim();
+
+                // 使用保存的策略 (預設 D)
+                switch (workingStrategy) {
+                    case 'A': headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cleanKey}` }; break;
+                    case 'B': url = baseEndpoint.endsWith('/') ? baseEndpoint + 'chat/completions' : baseEndpoint + '/chat/completions'; headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cleanKey}` }; break;
+                    case 'C': headers = { 'Content-Type': 'text/plain', 'Authorization': `Bearer ${cleanKey}` }; break;
+                    case 'D': url = `${baseEndpoint}?key=${cleanKey}`; headers = { 'Content-Type': 'application/json' }; break;
+                }
+
+                try {
+                    const payload = {
+                        messages: [
+                            { role: "system", content: SYSTEM_PROMPT },
+                            { role: "user", content: [
+                                { type: "text", text: "請嚴格按照圖片內容提取文字，不要續寫。" },
+                                { type: "image_url", image_url: { url: previewImage } }
+                            ]}
+                        ]
+                        // 移除 model 參數以提高相容性
+                    };
+
+                    const response = await fetch(url, { method: "POST", headers: headers, body: JSON.stringify(payload) });
+
+                    if (!response.ok) {
+                        const txt = await response.text().catch(() => '');
+                        throw new Error(`HTTP ${response.status}: ${txt.substring(0, 100)}`);
+                    }
+
+                    const responseText = await response.text();
+                    const data = JSON.parse(responseText);
+                    const content = data.choices?.[0]?.message?.content;
+                    
+                    if (!content) throw new Error("無 content");
+                    
+                    setRaw(content);
+                    const jsonString = content.replace(/```json/g, '').replace(/```/g, '').trim();
+                    setResult(JSON.parse(jsonString));
+                    addLog(`[${modelName}] ✅ 完成`);
+
+                } catch (err) {
+                    let msg = err.message;
+                    if (msg.includes('Failed to fetch')) msg = "連線失敗 (CORS/Network)";
+                    setRaw(`Error: ${msg}`);
+                    addLog(`[${modelName}] ❌ ${msg}`);
+                } finally {
+                    setAnalyzing(false);
+                }
+            };
+
+            const handleStartAnalysis = () => {
+                if (!apiKey1 || !apiKey2) { alert("請輸入兩組 API Key"); return; }
+                if (!previewImage) { alert("請先上傳試卷"); return; }
+                performAnalysis(endpoint1, apiKey1, setAnalyzing1, setResult1, setRawResponse1, "GPT-4o-mini");
+                performAnalysis(endpoint2, apiKey2, setAnalyzing2, setResult2, setRawResponse2, "GPT-4o");
+            };
+
+            const safeRender = (val) => (typeof val === 'object' && val !== null) ? JSON.stringify(val) : val;
+
+            return (
+                <div className="min-h-screen bg-gray-50 text-gray-900 font-sans p-6">
+                    <div className="max-w-7xl mx-auto space-y-6">
+                        <header className="flex justify-between items-center border-b pb-4 bg-white p-6 rounded-xl shadow-sm">
+                            <div>
+                                <h1 className="text-2xl font-bold text-indigo-600 flex items-center gap-2">
+                                    <Icons.ScanLine className="w-8 h-8" />
+                                    AI 試卷批改分析 (v7.0 Accuracy)
+                                </h1>
+                                <p className="text-gray-500 mt-1">獨立版 - 防腦補 Prompt + 畫質控制</p>
+                            </div>
+                            <div className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded font-bold">
+                                已鎖定策略: {workingStrategy}
+                            </div>
+                        </header>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            <div className="lg:col-span-1 space-y-4">
+                                <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
+                                    
+                                    <div className="mb-4">
+                                        <div className="text-xs font-bold text-gray-700 mb-2 flex items-center gap-1">
+                                            <Icons.Image className="w-4 h-4" /> 圖片傳輸畫質 (影響準確度)
+                                        </div>
+                                        <div className="flex bg-gray-100 rounded p-1">
+                                            {['low', 'medium', 'high'].map(q => (
+                                                <button 
+                                                    key={q}
+                                                    onClick={() => setImgQuality(q)}
+                                                    className={`flex-1 py-1 text-xs rounded transition-all ${imgQuality === q ? 'bg-white shadow text-indigo-600 font-bold' : 'text-gray-500'}`}
+                                                >
+                                                    {q === 'low' ? '低 (快)' : q === 'medium' ? '中 (推薦)' : '高 (準)'}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <div className="text-[10px] text-gray-400 mt-1 px-1">
+                                            * 若出現連線失敗，請調低畫質；若 AI 腦補嚴重，請調高畫質。
+                                        </div>
+                                    </div>
+
+                                    <div className="mb-4">
+                                        <button 
+                                            onClick={runDiagnosis} 
+                                            disabled={isDiagnosing}
+                                            className="w-full py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded flex items-center justify-center gap-2 text-xs font-bold transition"
+                                        >
+                                            <Icons.Activity className="w-3 h-3" /> 
+                                            {isDiagnosing ? "診斷中..." : "重新診斷連線"}
+                                        </button>
+                                    </div>
+                                    
+                                    <div className="p-2 bg-gray-800 text-green-400 text-xs rounded border border-gray-700 font-mono mb-4">
+                                        <div className="flex items-center gap-1 mb-1 border-b border-gray-700 pb-1"><Icons.Bug className="w-3 h-3" /> 日誌:</div>
+                                        <div className="h-32 overflow-y-auto">
+                                            {logs.length === 0 ? "準備就緒..." : logs.map((l, i) => <div key={i} className="mb-1 border-b border-gray-700/50 pb-0.5">{l}</div>)}
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                            <label className="block text-xs font-bold text-gray-700 mb-1">MODEL 1 (GPT-4o-mini)</label>
+                                            <input type="password" placeholder="Key 1" className="w-full p-2 border rounded-lg bg-white outline-none text-xs" value={apiKey1} onChange={(e) => setApiKey1(e.target.value)} />
+                                        </div>
+                                        <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                            <label className="block text-xs font-bold text-gray-700 mb-1">MODEL 2 (GPT-4o)</label>
+                                            <input type="password" placeholder="Key 2" className="w-full p-2 border rounded-lg bg-white outline-none text-xs" value={apiKey2} onChange={(e) => setApiKey2(e.target.value)} />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
+                                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:bg-gray-50 transition cursor-pointer relative">
+                                        <input type="file" accept=".pdf, image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={handleFileChange} />
+                                        {isProcessingPdf ? <div className="text-indigo-600 text-sm">壓縮中...</div> : file ? 
+                                            <div><div className="text-green-600 text-sm font-bold">{file.name}</div><div className="text-xs text-red-500 font-bold">{imageSizeInfo}</div></div> : 
+                                            <div className="text-gray-500 text-sm">上傳 PDF/圖片</div>
+                                        }
+                                    </div>
+                                    <button onClick={handleStartAnalysis} disabled={!previewImage || !apiKey1 || !apiKey2 || analyzing1 || analyzing2} className={`w-full mt-4 py-3 rounded-lg text-white font-medium flex items-center justify-center gap-2 ${(!previewImage || !apiKey1) ? 'bg-gray-300' : 'bg-indigo-600 hover:bg-indigo-700 shadow-lg'}`}>
+                                        {(analyzing1 || analyzing2) ? "分析中..." : <><Icons.Play className="w-4 h-4" /> 開始雙模型分析</>}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="lg:col-span-2 space-y-6">
+                                {previewImage && (
+                                    <div className="bg-white p-4 rounded-xl shadow-sm border overflow-hidden">
+                                        <div className="bg-gray-100 rounded-lg overflow-auto max-h-[150px] flex justify-center"><img src={previewImage} className="max-w-full object-contain" /></div>
+                                    </div>
+                                )}
+                                {(result1 || result2 || rawResponse1 || rawResponse2) && (
+                                    <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+                                        <div className="flex border-b">
+                                            <button onClick={() => setViewMode('comparison')} className={`flex-1 py-3 text-sm font-medium ${viewMode==='comparison'?'bg-indigo-50 text-indigo-700 border-b-2 border-indigo-600':'text-gray-500'}`}><Icons.SplitSquareHorizontal className="w-3 h-3 inline" /> 比較</button>
+                                            <button onClick={() => setViewMode('json')} className={`flex-1 py-3 text-sm font-medium ${viewMode==='json'?'bg-indigo-50 text-indigo-700 border-b-2 border-indigo-600':'text-gray-500'}`}><Icons.Table className="w-3 h-3 inline" /> 原始回應</button>
+                                        </div>
+                                        <div className="grid grid-cols-2 divide-x h-[600px] overflow-hidden">
+                                            <ResultCol title="GPT-4o-mini" loading={analyzing1} result={result1} raw={rawResponse1} viewMode={viewMode} safeRender={safeRender} />
+                                            <ResultCol title="GPT-4o" loading={analyzing2} result={result2} raw={rawResponse2} viewMode={viewMode} safeRender={safeRender} />
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const ResultCol = ({ title, loading, result, raw, viewMode, safeRender }) => (
+            <div className="flex flex-col h-full">
+                <div className="p-3 bg-gray-50 border-b font-bold text-sm text-center flex justify-between">
+                    <span>{title}</span>
+                    {loading && <span className="text-xs text-blue-500 animate-pulse">Running...</span>}
+                </div>
+                <div className="overflow-y-auto flex-1 p-4">
+                    {viewMode === 'comparison' ? (
+                        <ResultCard data={result} loading={loading} raw={raw} safeRender={safeRender} />
+                    ) : (
+                        <pre className="text-xs bg-gray-50 p-2 rounded border whitespace-pre-wrap overflow-x-auto">{raw}</pre>
+                    )}
+                </div>
+            </div>
+        );
+
+        const ResultCard = ({ data, loading, raw, safeRender }) => {
+            if (loading) return <div className="space-y-3 animate-pulse"><div className="h-4 bg-gray-200 rounded w-1/3"></div><div className="h-20 bg-gray-200 rounded w-full"></div></div>;
+            if (!data && raw) return <div className="bg-red-50 p-3 rounded border border-red-200 text-red-600 text-xs whitespace-pre-wrap break-all">{raw}</div>;
+            if (!data) return <div className="text-gray-400 text-sm text-center mt-10">...</div>;
+
+            return (
+                <div className="space-y-4 text-sm">
+                    <div className="bg-gray-50 p-3 rounded-lg border">
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div><span className="text-gray-500">姓名:</span> {safeRender(data.student_info?.name) || '-'}</div>
+                            <div><span className="text-gray-500">學號:</span> {safeRender(data.student_info?.student_id) || '-'}</div>
+                        </div>
+                    </div>
+                    <div className="space-y-3">
+                        {data.analysis?.map((item, idx) => (
+                            <div key={idx} className="border rounded-lg p-3 bg-white">
+                                <div className="flex justify-between items-start mb-2">
+                                    <span className="font-bold text-indigo-600 bg-indigo-50 px-2 rounded">Q{safeRender(item.question_id)}</span>
+                                    <span className={`px-2 py-0.5 rounded text-xs font-bold ${item.is_correct ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{safeRender(item.teacher_score)}</span>
+                                </div>
+                                <div className="mb-2 text-xs text-gray-500">{safeRender(item.question_text)}</div>
+                                <div className="bg-yellow-50 p-2 rounded border border-yellow-100 text-gray-800 font-medium">{safeRender(item.student_answer)}</div>
+                            </div>
+                        ))}
+                    </div>
+                    {data.summary && <div className="bg-blue-50 p-3 rounded-lg text-xs text-blue-800">{safeRender(data.summary)}</div>}
+                </div>
+            );
+        };
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>
