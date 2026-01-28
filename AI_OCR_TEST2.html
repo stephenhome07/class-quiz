@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 試卷分析比較工具 (v7.1 JSON Truncation Fix)</title>
+    <title>AI 試卷分析比較工具 (v8.0 UI/API Fix)</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -14,10 +14,15 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
         body { font-family: 'Noto Sans TC', sans-serif; }
+        /* 確保捲軸總是可見且好拉 */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
     </style>
 </head>
-<body class="bg-gray-100 text-gray-900">
-    <div id="root"></div>
+<body class="bg-gray-100 text-gray-900 h-screen overflow-hidden flex flex-col">
+    <div id="root" class="h-full flex flex-col"></div>
 
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
@@ -35,7 +40,8 @@
             Table: (p) => <IconBase {...p}><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><line x1="3" x2="21" y1="9" y2="9"/><line x1="3" x2="21" y1="15" y2="15"/><line x1="12" x2="12" y1="3" y2="21"/></IconBase>,
             Bug: (p) => <IconBase {...p}><path d="m8 2 1.88 1.88"/><path d="M14.12 3.88 16 2"/><path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9C4.6 8.8 3 7.1 3 5"/><path d="M6 13H2"/><path d="M3 21c0-2.1 1.7-3.9 3.8-4"/></IconBase>,
             Activity: (p) => <IconBase {...p}><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></IconBase>,
-            Image: (p) => <IconBase {...p}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></IconBase>
+            Image: (p) => <IconBase {...p}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></IconBase>,
+            Maximize: (p) => <IconBase {...p}><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></IconBase>
         };
 
         const App = () => {
@@ -57,6 +63,8 @@
             const [result2, setResult2] = useState(null);
             const [rawResponse1, setRawResponse1] = useState('');
             const [rawResponse2, setRawResponse2] = useState('');
+            const [errorMsg1, setErrorMsg1] = useState(null); // Explicit error state
+            const [errorMsg2, setErrorMsg2] = useState(null);
             
             const [logs, setLogs] = useState([]);
             const [viewMode, setViewMode] = useState('comparison');
@@ -126,7 +134,7 @@
                         }
                     };
                     xhr.onerror = () => resolve({success:false, status:0});
-                    xhr.send(JSON.stringify({ messages: [{ role: "user", content: "Hi" }], max_tokens: 10 }));
+                    xhr.send(JSON.stringify({ messages: [{ role: "user", content: "Hi" }] })); // Removed max_tokens to avoid conflict
                 });
             };
 
@@ -136,6 +144,7 @@
                 setFile(selectedFile);
                 setResult1(null); setResult2(null);
                 setRawResponse1(''); setRawResponse2('');
+                setErrorMsg1(null); setErrorMsg2(null);
                 
                 if (selectedFile.type === 'application/pdf') {
                     await convertPdfToImage(selectedFile);
@@ -210,34 +219,33 @@
             const SYSTEM_PROMPT = `
 你是一個高精度的 OCR 試卷分析系統。
 【絕對嚴格的規則】
-1. 逐字提取 (Verbatim Extraction)：只輸出圖片上肉眼清晰可見的文字。
+1. 逐字提取：只輸出圖片上肉眼清晰可見的文字。
 2. 禁止腦補：不要續寫句子。
-3. 區分筆跡：
-   - 題目文字：question_text
-   - 學生手寫：student_answer
-   - 紅色/圈選分數：teacher_score (若無則填 "N/A")
+3. 區分筆跡：question_text(題目), student_answer(手寫), teacher_score(紅色/圈選分數, 無則N/A)。
 4. 處理模糊：字跡不清填 "[模糊]"。
+5. 保持簡潔：Summary 簡短即可。
 
 請以純 JSON 格式輸出，結構:
 { 
-  "student_info": { "name": "學生姓名", "class": "班級", "student_id": "學號" }, 
+  "student_info": { "name": "姓名", "class": "班級", "student_id": "學號" }, 
   "analysis": [ 
     { 
       "question_id": "題號", 
-      "question_text": "題目原文", 
-      "student_answer": "學生手寫原文", 
+      "question_text": "題目", 
+      "student_answer": "答案", 
       "teacher_score": "分數", 
-      "is_correct": true/false 
+      "is_correct": true 
     } 
   ], 
-  "summary": "簡短評價" 
+  "summary": "評價" 
 }`;
 
-            const performAnalysis = async (baseEndpoint, apiKey, setAnalyzing, setResult, setRaw, modelName) => {
+            const performAnalysis = async (baseEndpoint, apiKey, setAnalyzing, setResult, setRaw, setErrorMsg, modelName) => {
                 if (!previewImage || !apiKey) return;
                 setAnalyzing(true);
                 setResult(null);
                 setRaw('');
+                setErrorMsg(null);
 
                 addLog(`[${modelName}] 請求中...`);
 
@@ -253,25 +261,22 @@
                 }
 
                 try {
-                    // v7.1 FIX: 明確增加 max_tokens 防止截斷
+                    // v8.0 FIX: 移除 max_tokens 和 response_format，避免與 Proxy 衝突
                     const payload = {
                         messages: [
                             { role: "system", content: SYSTEM_PROMPT },
                             { role: "user", content: [
-                                { type: "text", text: "請嚴格按照圖片內容提取文字。" },
+                                { type: "text", text: "請分析這張試卷圖片。" },
                                 { type: "image_url", image_url: { url: previewImage } }
                             ]}
                         ],
-                        max_tokens: 4000, // 關鍵修正：給予足夠的 Token 空間
-                        temperature: 0.1, // 降低隨機性
-                        response_format: { type: "json_object" } // 強制 JSON 模式 (如果支援)
+                        temperature: 0.1 
                     };
 
                     const response = await fetch(url, { method: "POST", headers: headers, body: JSON.stringify(payload) });
 
                     if (!response.ok) {
                         const txt = await response.text().catch(() => '');
-                        // 如果是因為 json_object 模式不被支援 (400 Bad Request)，可以考慮退回普通模式，但這裡先報錯
                         throw new Error(`HTTP ${response.status}: ${txt.substring(0, 100)}`);
                     }
 
@@ -288,17 +293,17 @@
                         setResult(JSON.parse(jsonString));
                         addLog(`[${modelName}] ✅ 完成`);
                     } catch (parseError) {
-                         // JSON 解析失敗的救援邏輯 (處理截斷)
                          console.error("JSON Parse Error", parseError);
-                         addLog(`[${modelName}] ⚠️ JSON 可能被截斷，嘗試顯示部分內容`);
-                         // 這裡我們不 throw，而是把原始文字當作 "raw" 顯示在畫面上，讓使用者能看到至少一部分
-                         setRaw(content + "\n\n⚠️ 錯誤: 回應可能被截斷 (Truncated)。已增加 max_tokens 嘗試修復。");
+                         addLog(`[${modelName}] ⚠️ JSON 格式不完整，顯示原始文本`);
+                         setErrorMsg("注意：內容可能被截斷，以下顯示原始回應：");
+                         // 不清空 raw，讓 UI 顯示它
                     }
 
                 } catch (err) {
                     let msg = err.message;
                     if (msg.includes('Failed to fetch')) msg = "連線失敗 (CORS/Network)";
-                    setRaw(`Error: ${msg}`);
+                    setRaw(`System Error: ${msg}`);
+                    setErrorMsg(msg);
                     addLog(`[${modelName}] ❌ ${msg}`);
                 } finally {
                     setAnalyzing(false);
@@ -308,111 +313,93 @@
             const handleStartAnalysis = () => {
                 if (!apiKey1 || !apiKey2) { alert("請輸入兩組 API Key"); return; }
                 if (!previewImage) { alert("請先上傳試卷"); return; }
-                performAnalysis(endpoint1, apiKey1, setAnalyzing1, setResult1, setRawResponse1, "GPT-4o-mini");
-                performAnalysis(endpoint2, apiKey2, setAnalyzing2, setResult2, setRawResponse2, "GPT-4o");
+                performAnalysis(endpoint1, apiKey1, setAnalyzing1, setResult1, setRawResponse1, setErrorMsg1, "GPT-4o-mini");
+                performAnalysis(endpoint2, apiKey2, setAnalyzing2, setResult2, setRawResponse2, setErrorMsg2, "GPT-4o");
             };
 
             const safeRender = (val) => (typeof val === 'object' && val !== null) ? JSON.stringify(val) : val;
 
             return (
-                <div className="min-h-screen bg-gray-50 text-gray-900 font-sans p-6">
-                    <div className="max-w-7xl mx-auto space-y-6">
-                        <header className="flex justify-between items-center border-b pb-4 bg-white p-6 rounded-xl shadow-sm">
-                            <div>
-                                <h1 className="text-2xl font-bold text-indigo-600 flex items-center gap-2">
-                                    <Icons.ScanLine className="w-8 h-8" />
-                                    AI 試卷批改分析 (v7.1 Fix)
-                                </h1>
-                                <p className="text-gray-500 mt-1">獨立版 - 修復 GPT-4o 回應截斷問題</p>
+                <div className="bg-gray-100 text-gray-900 font-sans h-full flex flex-col">
+                    {/* Header - Fixed Height */}
+                    <header className="flex-none flex justify-between items-center border-b bg-white p-4 shadow-sm z-10">
+                        <div>
+                            <h1 className="text-xl font-bold text-indigo-600 flex items-center gap-2">
+                                <Icons.ScanLine className="w-6 h-6" />
+                                AI 試卷批改分析 (v8.0 Fix)
+                            </h1>
+                        </div>
+                        <div className="flex gap-2 text-xs">
+                             <div className="bg-green-100 text-green-700 px-3 py-1 rounded font-bold">
+                                策略: {workingStrategy}
                             </div>
-                            <div className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded font-bold">
-                                已鎖定策略: {workingStrategy}
-                            </div>
-                        </header>
+                        </div>
+                    </header>
 
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                            <div className="lg:col-span-1 space-y-4">
-                                <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
-                                    
-                                    <div className="mb-4">
+                    {/* Main Content - Scrollable */}
+                    <div className="flex-1 overflow-y-auto p-4">
+                        <div className="max-w-7xl mx-auto space-y-4">
+                            
+                            {/* Control Panel */}
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                                <div className="lg:col-span-1 space-y-4">
+                                    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
                                         <div className="text-xs font-bold text-gray-700 mb-2 flex items-center gap-1">
-                                            <Icons.Image className="w-4 h-4" /> 圖片傳輸畫質
+                                            <Icons.Image className="w-4 h-4" /> 圖片設定
                                         </div>
-                                        <div className="flex bg-gray-100 rounded p-1">
+                                        <div className="flex bg-gray-100 rounded p-1 mb-3">
                                             {['low', 'medium', 'high'].map(q => (
-                                                <button 
-                                                    key={q}
-                                                    onClick={() => setImgQuality(q)}
-                                                    className={`flex-1 py-1 text-xs rounded transition-all ${imgQuality === q ? 'bg-white shadow text-indigo-600 font-bold' : 'text-gray-500'}`}
-                                                >
-                                                    {q === 'low' ? '低 (400px)' : q === 'medium' ? '中 (800px)' : '高 (1200px)'}
-                                                </button>
+                                                <button key={q} onClick={() => setImgQuality(q)} className={`flex-1 py-1 text-xs rounded transition-all ${imgQuality === q ? 'bg-white shadow text-indigo-600 font-bold' : 'text-gray-500'}`}>{q === 'low' ? '低' : q === 'medium' ? '中' : '高'}</button>
                                             ))}
                                         </div>
+                                        <button onClick={runDiagnosis} disabled={isDiagnosing} className="w-full py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded flex items-center justify-center gap-2 text-xs font-bold mb-3"><Icons.Activity className="w-3 h-3" /> {isDiagnosing ? "診斷中..." : "重新診斷連線"}</button>
+                                        
+                                        <div className="p-2 bg-gray-800 text-green-400 text-[10px] rounded border border-gray-700 font-mono">
+                                            <div className="h-20 overflow-y-auto">
+                                                {logs.length === 0 ? "準備就緒..." : logs.map((l, i) => <div key={i} className="mb-1">{l}</div>)}
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="mt-3 space-y-2">
+                                            <input type="password" placeholder="API Key 1 (Mini)" className="w-full p-2 border rounded text-xs" value={apiKey1} onChange={(e) => setApiKey1(e.target.value)} />
+                                            <input type="password" placeholder="API Key 2 (4o)" className="w-full p-2 border rounded text-xs" value={apiKey2} onChange={(e) => setApiKey2(e.target.value)} />
+                                        </div>
                                     </div>
 
-                                    <div className="mb-4">
-                                        <button 
-                                            onClick={runDiagnosis} 
-                                            disabled={isDiagnosing}
-                                            className="w-full py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded flex items-center justify-center gap-2 text-xs font-bold transition"
-                                        >
-                                            <Icons.Activity className="w-3 h-3" /> 
-                                            {isDiagnosing ? "診斷中..." : "重新診斷連線"}
+                                    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:bg-gray-50 cursor-pointer relative">
+                                            <input type="file" accept=".pdf, image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={handleFileChange} />
+                                            {isProcessingPdf ? <div className="text-indigo-600 text-xs">處理中...</div> : file ? 
+                                                <div><div className="text-green-600 text-xs font-bold truncate">{file.name}</div><div className="text-[10px] text-gray-400">{imageSizeInfo}</div></div> : 
+                                                <div className="text-gray-500 text-xs">拖放 PDF/圖片</div>
+                                            }
+                                        </div>
+                                        <button onClick={handleStartAnalysis} disabled={!previewImage || !apiKey1 || !apiKey2 || analyzing1 || analyzing2} className={`w-full mt-3 py-2 rounded text-white font-bold text-sm flex items-center justify-center gap-2 ${(!previewImage || !apiKey1) ? 'bg-gray-300' : 'bg-indigo-600 hover:bg-indigo-700 shadow'}`}>
+                                            {(analyzing1 || analyzing2) ? "分析中..." : <><Icons.Play className="w-4 h-4" /> 開始分析</>}
                                         </button>
                                     </div>
+                                </div>
+
+                                <div className="lg:col-span-2 flex flex-col gap-4">
+                                    {previewImage && (
+                                        <div className="bg-white p-2 rounded-xl shadow-sm border overflow-hidden flex justify-center bg-gray-50 h-32">
+                                            <img src={previewImage} className="h-full object-contain" />
+                                        </div>
+                                    )}
                                     
-                                    <div className="p-2 bg-gray-800 text-green-400 text-xs rounded border border-gray-700 font-mono mb-4">
-                                        <div className="flex items-center gap-1 mb-1 border-b border-gray-700 pb-1"><Icons.Bug className="w-3 h-3" /> 日誌:</div>
-                                        <div className="h-32 overflow-y-auto">
-                                            {logs.length === 0 ? "準備就緒..." : logs.map((l, i) => <div key={i} className="mb-1 border-b border-gray-700/50 pb-0.5">{l}</div>)}
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-4">
-                                        <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                                            <label className="block text-xs font-bold text-gray-700 mb-1">MODEL 1 (GPT-4o-mini)</label>
-                                            <input type="password" placeholder="Key 1" className="w-full p-2 border rounded-lg bg-white outline-none text-xs" value={apiKey1} onChange={(e) => setApiKey1(e.target.value)} />
-                                        </div>
-                                        <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                                            <label className="block text-xs font-bold text-gray-700 mb-1">MODEL 2 (GPT-4o)</label>
-                                            <input type="password" placeholder="Key 2" className="w-full p-2 border rounded-lg bg-white outline-none text-xs" value={apiKey2} onChange={(e) => setApiKey2(e.target.value)} />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
-                                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:bg-gray-50 transition cursor-pointer relative">
-                                        <input type="file" accept=".pdf, image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={handleFileChange} />
-                                        {isProcessingPdf ? <div className="text-indigo-600 text-sm">壓縮中...</div> : file ? 
-                                            <div><div className="text-green-600 text-sm font-bold">{file.name}</div><div className="text-xs text-red-500 font-bold">{imageSizeInfo}</div></div> : 
-                                            <div className="text-gray-500 text-sm">上傳 PDF/圖片</div>
-                                        }
-                                    </div>
-                                    <button onClick={handleStartAnalysis} disabled={!previewImage || !apiKey1 || !apiKey2 || analyzing1 || analyzing2} className={`w-full mt-4 py-3 rounded-lg text-white font-medium flex items-center justify-center gap-2 ${(!previewImage || !apiKey1) ? 'bg-gray-300' : 'bg-indigo-600 hover:bg-indigo-700 shadow-lg'}`}>
-                                        {(analyzing1 || analyzing2) ? "分析中..." : <><Icons.Play className="w-4 h-4" /> 開始雙模型分析</>}
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div className="lg:col-span-2 space-y-6">
-                                {previewImage && (
-                                    <div className="bg-white p-4 rounded-xl shadow-sm border overflow-hidden">
-                                        <div className="bg-gray-100 rounded-lg overflow-auto max-h-[150px] flex justify-center"><img src={previewImage} className="max-w-full object-contain" /></div>
-                                    </div>
-                                )}
-                                {(result1 || result2 || rawResponse1 || rawResponse2) && (
-                                    <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-                                        <div className="flex border-b">
-                                            <button onClick={() => setViewMode('comparison')} className={`flex-1 py-3 text-sm font-medium ${viewMode==='comparison'?'bg-indigo-50 text-indigo-700 border-b-2 border-indigo-600':'text-gray-500'}`}><Icons.SplitSquareHorizontal className="w-3 h-3 inline" /> 比較</button>
+                                    {/* RESULTS CONTAINER - KEY FIX: Use Flex-1 to fill remaining space properly */}
+                                    <div className="bg-white rounded-xl shadow-sm border flex flex-col h-[65vh] min-h-[500px]">
+                                        <div className="flex border-b flex-none">
+                                            <button onClick={() => setViewMode('comparison')} className={`flex-1 py-3 text-sm font-medium ${viewMode==='comparison'?'bg-indigo-50 text-indigo-700 border-b-2 border-indigo-600':'text-gray-500'}`}><Icons.SplitSquareHorizontal className="w-3 h-3 inline" /> 比較檢視</button>
                                             <button onClick={() => setViewMode('json')} className={`flex-1 py-3 text-sm font-medium ${viewMode==='json'?'bg-indigo-50 text-indigo-700 border-b-2 border-indigo-600':'text-gray-500'}`}><Icons.Table className="w-3 h-3 inline" /> 原始回應</button>
                                         </div>
-                                        <div className="grid grid-cols-2 divide-x h-[600px] overflow-hidden">
-                                            <ResultCol title="GPT-4o-mini" loading={analyzing1} result={result1} raw={rawResponse1} viewMode={viewMode} safeRender={safeRender} />
-                                            <ResultCol title="GPT-4o" loading={analyzing2} result={result2} raw={rawResponse2} viewMode={viewMode} safeRender={safeRender} />
+                                        
+                                        <div className="flex-1 flex divide-x overflow-hidden">
+                                            <ResultCol title="GPT-4o-mini" loading={analyzing1} result={result1} raw={rawResponse1} errorMsg={errorMsg1} viewMode={viewMode} safeRender={safeRender} />
+                                            <ResultCol title="GPT-4o" loading={analyzing2} result={result2} raw={rawResponse2} errorMsg={errorMsg2} viewMode={viewMode} safeRender={safeRender} />
                                         </div>
                                     </div>
-                                )}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -420,29 +407,50 @@
             );
         };
 
-        const ResultCol = ({ title, loading, result, raw, viewMode, safeRender }) => (
-            <div className="flex flex-col h-full">
-                <div className="p-3 bg-gray-50 border-b font-bold text-sm text-center flex justify-between">
+        const ResultCol = ({ title, loading, result, raw, errorMsg, viewMode, safeRender }) => (
+            <div className="flex-1 flex flex-col h-full overflow-hidden w-1/2">
+                <div className="p-2 bg-gray-50 border-b font-bold text-xs text-center flex justify-between items-center flex-none">
                     <span>{title}</span>
                     {loading && <span className="text-xs text-blue-500 animate-pulse">Running...</span>}
                 </div>
-                <div className="overflow-y-auto flex-1 p-4">
+                
+                {/* Scrollable Content Area */}
+                <div className="flex-1 overflow-y-auto p-4 bg-white relative">
+                    {/* Error / Warning Banner */}
+                    {errorMsg && (
+                         <div className="mb-4 bg-yellow-50 border-l-4 border-yellow-400 p-2 text-xs text-yellow-700">
+                            <p>{errorMsg}</p>
+                         </div>
+                    )}
+
                     {viewMode === 'comparison' ? (
-                        <ResultCard data={result} loading={loading} raw={raw} safeRender={safeRender} />
+                        <ResultCard data={result} loading={loading} raw={raw} safeRender={safeRender} forceRaw={!!errorMsg} />
                     ) : (
-                        <pre className="text-xs bg-gray-50 p-2 rounded border whitespace-pre-wrap overflow-x-auto">{raw}</pre>
+                        <pre className="text-xs bg-gray-50 p-2 rounded border whitespace-pre-wrap overflow-x-auto font-mono">{raw}</pre>
                     )}
                 </div>
             </div>
         );
 
-        const ResultCard = ({ data, loading, raw, safeRender }) => {
+        const ResultCard = ({ data, loading, raw, safeRender, forceRaw }) => {
             if (loading) return <div className="space-y-3 animate-pulse"><div className="h-4 bg-gray-200 rounded w-1/3"></div><div className="h-20 bg-gray-200 rounded w-full"></div></div>;
-            if (!data && raw) return <div className="bg-red-50 p-3 rounded border border-red-200 text-red-600 text-xs whitespace-pre-wrap break-all">{raw}</div>;
-            if (!data) return <div className="text-gray-400 text-sm text-center mt-10">...</div>;
+            
+            // 如果 JSON 解析失敗或被強制顯示原始碼
+            if ((!data && raw) || (forceRaw && raw)) {
+                return (
+                    <div className="space-y-2">
+                        {forceRaw && <div className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Raw Output Fallback</div>}
+                        <pre className="bg-red-50 p-3 rounded border border-red-200 text-gray-700 text-xs whitespace-pre-wrap break-all font-mono leading-relaxed">
+                            {raw}
+                        </pre>
+                    </div>
+                );
+            }
+            
+            if (!data) return <div className="text-gray-400 text-sm text-center mt-10">等待分析結果...</div>;
 
             return (
-                <div className="space-y-4 text-sm">
+                <div className="space-y-4 text-sm pb-10">
                     <div className="bg-gray-50 p-3 rounded-lg border">
                         <div className="grid grid-cols-2 gap-2 text-xs">
                             <div><span className="text-gray-500">姓名:</span> {safeRender(data.student_info?.name) || '-'}</div>
@@ -451,13 +459,13 @@
                     </div>
                     <div className="space-y-3">
                         {data.analysis?.map((item, idx) => (
-                            <div key={idx} className="border rounded-lg p-3 bg-white">
+                            <div key={idx} className="border rounded-lg p-3 bg-white hover:shadow-sm transition">
                                 <div className="flex justify-between items-start mb-2">
                                     <span className="font-bold text-indigo-600 bg-indigo-50 px-2 rounded">Q{safeRender(item.question_id)}</span>
                                     <span className={`px-2 py-0.5 rounded text-xs font-bold ${item.is_correct ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{safeRender(item.teacher_score)}</span>
                                 </div>
-                                <div className="mb-2 text-xs text-gray-500">{safeRender(item.question_text)}</div>
-                                <div className="bg-yellow-50 p-2 rounded border border-yellow-100 text-gray-800 font-medium">{safeRender(item.student_answer)}</div>
+                                <div className="mb-2 text-xs text-gray-600 leading-relaxed">{safeRender(item.question_text)}</div>
+                                <div className="bg-yellow-50 p-2 rounded border border-yellow-100 text-gray-800 font-medium text-xs leading-relaxed">{safeRender(item.student_answer)}</div>
                             </div>
                         ))}
                     </div>
