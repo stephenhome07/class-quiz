@@ -3,19 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 試卷分析比較工具 (Standalone Fixed)</title>
+    <title>AI 試卷分析比較工具 (v3.0 Final Fix)</title>
     
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    
-    <!-- Babel for JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
-    <!-- PDF.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
     <style>
@@ -27,43 +20,30 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useRef } = React;
         const PDFJS_WORKER_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
-        // --- 1. 定義內建圖標 (解決 Error #130 的關鍵) ---
+        // SVG Icons
         const IconBase = ({ children, className }) => (
-            <svg 
-                xmlns="http://www.w3.org/2000/svg" 
-                width="24" height="24" viewBox="0 0 24 24" 
-                fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" 
-                className={className}
-            >
-                {children}
-            </svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>
         );
-
         const Icons = {
-            Upload: (props) => <IconBase {...props}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></IconBase>,
-            FileText: (props) => <IconBase {...props}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/></IconBase>,
-            Check: (props) => <IconBase {...props}><polyline points="20 6 9 17 4 12"/></IconBase>,
-            AlertCircle: (props) => <IconBase {...props}><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></IconBase>,
-            Play: (props) => <IconBase {...props}><polygon points="5 3 19 12 5 21 5 3"/></IconBase>,
-            ScanLine: (props) => <IconBase {...props}><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" x2="17" y1="12" y2="12"/></IconBase>,
-            SplitSquareHorizontal: (props) => <IconBase {...props}><path d="M8 19H5c-1 0-2-1-2-2V7c0-1 1-2 2-2h3"/><path d="M16 5h3c1 0 2 1 2 2v10c0 1-1 2-2 2h-3"/><line x1="12" x2="12" y1="4" y2="20"/></IconBase>,
-            Table: (props) => <IconBase {...props}><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><line x1="3" x2="21" y1="9" y2="9"/><line x1="3" x2="21" y1="15" y2="15"/><line x1="12" x2="12" y1="3" y2="21"/></IconBase>,
-            Settings: (props) => <IconBase {...props}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></IconBase>,
-            Globe: (props) => <IconBase {...props}><circle cx="12" cy="12" r="10"/><line x1="2" x2="22" y1="12" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></IconBase>,
-            ShieldCheck: (props) => <IconBase {...props}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></IconBase>,
-            Zap: (props) => <IconBase {...props}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></IconBase>,
-            ImageIcon: (props) => <IconBase {...props}><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></IconBase>
+            Upload: (p) => <IconBase {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></IconBase>,
+            Check: (p) => <IconBase {...p}><polyline points="20 6 9 17 4 12"/></IconBase>,
+            AlertCircle: (p) => <IconBase {...p}><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></IconBase>,
+            Play: (p) => <IconBase {...p}><polygon points="5 3 19 12 5 21 5 3"/></IconBase>,
+            ScanLine: (p) => <IconBase {...p}><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" x2="17" y1="12" y2="12"/></IconBase>,
+            SplitSquareHorizontal: (p) => <IconBase {...p}><path d="M8 19H5c-1 0-2-1-2-2V7c0-1 1-2 2-2h3"/><path d="M16 5h3c1 0 2 1 2 2v10c0 1-1 2-2 2h-3"/><line x1="12" x2="12" y1="4" y2="20"/></IconBase>,
+            Table: (p) => <IconBase {...p}><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><line x1="3" x2="21" y1="9" y2="9"/><line x1="3" x2="21" y1="15" y2="15"/><line x1="12" x2="12" y1="3" y2="21"/></IconBase>,
+            ShieldCheck: (p) => <IconBase {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></IconBase>,
+            Zap: (p) => <IconBase {...p}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></IconBase>,
+            ImageIcon: (p) => <IconBase {...p}><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></IconBase>,
+            Bug: (p) => <IconBase {...p}><path d="m8 2 1.88 1.88"/><path d="M14.12 3.88 16 2"/><path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9C4.6 8.8 3 7.1 3 5"/><path d="M6 13H2"/><path d="M3 21c0-2.1 1.7-3.9 3.8-4"/></IconBase>
         };
-
-        const { Upload, FileText, Check, AlertCircle, Play, ScanLine, SplitSquareHorizontal, Table, Settings, Globe, ShieldCheck, Zap, ImageIcon } = Icons;
 
         const App = () => {
             const [endpoint1, setEndpoint1] = useState("https://apiproxy.k12gpt.ai/hus_eRR");
             const [endpoint2, setEndpoint2] = useState("https://apiproxy.k12gpt.ai/XB3RZRq");
-
             const [apiKey1, setApiKey1] = useState('');
             const [apiKey2, setApiKey2] = useState('');
             
@@ -80,49 +60,51 @@
             const [result2, setResult2] = useState(null);
             const [rawResponse1, setRawResponse1] = useState('');
             const [rawResponse2, setRawResponse2] = useState('');
+            
+            const [logs, setLogs] = useState([]);
 
             const [viewMode, setViewMode] = useState('comparison');
-            const [connectionMode, setConnectionMode] = useState('direct'); 
+            const [connectionMode, setConnectionMode] = useState('direct'); // Default direct since Ai.html works
 
             useEffect(() => {
-                if (window.pdfjsLib) {
-                    window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL;
-                }
+                if (window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL;
             }, []);
+
+            const addLog = (msg) => {
+                const time = new Date().toLocaleTimeString();
+                setLogs(prev => [`[${time}] ${msg}`, ...prev]);
+            };
 
             const handleFileChange = async (e) => {
                 const selectedFile = e.target.files[0];
                 if (!selectedFile) return;
-
                 setFile(selectedFile);
                 resetResults();
-                
                 if (selectedFile.type === 'application/pdf') {
                     await convertPdfToImage(selectedFile);
                 } else if (selectedFile.type.startsWith('image/')) {
                     const reader = new FileReader();
-                    reader.onload = (event) => {
-                        resizeImage(event.target.result).then(({dataUrl, sizeKB}) => {
-                            setPreviewImage(dataUrl);
-                            setImageSizeInfo(`原始圖片 -> 壓縮後: ${sizeKB} KB (適合 API 傳輸)`);
-                        });
-                    };
+                    reader.onload = (ev) => processImage(ev.target.result);
                     reader.readAsDataURL(selectedFile);
-                } else {
-                    setError('請上傳 PDF 或圖片檔案 (JPG/PNG)');
                 }
             };
 
             const resetResults = () => {
-                setResult1(null);
-                setResult2(null);
-                setRawResponse1('');
-                setRawResponse2('');
-                setError('');
-                setImageSizeInfo('');
+                setResult1(null); setResult2(null);
+                setRawResponse1(''); setRawResponse2('');
+                setError(''); setImageSizeInfo(''); setLogs([]);
             };
 
-            const resizeImage = (base64Str, maxWidth = 800) => {
+            // 更強力的壓縮邏輯 (v3.0)
+            const processImage = (base64Str) => {
+                resizeImage(base64Str, 600).then(({dataUrl, sizeKB}) => { // 縮小到 600px
+                    setPreviewImage(dataUrl);
+                    setImageSizeInfo(`已壓縮: ${sizeKB} KB (解析度寬 600px)`);
+                    addLog(`圖片處理完成，大小: ${sizeKB} KB`);
+                });
+            };
+
+            const resizeImage = (base64Str, maxWidth = 600) => {
                 return new Promise((resolve) => {
                     const img = new Image();
                     img.src = base64Str;
@@ -130,54 +112,38 @@
                         const canvas = document.createElement('canvas');
                         let width = img.width;
                         let height = img.height;
-
                         if (width > maxWidth) {
                             height = Math.round((height * maxWidth) / width);
                             width = maxWidth;
                         }
-
                         canvas.width = width;
                         canvas.height = height;
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, width, height);
-                        
-                        const dataUrl = canvas.toDataURL('image/jpeg', 0.5);
+                        // 品質降至 0.4
+                        const dataUrl = canvas.toDataURL('image/jpeg', 0.4); 
                         const sizeKB = Math.round(dataUrl.length / 1024 * 0.75);
-                        
                         resolve({ dataUrl, sizeKB });
                     };
                 });
             };
 
             const convertPdfToImage = async (pdfFile) => {
-                if (!window.pdfjsLib) {
-                    setError("PDF 處理器尚未加載完成，請稍後再試");
-                    return;
-                }
-
                 setIsProcessingPdf(true);
+                addLog("開始轉換 PDF...");
                 try {
                     const arrayBuffer = await pdfFile.arrayBuffer();
                     const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
                     const page = await pdf.getPage(1); 
-                    
                     const viewport = page.getViewport({ scale: 1.5 });
                     const canvas = document.createElement('canvas');
-                    const context = canvas.getContext('2d');
                     canvas.height = viewport.height;
                     canvas.width = viewport.width;
-
-                    await page.render({ canvasContext: context, viewport }).promise;
-                    
-                    const rawBase64 = canvas.toDataURL('image/jpeg', 0.8);
-                    const { dataUrl, sizeKB } = await resizeImage(rawBase64, 800);
-                    
-                    setPreviewImage(dataUrl);
-                    setImageSizeInfo(`PDF 頁面 -> 圖片: ${sizeKB} KB (已優化傳輸大小)`);
-                    
+                    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+                    processImage(canvas.toDataURL('image/jpeg', 0.8));
                 } catch (err) {
-                    console.error(err);
-                    setError("PDF 轉換失敗，請確保檔案未損壞");
+                    addLog("PDF 錯誤: " + err.message);
+                    setError("PDF 轉換失敗");
                 } finally {
                     setIsProcessingPdf(false);
                 }
@@ -189,26 +155,15 @@
 
 請以純 JSON 格式輸出，不要包含 Markdown 標記，結構如下：
 {
-  "student_info": {
-    "name": "學生姓名",
-    "class": "班級",
-    "student_id": "學號"
-  },
+  "student_info": { "name": "學生姓名", "class": "班級", "student_id": "學號" },
   "analysis": [
-    {
-      "question_id": "題號",
-      "question_text": "題目簡述",
-      "student_answer": "學生手寫答案",
-      "teacher_score": "評分(若無則填N/A)",
-      "is_correct": true/false
-    }
+    { "question_id": "題號", "question_text": "題目簡述", "student_answer": "學生手寫答案", "teacher_score": "評分(若無則填N/A)", "is_correct": true/false }
   ],
   "summary": "簡短總結"
 }`;
 
-            const analyzeImage = async (originalEndpoint, apiKey, setAnalyzing, setResult, setRaw) => {
+            const analyzeImage = async (originalEndpoint, apiKey, setAnalyzing, setResult, setRaw, modelName) => {
                 if (!previewImage || !apiKey) return;
-                
                 setAnalyzing(true);
                 setResult(null);
                 setRaw('');
@@ -216,28 +171,26 @@
                 const cleanApiKey = apiKey.trim();
                 let finalEndpoint = originalEndpoint;
                 
+                // Proxy URL construction
                 if (connectionMode === 'proxy') {
                     finalEndpoint = `https://corsproxy.io/?${encodeURIComponent(originalEndpoint)}`;
                 }
+
+                addLog(`[${modelName}] 發送請求至 ${connectionMode === 'proxy' ? 'Proxy' : 'Direct'}...`);
 
                 try {
                     const payload = {
                         model: "gpt-4o", 
                         messages: [
                             { role: "system", content: SYSTEM_PROMPT },
-                            { 
-                                role: "user", 
-                                content: [
-                                    { type: "text", text: "分析這張試卷。" },
-                                    { type: "image_url", image_url: { url: previewImage } }
-                                ]
-                            }
+                            { role: "user", content: [
+                                { type: "text", text: "分析這張試卷" },
+                                { type: "image_url", image_url: { url: previewImage } }
+                            ]}
                         ],
                         max_tokens: 1500,
                         temperature: 0.1
                     };
-
-                    console.log(`[${connectionMode.toUpperCase()}] Request to ${finalEndpoint}`);
 
                     const response = await fetch(finalEndpoint, {
                         method: "POST",
@@ -248,103 +201,80 @@
                         body: JSON.stringify(payload)
                     });
 
+                    addLog(`[${modelName}] 收到回應 Status: ${response.status}`);
+
                     if (!response.ok) {
-                        const errorText = await response.text().catch(() => 'No details');
-                        throw new Error(`HTTP ${response.status}: ${errorText.substring(0, 100)}...`);
+                        const errorText = await response.text().catch(() => 'No text');
+                        throw new Error(`HTTP ${response.status}: ${errorText.substring(0, 150)}`);
                     }
 
-                    const data = await response.json();
-                    const content = data.choices?.[0]?.message?.content;
+                    const responseText = await response.text();
                     
-                    if (!content) throw new Error("API 回傳缺少 content");
-
-                    setRaw(content);
-                    
-                    const jsonString = content.replace(/```json/g, '').replace(/```/g, '').trim();
                     try {
+                        const data = JSON.parse(responseText);
+                        const content = data.choices?.[0]?.message?.content;
+                        if (!content) throw new Error("API 回傳缺少 content 欄位");
+                        
+                        setRaw(content);
+                        const jsonString = content.replace(/```json/g, '').replace(/```/g, '').trim();
                         setResult(JSON.parse(jsonString));
-                    } catch (e) {
-                        console.warn("JSON Parse warning", e);
+                        addLog(`[${modelName}] 解析成功！`);
+                    } catch (parseErr) {
+                        // 如果 JSON 解析失敗，顯示原始文字，這對 Debug 很重要
+                        setRaw("無法解析 JSON，原始回應:\n" + responseText.substring(0, 500));
+                        addLog(`[${modelName}] JSON 解析失敗: ${parseErr.message}`);
                     }
 
                 } catch (err) {
-                    console.error("Analysis Error:", err);
                     let msg = err.message;
-                    
-                    if (err.name === 'TypeError' && err.message.includes('Failed to fetch')) {
-                        if (connectionMode === 'direct') {
-                            msg = "CORS 錯誤 (直接連線被擋)。請嘗試切換回 'Proxy 模式'。";
-                        } else {
-                            msg = "連線失敗。請檢查 API Key 是否正確。";
-                        }
+                    if (msg.includes('Failed to fetch')) {
+                         msg = connectionMode === 'direct' 
+                            ? "CORS 錯誤 (連線被瀏覽器阻擋)。" 
+                            : "連線失敗 (Proxy 拒絕)。";
                     }
-                    setRaw(`錯誤: ${msg}`);
+                    setRaw(`連線錯誤: ${msg}`);
+                    addLog(`[${modelName}] 錯誤: ${msg}`);
                 } finally {
                     setAnalyzing(false);
                 }
             };
 
             const handleStartAnalysis = () => {
-                if (!apiKey1 || !apiKey2) {
-                    alert("請輸入兩組 API Key");
-                    return;
-                }
-                if (!previewImage) {
-                    alert("請先上傳試卷");
-                    return;
-                }
-                analyzeImage(endpoint1, apiKey1, setAnalyzing1, setResult1, setRawResponse1);
-                analyzeImage(endpoint2, apiKey2, setAnalyzing2, setResult2, setRawResponse2);
+                if (!apiKey1 || !apiKey2) { alert("請輸入兩組 API Key"); return; }
+                if (!previewImage) { alert("請先上傳試卷"); return; }
+                setLogs([]);
+                analyzeImage(endpoint1, apiKey1, setAnalyzing1, setResult1, setRawResponse1, "GPT-4o-mini");
+                analyzeImage(endpoint2, apiKey2, setAnalyzing2, setResult2, setRawResponse2, "GPT-4o");
             };
 
-            // 安全渲染 Helper：防止意外的 Object 渲染錯誤
-            const safeRender = (value) => {
-                if (typeof value === 'object' && value !== null) {
-                    return JSON.stringify(value);
-                }
-                return value;
-            };
+            const safeRender = (val) => (typeof val === 'object' && val !== null) ? JSON.stringify(val) : val;
 
             return (
                 <div className="min-h-screen bg-gray-50 text-gray-900 font-sans p-6">
                     <div className="max-w-7xl mx-auto space-y-6">
-                        
                         <header className="flex justify-between items-center border-b pb-4 bg-white p-6 rounded-xl shadow-sm">
                             <div>
                                 <h1 className="text-2xl font-bold text-indigo-600 flex items-center gap-2">
-                                    <ScanLine className="w-8 h-8" />
-                                    AI 試卷批改分析對決
+                                    <Icons.ScanLine className="w-8 h-8" />
+                                    AI 試卷批改分析 (v3.0 Final)
                                 </h1>
-                                <p className="text-gray-500 mt-1">本地測試版 (Fixed) - 已內置圖標庫</p>
+                                <p className="text-gray-500 mt-1">獨立修復版 - 強化壓縮與連線診斷</p>
                             </div>
-                            <div className="text-xs text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
-                                Standalone Fixed
+                            <div className="flex gap-2">
+                                <button onClick={() => setConnectionMode('direct')} className={`px-3 py-1 rounded text-xs font-bold ${connectionMode==='direct' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-600'}`}>直接連線</button>
+                                <button onClick={() => setConnectionMode('proxy')} className={`px-3 py-1 rounded text-xs font-bold ${connectionMode==='proxy' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-600'}`}>Proxy 模式</button>
                             </div>
                         </header>
 
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                             <div className="lg:col-span-1 space-y-4">
                                 <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
-                                    
-                                    <div className="bg-gray-50 p-1 rounded-lg flex mb-4 text-xs font-medium relative">
-                                        <button 
-                                            onClick={() => setConnectionMode('proxy')}
-                                            className={`flex-1 py-2 rounded-md flex items-center justify-center gap-1 transition-all ${connectionMode === 'proxy' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
-                                        >
-                                            <ShieldCheck className="w-3 h-3" /> Proxy 模式
-                                        </button>
-                                        <button 
-                                            onClick={() => setConnectionMode('direct')}
-                                            className={`flex-1 py-2 rounded-md flex items-center justify-center gap-1 transition-all ${connectionMode === 'direct' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
-                                        >
-                                            <Zap className="w-3 h-3" /> 直接連線
-                                        </button>
-                                    </div>
-
-                                    <div className="text-[10px] text-gray-400 mb-4 px-1">
-                                        {connectionMode === 'proxy' 
-                                            ? "ℹ️ 透過中轉伺服器解決 CORS，適用於嚴格網路環境。" 
-                                            : "ℹ️ 瀏覽器直接發送請求。本地打開 HTML 檔案時推薦此模式。"}
+                                    <div className="mb-4 p-2 bg-blue-50 text-blue-800 text-xs rounded border border-blue-200">
+                                        <Icons.Bug className="w-3 h-3 inline mr-1" />
+                                        <strong>診斷日誌:</strong>
+                                        <div className="mt-1 h-24 overflow-y-auto font-mono bg-white p-1 border rounded text-[10px] text-gray-600">
+                                            {logs.length === 0 ? "等待操作..." : logs.map((l, i) => <div key={i}>{l}</div>)}
+                                        </div>
                                     </div>
 
                                     <div className="space-y-4">
@@ -352,7 +282,6 @@
                                             <label className="block text-xs font-bold text-gray-700 mb-1">MODEL 1 (GPT-4o-mini)</label>
                                             <input type="password" placeholder="Key 1" className="w-full p-2 border rounded-lg bg-white outline-none text-xs" value={apiKey1} onChange={(e) => setApiKey1(e.target.value)} />
                                         </div>
-
                                         <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
                                             <label className="block text-xs font-bold text-gray-700 mb-1">MODEL 2 (GPT-4o)</label>
                                             <input type="password" placeholder="Key 2" className="w-full p-2 border rounded-lg bg-white outline-none text-xs" value={apiKey2} onChange={(e) => setApiKey2(e.target.value)} />
@@ -361,116 +290,34 @@
                                 </div>
 
                                 <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
-                                    <h3 className="font-semibold mb-4 flex items-center gap-2">
-                                        <Upload className="w-4 h-4" /> 上傳試卷
-                                    </h3>
-                                    
                                     <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:bg-gray-50 transition cursor-pointer relative">
                                         <input type="file" accept=".pdf, image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={handleFileChange} />
-                                        {isProcessingPdf ? (
-                                            <div className="animate-pulse text-indigo-600 text-sm">正在轉換 PDF 並優化...</div>
-                                        ) : file ? (
-                                            <div>
-                                                <div className="text-green-600 font-medium flex items-center justify-center gap-2 text-sm break-all">
-                                                    <Check className="w-4 h-4" /> {file.name}
-                                                </div>
-                                                {imageSizeInfo && <div className="text-xs text-gray-400 mt-1">{imageSizeInfo}</div>}
-                                            </div>
-                                        ) : (
-                                            <div className="text-gray-500 text-sm">點擊或拖放 PDF/圖片</div>
-                                        )}
+                                        {isProcessingPdf ? <div className="text-indigo-600 text-sm">處理中...</div> : file ? 
+                                            <div><div className="text-green-600 text-sm font-bold">{file.name}</div><div className="text-xs text-gray-400">{imageSizeInfo}</div></div> : 
+                                            <div className="text-gray-500 text-sm">上傳 PDF/圖片</div>
+                                        }
                                     </div>
-
-                                    {error && (
-                                        <div className="mt-3 bg-red-50 text-red-600 text-xs p-2 rounded flex items-center gap-2">
-                                            <AlertCircle className="w-3 h-3" /> {error}
-                                        </div>
-                                    )}
-
-                                    <button 
-                                        onClick={handleStartAnalysis}
-                                        disabled={!previewImage || !apiKey1 || !apiKey2 || analyzing1 || analyzing2}
-                                        className={`w-full mt-4 py-3 rounded-lg text-white font-medium flex items-center justify-center gap-2 transition
-                                            ${(!previewImage || !apiKey1 || !apiKey2) ? 'bg-gray-300 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 shadow-lg'}
-                                        `}
-                                    >
-                                        {(analyzing1 || analyzing2) ? (
-                                            <>
-                                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                                分析中...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Play className="w-4 h-4" /> 開始測試
-                                            </>
-                                        )}
+                                    <button onClick={handleStartAnalysis} disabled={!previewImage || !apiKey1 || !apiKey2 || analyzing1 || analyzing2} className={`w-full mt-4 py-3 rounded-lg text-white font-medium flex items-center justify-center gap-2 ${(!previewImage || !apiKey1) ? 'bg-gray-300' : 'bg-indigo-600 hover:bg-indigo-700 shadow-lg'}`}>
+                                        {(analyzing1 || analyzing2) ? "分析中..." : <><Icons.Play className="w-4 h-4" /> 開始測試</>}
                                     </button>
                                 </div>
                             </div>
 
                             <div className="lg:col-span-2 space-y-6">
-                                
                                 {previewImage && (
                                     <div className="bg-white p-4 rounded-xl shadow-sm border overflow-hidden">
-                                        <h3 className="text-sm font-bold text-gray-500 mb-2 flex justify-between">
-                                            <span>試卷預覽</span>
-                                            <span className="text-xs text-indigo-500 font-normal flex items-center gap-1">
-                                                <ImageIcon className="w-3 h-3" /> 已優化 (800px)
-                                            </span>
-                                        </h3>
-                                        <div className="bg-gray-100 rounded-lg overflow-auto max-h-[200px] flex justify-center">
-                                            <img src={previewImage} alt="Preview" className="max-w-full object-contain" />
-                                        </div>
+                                        <div className="bg-gray-100 rounded-lg overflow-auto max-h-[150px] flex justify-center"><img src={previewImage} className="max-w-full object-contain" /></div>
                                     </div>
                                 )}
-
                                 {(result1 || result2 || rawResponse1 || rawResponse2) && (
                                     <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
                                         <div className="flex border-b">
-                                            <button 
-                                                onClick={() => setViewMode('comparison')}
-                                                className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 ${viewMode === 'comparison' ? 'bg-indigo-50 text-indigo-700 border-b-2 border-indigo-600' : 'text-gray-500 hover:bg-gray-50'}`}
-                                            >
-                                                <SplitSquareHorizontal className="w-4 h-4" /> 比較檢視
-                                            </button>
-                                            <button 
-                                                onClick={() => setViewMode('json')}
-                                                className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 ${viewMode === 'json' ? 'bg-indigo-50 text-indigo-700 border-b-2 border-indigo-600' : 'text-gray-500 hover:bg-gray-50'}`}
-                                            >
-                                                <Table className="w-4 h-4" /> 原始 JSON
-                                            </button>
+                                            <button onClick={() => setViewMode('comparison')} className={`flex-1 py-3 text-sm font-medium ${viewMode==='comparison'?'bg-indigo-50 text-indigo-700 border-b-2 border-indigo-600':'text-gray-500'}`}><Icons.SplitSquareHorizontal className="w-3 h-3 inline" /> 比較</button>
+                                            <button onClick={() => setViewMode('json')} className={`flex-1 py-3 text-sm font-medium ${viewMode==='json'?'bg-indigo-50 text-indigo-700 border-b-2 border-indigo-600':'text-gray-500'}`}><Icons.Table className="w-3 h-3 inline" /> 原始回應</button>
                                         </div>
-
                                         <div className="grid grid-cols-2 divide-x h-[600px] overflow-hidden">
-                                            
-                                            <div className="flex flex-col h-full">
-                                                <div className="p-3 bg-blue-50 border-b flex justify-between items-center">
-                                                    <span className="font-bold text-blue-800 text-sm">GPT-4o-mini</span>
-                                                    {analyzing1 && <span className="text-xs text-blue-500 animate-pulse">Processing...</span>}
-                                                </div>
-                                                <div className="overflow-y-auto flex-1 p-4">
-                                                    {viewMode === 'comparison' ? (
-                                                        <ResultCard data={result1} loading={analyzing1} raw={rawResponse1} safeRender={safeRender} />
-                                                    ) : (
-                                                        <pre className="text-xs bg-gray-50 p-2 rounded border whitespace-pre-wrap overflow-x-auto">{rawResponse1}</pre>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            <div className="flex flex-col h-full">
-                                                <div className="p-3 bg-purple-50 border-b flex justify-between items-center">
-                                                    <span className="font-bold text-purple-800 text-sm">GPT-4o</span>
-                                                    {analyzing2 && <span className="text-xs text-purple-500 animate-pulse">Processing...</span>}
-                                                </div>
-                                                <div className="overflow-y-auto flex-1 p-4">
-                                                    {viewMode === 'comparison' ? (
-                                                        <ResultCard data={result2} loading={analyzing2} raw={rawResponse2} safeRender={safeRender} />
-                                                    ) : (
-                                                        <pre className="text-xs bg-gray-50 p-2 rounded border whitespace-pre-wrap overflow-x-auto">{rawResponse2}</pre>
-                                                    )}
-                                                </div>
-                                            </div>
-
+                                            <ResultCol title="GPT-4o-mini" loading={analyzing1} result={result1} raw={rawResponse1} viewMode={viewMode} safeRender={safeRender} />
+                                            <ResultCol title="GPT-4o" loading={analyzing2} result={result2} raw={rawResponse2} viewMode={viewMode} safeRender={safeRender} />
                                         </div>
                                     </div>
                                 )}
@@ -481,67 +328,53 @@
             );
         };
 
-        const ResultCard = ({ data, loading, raw, safeRender }) => {
-            if (loading) return <div className="space-y-3 animate-pulse">
-                <div className="h-4 bg-gray-200 rounded w-1/3"></div>
-                <div className="h-20 bg-gray-200 rounded w-full"></div>
-                <div className="h-20 bg-gray-200 rounded w-full"></div>
-            </div>;
-
-            if (!data && raw) return (
-                <div className="bg-red-50 p-3 rounded border border-red-200">
-                    <div className="text-red-700 text-xs font-bold mb-2">解析失敗 (JSON 格式錯誤)</div>
-                    <div className="text-red-600 text-[10px] whitespace-pre-wrap break-all h-40 overflow-auto">{raw}</div>
+        const ResultCol = ({ title, loading, result, raw, viewMode, safeRender }) => (
+            <div className="flex flex-col h-full">
+                <div className="p-3 bg-gray-50 border-b font-bold text-sm text-center flex justify-between">
+                    <span>{title}</span>
+                    {loading && <span className="text-xs text-blue-500 animate-pulse">Running...</span>}
                 </div>
-            );
-            
-            if (!data) return <div className="text-gray-400 text-sm text-center mt-10">等待分析結果...</div>;
+                <div className="overflow-y-auto flex-1 p-4">
+                    {viewMode === 'comparison' ? (
+                        <ResultCard data={result} loading={loading} raw={raw} safeRender={safeRender} />
+                    ) : (
+                        <pre className="text-xs bg-gray-50 p-2 rounded border whitespace-pre-wrap overflow-x-auto">{raw}</pre>
+                    )}
+                </div>
+            </div>
+        );
+
+        const ResultCard = ({ data, loading, raw, safeRender }) => {
+            if (loading) return <div className="space-y-3 animate-pulse"><div className="h-4 bg-gray-200 rounded w-1/3"></div><div className="h-20 bg-gray-200 rounded w-full"></div></div>;
+            if (!data && raw) return <div className="bg-red-50 p-3 rounded border border-red-200 text-red-600 text-xs whitespace-pre-wrap break-all">{raw}</div>;
+            if (!data) return <div className="text-gray-400 text-sm text-center mt-10">...</div>;
 
             return (
                 <div className="space-y-4 text-sm">
                     <div className="bg-gray-50 p-3 rounded-lg border">
-                        <h4 className="font-bold text-gray-700 mb-2 border-b pb-1">學生資料</h4>
                         <div className="grid grid-cols-2 gap-2 text-xs">
                             <div><span className="text-gray-500">姓名:</span> {safeRender(data.student_info?.name) || '-'}</div>
                             <div><span className="text-gray-500">學號:</span> {safeRender(data.student_info?.student_id) || '-'}</div>
-                            <div><span className="text-gray-500">班級:</span> {safeRender(data.student_info?.class) || '-'}</div>
                         </div>
                     </div>
-
                     <div className="space-y-3">
                         {data.analysis?.map((item, idx) => (
-                            <div key={idx} className="border rounded-lg p-3 hover:shadow-md transition bg-white">
+                            <div key={idx} className="border rounded-lg p-3 bg-white">
                                 <div className="flex justify-between items-start mb-2">
                                     <span className="font-bold text-indigo-600 bg-indigo-50 px-2 rounded">Q{safeRender(item.question_id)}</span>
-                                    <span className={`px-2 py-0.5 rounded text-xs font-bold ${item.is_correct ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                        得分: {safeRender(item.teacher_score)}
-                                    </span>
+                                    <span className={`px-2 py-0.5 rounded text-xs font-bold ${item.is_correct ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{safeRender(item.teacher_score)}</span>
                                 </div>
-                                
-                                <div className="mb-2">
-                                    <p className="text-xs text-gray-400 mb-1">題目:</p>
-                                    <p className="text-gray-700 line-clamp-2">{safeRender(item.question_text)}</p>
-                                </div>
-
-                                <div className="bg-yellow-50 p-2 rounded border border-yellow-100">
-                                    <p className="text-xs text-yellow-700 font-semibold mb-1">學生答案 (OCR):</p>
-                                    <p className="text-gray-800 font-medium">{safeRender(item.student_answer)}</p>
-                                </div>
+                                <div className="mb-2 text-xs text-gray-500 line-clamp-2">{safeRender(item.question_text)}</div>
+                                <div className="bg-yellow-50 p-2 rounded border border-yellow-100 text-gray-800 font-medium">{safeRender(item.student_answer)}</div>
                             </div>
                         ))}
                     </div>
-
-                    {data.summary && (
-                        <div className="bg-blue-50 p-3 rounded-lg text-xs text-blue-800">
-                            <strong>總結:</strong> {safeRender(data.summary)}
-                        </div>
-                    )}
+                    {data.summary && <div className="bg-blue-50 p-3 rounded-lg text-xs text-blue-800">{safeRender(data.summary)}</div>}
                 </div>
             );
         };
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
     </script>
 </body>
 </html>
