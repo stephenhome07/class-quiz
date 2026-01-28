@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 試卷分析比較工具 (v3.0 Final Fix)</title>
+    <title>AI 試卷分析比較工具 (v5.0 Compat Fix)</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -29,16 +29,13 @@
         );
         const Icons = {
             Upload: (p) => <IconBase {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></IconBase>,
-            Check: (p) => <IconBase {...p}><polyline points="20 6 9 17 4 12"/></IconBase>,
-            AlertCircle: (p) => <IconBase {...p}><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></IconBase>,
             Play: (p) => <IconBase {...p}><polygon points="5 3 19 12 5 21 5 3"/></IconBase>,
             ScanLine: (p) => <IconBase {...p}><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" x2="17" y1="12" y2="12"/></IconBase>,
             SplitSquareHorizontal: (p) => <IconBase {...p}><path d="M8 19H5c-1 0-2-1-2-2V7c0-1 1-2 2-2h3"/><path d="M16 5h3c1 0 2 1 2 2v10c0 1-1 2-2 2h-3"/><line x1="12" x2="12" y1="4" y2="20"/></IconBase>,
             Table: (p) => <IconBase {...p}><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><line x1="3" x2="21" y1="9" y2="9"/><line x1="3" x2="21" y1="15" y2="15"/><line x1="12" x2="12" y1="3" y2="21"/></IconBase>,
-            ShieldCheck: (p) => <IconBase {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></IconBase>,
-            Zap: (p) => <IconBase {...p}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></IconBase>,
-            ImageIcon: (p) => <IconBase {...p}><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></IconBase>,
-            Bug: (p) => <IconBase {...p}><path d="m8 2 1.88 1.88"/><path d="M14.12 3.88 16 2"/><path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9C4.6 8.8 3 7.1 3 5"/><path d="M6 13H2"/><path d="M3 21c0-2.1 1.7-3.9 3.8-4"/></IconBase>
+            Bug: (p) => <IconBase {...p}><path d="m8 2 1.88 1.88"/><path d="M14.12 3.88 16 2"/><path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9C4.6 8.8 3 7.1 3 5"/><path d="M6 13H2"/><path d="M3 21c0-2.1 1.7-3.9 3.8-4"/></IconBase>,
+            Wifi: (p) => <IconBase {...p}><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></IconBase>,
+            Zap: (p) => <IconBase {...p}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></IconBase>
         };
 
         const App = () => {
@@ -54,17 +51,19 @@
             const [isProcessingPdf, setIsProcessingPdf] = useState(false);
             const [analyzing1, setAnalyzing1] = useState(false);
             const [analyzing2, setAnalyzing2] = useState(false);
-            const [error, setError] = useState('');
-
+            
             const [result1, setResult1] = useState(null);
             const [result2, setResult2] = useState(null);
             const [rawResponse1, setRawResponse1] = useState('');
             const [rawResponse2, setRawResponse2] = useState('');
             
             const [logs, setLogs] = useState([]);
-
             const [viewMode, setViewMode] = useState('comparison');
-            const [connectionMode, setConnectionMode] = useState('direct'); // Default direct since Ai.html works
+            const [connectionMode, setConnectionMode] = useState('direct'); 
+            const [testStatus, setTestStatus] = useState('');
+            
+            // 新增: 兼容模式開關 (預設開啟，因為這是最可能的修復)
+            const [compatMode, setCompatMode] = useState(true);
 
             useEffect(() => {
                 if (window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL;
@@ -75,11 +74,63 @@
                 setLogs(prev => [`[${time}] ${msg}`, ...prev]);
             };
 
+            // 1. 純文字連線測試 (關鍵診斷)
+            const testConnection = async () => {
+                if (!apiKey1) { alert("請先輸入 API Key 1"); return; }
+                setTestStatus('testing');
+                addLog(`=== 純文字測試 (兼容模式: ${compatMode ? 'ON' : 'OFF'}) ===`);
+                
+                try {
+                    const endpoint = connectionMode === 'proxy' 
+                        ? `https://corsproxy.io/?${encodeURIComponent(endpoint1)}` 
+                        : endpoint1;
+                    
+                    addLog(`目標: ${endpoint}`);
+                    
+                    // 根據相容模式決定 Payload
+                    const payload = {
+                        messages: [{ role: "user", content: "Say Hello" }]
+                    };
+                    
+                    // 只有在非兼容模式下才送 model，因為有些 Proxy 會拒絕自帶 model 的請求
+                    if (!compatMode) {
+                        payload.model = "gpt-4o";
+                        payload.max_tokens = 10;
+                    }
+
+                    const res = await fetch(endpoint, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Authorization": `Bearer ${apiKey1.trim()}`
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (res.ok) {
+                        const data = await res.json();
+                        addLog(`✅ 成功! 回應: ${JSON.stringify(data.choices?.[0]?.message?.content || data)}`);
+                        setTestStatus('success');
+                        alert("連線成功！");
+                    } else {
+                        const txt = await res.text();
+                        addLog(`❌ 失敗 Status: ${res.status}, Body: ${txt}`);
+                        setTestStatus('fail');
+                    }
+                } catch (e) {
+                    addLog(`❌ 錯誤: ${e.message}`);
+                    setTestStatus('fail');
+                }
+            };
+
             const handleFileChange = async (e) => {
                 const selectedFile = e.target.files[0];
                 if (!selectedFile) return;
                 setFile(selectedFile);
-                resetResults();
+                setResult1(null); setResult2(null);
+                setRawResponse1(''); setRawResponse2('');
+                setLogs([]);
+                
                 if (selectedFile.type === 'application/pdf') {
                     await convertPdfToImage(selectedFile);
                 } else if (selectedFile.type.startsWith('image/')) {
@@ -89,22 +140,16 @@
                 }
             };
 
-            const resetResults = () => {
-                setResult1(null); setResult2(null);
-                setRawResponse1(''); setRawResponse2('');
-                setError(''); setImageSizeInfo(''); setLogs([]);
-            };
-
-            // 更強力的壓縮邏輯 (v3.0)
+            // 暴力壓縮
             const processImage = (base64Str) => {
-                resizeImage(base64Str, 600).then(({dataUrl, sizeKB}) => { // 縮小到 600px
+                resizeImage(base64Str, 500, 0.4).then(({dataUrl, sizeKB}) => { 
                     setPreviewImage(dataUrl);
-                    setImageSizeInfo(`已壓縮: ${sizeKB} KB (解析度寬 600px)`);
-                    addLog(`圖片處理完成，大小: ${sizeKB} KB`);
+                    setImageSizeInfo(`已壓縮: ${sizeKB} KB (寬500px)`);
+                    addLog(`圖片處理完成: ${sizeKB} KB`);
                 });
             };
 
-            const resizeImage = (base64Str, maxWidth = 600) => {
+            const resizeImage = (base64Str, maxWidth, quality) => {
                 return new Promise((resolve) => {
                     const img = new Image();
                     img.src = base64Str;
@@ -120,9 +165,8 @@
                         canvas.height = height;
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, width, height);
-                        // 品質降至 0.4
-                        const dataUrl = canvas.toDataURL('image/jpeg', 0.4); 
-                        const sizeKB = Math.round(dataUrl.length / 1024 * 0.75);
+                        const dataUrl = canvas.toDataURL('image/jpeg', quality); 
+                        const sizeKB = Math.round(dataUrl.length / 1024 * 10) / 10;
                         resolve({ dataUrl, sizeKB });
                     };
                 });
@@ -130,37 +174,29 @@
 
             const convertPdfToImage = async (pdfFile) => {
                 setIsProcessingPdf(true);
-                addLog("開始轉換 PDF...");
+                addLog("轉換 PDF...");
                 try {
                     const arrayBuffer = await pdfFile.arrayBuffer();
                     const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
                     const page = await pdf.getPage(1); 
-                    const viewport = page.getViewport({ scale: 1.5 });
+                    const viewport = page.getViewport({ scale: 1.0 });
                     const canvas = document.createElement('canvas');
                     canvas.height = viewport.height;
                     canvas.width = viewport.width;
                     await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-                    processImage(canvas.toDataURL('image/jpeg', 0.8));
+                    processImage(canvas.toDataURL('image/jpeg', 0.5));
                 } catch (err) {
                     addLog("PDF 錯誤: " + err.message);
-                    setError("PDF 轉換失敗");
                 } finally {
                     setIsProcessingPdf(false);
                 }
             };
 
             const SYSTEM_PROMPT = `
-你是一位專業的閱卷助教。你的任務是從試卷圖片中提取以下資訊。
-請特別注意手寫文字（學生答案）和紅色筆跡/圈選數字（老師評分）。
-
-請以純 JSON 格式輸出，不要包含 Markdown 標記，結構如下：
-{
-  "student_info": { "name": "學生姓名", "class": "班級", "student_id": "學號" },
-  "analysis": [
-    { "question_id": "題號", "question_text": "題目簡述", "student_answer": "學生手寫答案", "teacher_score": "評分(若無則填N/A)", "is_correct": true/false }
-  ],
-  "summary": "簡短總結"
-}`;
+你是一位專業的閱卷助教。你的任務是從試卷圖片中提取資訊。
+請以純 JSON 格式輸出，結構:
+{ "student_info": { "name": "", "class": "", "student_id": "" }, "analysis": [ { "question_id": "", "question_text": "", "student_answer": "", "teacher_score": "", "is_correct": true } ], "summary": "" }
+若無分數填 "N/A"。`;
 
             const analyzeImage = async (originalEndpoint, apiKey, setAnalyzing, setResult, setRaw, modelName) => {
                 if (!previewImage || !apiKey) return;
@@ -170,27 +206,29 @@
 
                 const cleanApiKey = apiKey.trim();
                 let finalEndpoint = originalEndpoint;
-                
-                // Proxy URL construction
                 if (connectionMode === 'proxy') {
                     finalEndpoint = `https://corsproxy.io/?${encodeURIComponent(originalEndpoint)}`;
                 }
 
-                addLog(`[${modelName}] 發送請求至 ${connectionMode === 'proxy' ? 'Proxy' : 'Direct'}...`);
+                addLog(`[${modelName}] 發送...`);
 
                 try {
                     const payload = {
-                        model: "gpt-4o", 
                         messages: [
                             { role: "system", content: SYSTEM_PROMPT },
                             { role: "user", content: [
-                                { type: "text", text: "分析這張試卷" },
+                                { type: "text", text: "分析試卷" },
                                 { type: "image_url", image_url: { url: previewImage } }
                             ]}
-                        ],
-                        max_tokens: 1500,
-                        temperature: 0.1
+                        ]
                     };
+
+                    // 兼容模式修復：如果開啟，就不送 model 參數
+                    if (!compatMode) {
+                        payload.model = "gpt-4o";
+                        payload.max_tokens = 1000;
+                        payload.temperature = 0.1;
+                    }
 
                     const response = await fetch(finalEndpoint, {
                         method: "POST",
@@ -201,11 +239,11 @@
                         body: JSON.stringify(payload)
                     });
 
-                    addLog(`[${modelName}] 收到回應 Status: ${response.status}`);
+                    addLog(`[${modelName}] Status: ${response.status}`);
 
                     if (!response.ok) {
                         const errorText = await response.text().catch(() => 'No text');
-                        throw new Error(`HTTP ${response.status}: ${errorText.substring(0, 150)}`);
+                        throw new Error(`HTTP ${response.status}: ${errorText.substring(0, 100)}`);
                     }
 
                     const responseText = await response.text();
@@ -213,27 +251,22 @@
                     try {
                         const data = JSON.parse(responseText);
                         const content = data.choices?.[0]?.message?.content;
-                        if (!content) throw new Error("API 回傳缺少 content 欄位");
+                        if (!content) throw new Error("無 content");
                         
                         setRaw(content);
                         const jsonString = content.replace(/```json/g, '').replace(/```/g, '').trim();
                         setResult(JSON.parse(jsonString));
-                        addLog(`[${modelName}] 解析成功！`);
+                        addLog(`[${modelName}] ✅ 成功`);
                     } catch (parseErr) {
-                        // 如果 JSON 解析失敗，顯示原始文字，這對 Debug 很重要
-                        setRaw("無法解析 JSON，原始回應:\n" + responseText.substring(0, 500));
-                        addLog(`[${modelName}] JSON 解析失敗: ${parseErr.message}`);
+                        setRaw(responseText);
+                        addLog(`[${modelName}] JSON 解析失敗`);
                     }
 
                 } catch (err) {
                     let msg = err.message;
-                    if (msg.includes('Failed to fetch')) {
-                         msg = connectionMode === 'direct' 
-                            ? "CORS 錯誤 (連線被瀏覽器阻擋)。" 
-                            : "連線失敗 (Proxy 拒絕)。";
-                    }
-                    setRaw(`連線錯誤: ${msg}`);
-                    addLog(`[${modelName}] 錯誤: ${msg}`);
+                    if (msg.includes('Failed to fetch')) msg = "CORS 錯誤 (請確認 API Key 或開啟 Proxy 模式)";
+                    setRaw(`Error: ${msg}`);
+                    addLog(`[${modelName}] ❌ ${msg}`);
                 } finally {
                     setAnalyzing(false);
                 }
@@ -242,7 +275,6 @@
             const handleStartAnalysis = () => {
                 if (!apiKey1 || !apiKey2) { alert("請輸入兩組 API Key"); return; }
                 if (!previewImage) { alert("請先上傳試卷"); return; }
-                setLogs([]);
                 analyzeImage(endpoint1, apiKey1, setAnalyzing1, setResult1, setRawResponse1, "GPT-4o-mini");
                 analyzeImage(endpoint2, apiKey2, setAnalyzing2, setResult2, setRawResponse2, "GPT-4o");
             };
@@ -256,9 +288,9 @@
                             <div>
                                 <h1 className="text-2xl font-bold text-indigo-600 flex items-center gap-2">
                                     <Icons.ScanLine className="w-8 h-8" />
-                                    AI 試卷批改分析 (v3.0 Final)
+                                    AI 試卷批改分析 (v5.0 Compat Fix)
                                 </h1>
-                                <p className="text-gray-500 mt-1">獨立修復版 - 強化壓縮與連線診斷</p>
+                                <p className="text-gray-500 mt-1">獨立版 - 自動修正請求參數</p>
                             </div>
                             <div className="flex gap-2">
                                 <button onClick={() => setConnectionMode('direct')} className={`px-3 py-1 rounded text-xs font-bold ${connectionMode==='direct' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-600'}`}>直接連線</button>
@@ -269,22 +301,41 @@
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                             <div className="lg:col-span-1 space-y-4">
                                 <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
-                                    <div className="mb-4 p-2 bg-blue-50 text-blue-800 text-xs rounded border border-blue-200">
-                                        <Icons.Bug className="w-3 h-3 inline mr-1" />
-                                        <strong>診斷日誌:</strong>
-                                        <div className="mt-1 h-24 overflow-y-auto font-mono bg-white p-1 border rounded text-[10px] text-gray-600">
-                                            {logs.length === 0 ? "等待操作..." : logs.map((l, i) => <div key={i}>{l}</div>)}
+                                    
+                                    <div className="mb-4">
+                                        <div className="flex items-center gap-2 mb-2 p-2 bg-yellow-50 rounded border border-yellow-200 cursor-pointer" onClick={() => setCompatMode(!compatMode)}>
+                                            <div className={`w-4 h-4 border rounded flex items-center justify-center ${compatMode ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-gray-400'}`}>
+                                                {compatMode && <Icons.Zap className="w-3 h-3 text-white" />}
+                                            </div>
+                                            <div className="text-xs select-none">
+                                                <div className="font-bold text-gray-700">兼容模式 (推薦開啟)</div>
+                                                <div className="text-gray-500">移除 model 參數以避免 Proxy 錯誤</div>
+                                            </div>
+                                        </div>
+
+                                        <button onClick={testConnection} className="w-full bg-teal-600 hover:bg-teal-700 text-white py-2 rounded flex items-center justify-center gap-2 text-sm font-bold">
+                                            <Icons.Wifi className="w-4 h-4" /> 1. 先按此測試連線
+                                        </button>
+                                        {testStatus === 'success' && <div className="text-center text-xs text-green-600 mt-1 font-bold">✅ 連線測試通過</div>}
+                                        {testStatus === 'fail' && <div className="text-center text-xs text-red-600 mt-1 font-bold">❌ 連線測試失敗 (請看日誌)</div>}
+                                    </div>
+                                    
+                                    <div className="p-2 bg-gray-800 text-green-400 text-xs rounded border border-gray-700 font-mono mb-4">
+                                        <div className="h-32 overflow-y-auto">
+                                            {logs.length === 0 ? "系統日誌..." : logs.map((l, i) => <div key={i} className="mb-1">{l}</div>)}
                                         </div>
                                     </div>
 
                                     <div className="space-y-4">
                                         <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                                            <label className="block text-xs font-bold text-gray-700 mb-1">MODEL 1 (GPT-4o-mini)</label>
-                                            <input type="password" placeholder="Key 1" className="w-full p-2 border rounded-lg bg-white outline-none text-xs" value={apiKey1} onChange={(e) => setApiKey1(e.target.value)} />
+                                            <label className="block text-xs font-bold text-gray-700 mb-1">MODEL 1 Endpoint</label>
+                                            <div className="text-[10px] text-gray-400 break-all mb-1">{endpoint1}</div>
+                                            <input type="password" placeholder="API Key 1" className="w-full p-2 border rounded-lg bg-white outline-none text-xs" value={apiKey1} onChange={(e) => setApiKey1(e.target.value)} />
                                         </div>
                                         <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                                            <label className="block text-xs font-bold text-gray-700 mb-1">MODEL 2 (GPT-4o)</label>
-                                            <input type="password" placeholder="Key 2" className="w-full p-2 border rounded-lg bg-white outline-none text-xs" value={apiKey2} onChange={(e) => setApiKey2(e.target.value)} />
+                                            <label className="block text-xs font-bold text-gray-700 mb-1">MODEL 2 Endpoint</label>
+                                            <div className="text-[10px] text-gray-400 break-all mb-1">{endpoint2}</div>
+                                            <input type="password" placeholder="API Key 2" className="w-full p-2 border rounded-lg bg-white outline-none text-xs" value={apiKey2} onChange={(e) => setApiKey2(e.target.value)} />
                                         </div>
                                     </div>
                                 </div>
@@ -293,12 +344,12 @@
                                     <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:bg-gray-50 transition cursor-pointer relative">
                                         <input type="file" accept=".pdf, image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={handleFileChange} />
                                         {isProcessingPdf ? <div className="text-indigo-600 text-sm">處理中...</div> : file ? 
-                                            <div><div className="text-green-600 text-sm font-bold">{file.name}</div><div className="text-xs text-gray-400">{imageSizeInfo}</div></div> : 
-                                            <div className="text-gray-500 text-sm">上傳 PDF/圖片</div>
+                                            <div><div className="text-green-600 text-sm font-bold">{file.name}</div><div className="text-xs text-red-500 font-bold">{imageSizeInfo}</div></div> : 
+                                            <div className="text-gray-500 text-sm">2. 上傳 PDF/圖片</div>
                                         }
                                     </div>
                                     <button onClick={handleStartAnalysis} disabled={!previewImage || !apiKey1 || !apiKey2 || analyzing1 || analyzing2} className={`w-full mt-4 py-3 rounded-lg text-white font-medium flex items-center justify-center gap-2 ${(!previewImage || !apiKey1) ? 'bg-gray-300' : 'bg-indigo-600 hover:bg-indigo-700 shadow-lg'}`}>
-                                        {(analyzing1 || analyzing2) ? "分析中..." : <><Icons.Play className="w-4 h-4" /> 開始測試</>}
+                                        {(analyzing1 || analyzing2) ? "分析中..." : <><Icons.Play className="w-4 h-4" /> 3. 開始雙模型分析</>}
                                     </button>
                                 </div>
                             </div>
