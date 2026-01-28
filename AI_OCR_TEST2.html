@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 試卷分析比較工具 (v7.0 Accuracy Fix)</title>
+    <title>AI 試卷分析比較工具 (v7.1 JSON Truncation Fix)</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -61,14 +61,11 @@
             const [logs, setLogs] = useState([]);
             const [viewMode, setViewMode] = useState('comparison');
             
-            // Diagnosis State
             const [diagnosisResults, setDiagnosisResults] = useState({});
             const [isDiagnosing, setIsDiagnosing] = useState(false);
-            // Default to 'D' if not set, as user confirmed it works
             const [workingStrategy, setWorkingStrategy] = useState(localStorage.getItem('exam_ai_strat') || 'D'); 
 
-            // Image Quality State
-            const [imgQuality, setImgQuality] = useState('medium'); // low (400), medium (800), high (1200)
+            const [imgQuality, setImgQuality] = useState('medium'); 
 
             useEffect(() => {
                 if (window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL;
@@ -94,8 +91,6 @@
                     { id: 'C', name: 'C. 無預檢', url: endpoint1, headers: {'Content-Type': 'text/plain', 'Authorization': `Bearer ${apiKey1}`} },
                     { id: 'D', name: 'D. URL Key', url: `${endpoint1}?key=${apiKey1}`, headers: {'Content-Type': 'application/json'} }
                 ];
-
-                // Prioritize checking D first since it worked for user
                 const sortedStrategies = strategies.sort((a,b) => (a.id === 'D' ? -1 : 1));
 
                 for (let strat of sortedStrategies) {
@@ -131,7 +126,7 @@
                         }
                     };
                     xhr.onerror = () => resolve({success:false, status:0});
-                    xhr.send(JSON.stringify({ messages: [{ role: "user", content: "Hi" }] }));
+                    xhr.send(JSON.stringify({ messages: [{ role: "user", content: "Hi" }], max_tokens: 10 }));
                 });
             };
 
@@ -151,7 +146,6 @@
                 }
             };
 
-            // 重新處理圖片 (當畫質改變時)
             useEffect(() => {
                 if (file) handleFileChange({ target: { files: [file] } });
             }, [imgQuality]);
@@ -159,7 +153,6 @@
             const processImage = (base64Str) => {
                 let width = 800;
                 let quality = 0.6;
-
                 if (imgQuality === 'low') { width = 400; quality = 0.4; }
                 if (imgQuality === 'medium') { width = 800; quality = 0.6; }
                 if (imgQuality === 'high') { width = 1200; quality = 0.8; }
@@ -201,7 +194,7 @@
                     const arrayBuffer = await pdfFile.arrayBuffer();
                     const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
                     const page = await pdf.getPage(1); 
-                    const viewport = page.getViewport({ scale: 1.5 }); // Use higher scale for better source
+                    const viewport = page.getViewport({ scale: 1.5 });
                     const canvas = document.createElement('canvas');
                     canvas.height = viewport.height;
                     canvas.width = viewport.width;
@@ -214,19 +207,16 @@
                 }
             };
 
-            // === 核心：防腦補 Prompt ===
             const SYSTEM_PROMPT = `
-你是一個高精度的 OCR 試卷分析系統。你的任務是從圖片中提取試卷內容。
-
-【絕對嚴格的規則 - 違反將導致錯誤】
+你是一個高精度的 OCR 試卷分析系統。
+【絕對嚴格的規則】
 1. 逐字提取 (Verbatim Extraction)：只輸出圖片上肉眼清晰可見的文字。
-2. 禁止腦補 (No Hallucination)：絕對不要嘗試補全句子、推測問題或自行回答問題。如果句子在圖片中切斷了，就讓它切斷，不要續寫。
+2. 禁止腦補：不要續寫句子。
 3. 區分筆跡：
-   - 題目文字：提取為 question_text
-   - 學生手寫：提取為 student_answer
-   - 紅色/圈選分數：提取為 teacher_score
-4. 處理模糊：如果字跡模糊無法辨識，請填寫 "[模糊]"，不要猜測。
-5. 分數格式：如果沒有看到分數，teacher_score 必須填 "N/A"。
+   - 題目文字：question_text
+   - 學生手寫：student_answer
+   - 紅色/圈選分數：teacher_score (若無則填 "N/A")
+4. 處理模糊：字跡不清填 "[模糊]"。
 
 請以純 JSON 格式輸出，結構:
 { 
@@ -234,7 +224,7 @@
   "analysis": [ 
     { 
       "question_id": "題號", 
-      "question_text": "題目原文(勿補全)", 
+      "question_text": "題目原文", 
       "student_answer": "學生手寫原文", 
       "teacher_score": "分數", 
       "is_correct": true/false 
@@ -255,7 +245,6 @@
                 let headers = {};
                 let cleanKey = apiKey.trim();
 
-                // 使用保存的策略 (預設 D)
                 switch (workingStrategy) {
                     case 'A': headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cleanKey}` }; break;
                     case 'B': url = baseEndpoint.endsWith('/') ? baseEndpoint + 'chat/completions' : baseEndpoint + '/chat/completions'; headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cleanKey}` }; break;
@@ -264,21 +253,25 @@
                 }
 
                 try {
+                    // v7.1 FIX: 明確增加 max_tokens 防止截斷
                     const payload = {
                         messages: [
                             { role: "system", content: SYSTEM_PROMPT },
                             { role: "user", content: [
-                                { type: "text", text: "請嚴格按照圖片內容提取文字，不要續寫。" },
+                                { type: "text", text: "請嚴格按照圖片內容提取文字。" },
                                 { type: "image_url", image_url: { url: previewImage } }
                             ]}
-                        ]
-                        // 移除 model 參數以提高相容性
+                        ],
+                        max_tokens: 4000, // 關鍵修正：給予足夠的 Token 空間
+                        temperature: 0.1, // 降低隨機性
+                        response_format: { type: "json_object" } // 強制 JSON 模式 (如果支援)
                     };
 
                     const response = await fetch(url, { method: "POST", headers: headers, body: JSON.stringify(payload) });
 
                     if (!response.ok) {
                         const txt = await response.text().catch(() => '');
+                        // 如果是因為 json_object 模式不被支援 (400 Bad Request)，可以考慮退回普通模式，但這裡先報錯
                         throw new Error(`HTTP ${response.status}: ${txt.substring(0, 100)}`);
                     }
 
@@ -290,8 +283,17 @@
                     
                     setRaw(content);
                     const jsonString = content.replace(/```json/g, '').replace(/```/g, '').trim();
-                    setResult(JSON.parse(jsonString));
-                    addLog(`[${modelName}] ✅ 完成`);
+                    
+                    try {
+                        setResult(JSON.parse(jsonString));
+                        addLog(`[${modelName}] ✅ 完成`);
+                    } catch (parseError) {
+                         // JSON 解析失敗的救援邏輯 (處理截斷)
+                         console.error("JSON Parse Error", parseError);
+                         addLog(`[${modelName}] ⚠️ JSON 可能被截斷，嘗試顯示部分內容`);
+                         // 這裡我們不 throw，而是把原始文字當作 "raw" 顯示在畫面上，讓使用者能看到至少一部分
+                         setRaw(content + "\n\n⚠️ 錯誤: 回應可能被截斷 (Truncated)。已增加 max_tokens 嘗試修復。");
+                    }
 
                 } catch (err) {
                     let msg = err.message;
@@ -319,9 +321,9 @@
                             <div>
                                 <h1 className="text-2xl font-bold text-indigo-600 flex items-center gap-2">
                                     <Icons.ScanLine className="w-8 h-8" />
-                                    AI 試卷批改分析 (v7.0 Accuracy)
+                                    AI 試卷批改分析 (v7.1 Fix)
                                 </h1>
-                                <p className="text-gray-500 mt-1">獨立版 - 防腦補 Prompt + 畫質控制</p>
+                                <p className="text-gray-500 mt-1">獨立版 - 修復 GPT-4o 回應截斷問題</p>
                             </div>
                             <div className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded font-bold">
                                 已鎖定策略: {workingStrategy}
@@ -334,7 +336,7 @@
                                     
                                     <div className="mb-4">
                                         <div className="text-xs font-bold text-gray-700 mb-2 flex items-center gap-1">
-                                            <Icons.Image className="w-4 h-4" /> 圖片傳輸畫質 (影響準確度)
+                                            <Icons.Image className="w-4 h-4" /> 圖片傳輸畫質
                                         </div>
                                         <div className="flex bg-gray-100 rounded p-1">
                                             {['low', 'medium', 'high'].map(q => (
@@ -343,12 +345,9 @@
                                                     onClick={() => setImgQuality(q)}
                                                     className={`flex-1 py-1 text-xs rounded transition-all ${imgQuality === q ? 'bg-white shadow text-indigo-600 font-bold' : 'text-gray-500'}`}
                                                 >
-                                                    {q === 'low' ? '低 (快)' : q === 'medium' ? '中 (推薦)' : '高 (準)'}
+                                                    {q === 'low' ? '低 (400px)' : q === 'medium' ? '中 (800px)' : '高 (1200px)'}
                                                 </button>
                                             ))}
-                                        </div>
-                                        <div className="text-[10px] text-gray-400 mt-1 px-1">
-                                            * 若出現連線失敗，請調低畫質；若 AI 腦補嚴重，請調高畫質。
                                         </div>
                                     </div>
 
