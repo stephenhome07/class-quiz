@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>教師 AI 與適性教學工作坊 - 實戰懶人包</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --primary: #0f172a; /* Deep Slate */
+            --accent: #3b82f6; /* Bright Blue */
+            --success: #10b981; /* Green */
+            --warning: #f59e0b; /* Orange */
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #334155;
+            --text-light: #64748b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Poppins', 'Noto Sans TC', sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            line-height: 1.6;
+            padding-bottom: 50px;
+        }
+
+        /* Hero Section */
+        .hero {
+            background: linear-gradient(135deg, var(--primary) 0%, #1e293b 100%);
+            color: white;
+            padding: 60px 20px;
+            text-align: center;
+            border-bottom: 5px solid var(--accent);
+        }
+
+        .hero h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .hero p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Section Styling */
+        .section-title {
+            font-size: 1.8rem;
+            color: var(--primary);
+            margin: 40px 0 20px 0;
+            border-left: 5px solid var(--accent);
+            padding-left: 15px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            padding: 25px;
+            margin-bottom: 25px;
+            border: 1px solid #e2e8f0;
+            transition: transform 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .card-title {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .tag {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .tag-easy { background-color: #dcfce7; color: #166534; }
+        .tag-middle { background-color: #fef3c7; color: #92400e; }
+        .tag-hard { background-color: #fee2e2; color: #991b1b; }
+        .tag-tool { background-color: #e0f2fe; color: #075985; }
+
+        .desc {
+            margin-bottom: 15px;
+            color: var(--text-light);
+            font-size: 0.95rem;
+        }
+
+        /* Prompt Box Styling */
+        .prompt-box {
+            background-color: #1e293b;
+            border-radius: 8px;
+            position: relative;
+            overflow: hidden;
+            margin-top: 15px;
+        }
+
+        .prompt-header {
+            background-color: #0f172a;
+            color: #94a3b8;
+            padding: 8px 15px;
+            font-size: 0.8rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #334155;
+        }
+
+        .prompt-content {
+            padding: 15px;
+            color: #e2e8f0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+            line-height: 1.5;
+        }
+
+        .copy-btn {
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 500;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .copy-btn:hover {
+            background-color: #2563eb;
+        }
+
+        .copy-btn.copied {
+            background-color: var(--success);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero h1 { font-size: 1.8rem; }
+            .container { padding: 15px; }
+            .section-title { font-size: 1.4rem; }
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            color: var(--text-light);
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="hero">
+        <h1>教師 AI 與適性教學工作坊</h1>
+        <p>實戰 Prompt 懶人包 & 工具指南</p>
+    </div>
+
+    <div class="container">
+
+        <!-- PART 3: Data Analysis -->
+        <div class="section-title">
+            <i class="fa-solid fa-chart-line"></i> PART 3: 數據分析三部曲
+        </div>
+
+        <!-- Easy Mode -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title"><i class="fa-solid fa-chart-pie"></i> Easy Mode: 基礎圖表分析</div>
+                <span class="tag tag-easy">入門必備</span>
+            </div>
+            <div class="desc">
+                直接將學校系統匯出的 CSV 成績表丟給 AI，快速找出學生弱點與分佈。
+            </div>
+            <div class="prompt-box">
+                <div class="prompt-header">
+                    <span>Prompt (提示詞)</span>
+                    <button class="copy-btn" onclick="copyText(this)"><i class="fa-regular fa-copy"></i> 複製</button>
+                </div>
+                <div class="prompt-content">你現在是一位資深的教育數據分析師。
+請分析我上傳的這份學生成績 CSV 檔案。
+
+請執行以下任務：
+1. 【弱點診斷】：找出全班答對率最低的三個題目 (或是分數最低的三個課題)。
+2. 【圖表呈現】：請繪製一張直方圖，顯示全班的分數分佈 (Distribution)。
+3. 【教學建議】：針對上述弱點，給出 3 個具體的教學改善建議。
+
+請用繁體中文回答，語氣專業且具建設性。</div>
+            </div>
+        </div>
+
+        <!-- Middle Mode -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title"><i class="fa-solid fa-code"></i> Middle Mode: AI + AI 自製工具</div>
+                <span class="tag tag-middle">進階推薦</span>
+            </div>
+            <div class="desc">
+                不再依賴 Excel 函數！讓 Gemini 幫你寫一個「HTML 本地分析網頁」，將來只需貼上數據即可使用。
+            </div>
+            <div class="prompt-box">
+                <div class="prompt-header">
+                    <span>Prompt (生成 HTML 工具用)</span>
+                    <button class="copy-btn" onclick="copyText(this)"><i class="fa-regular fa-copy"></i> 複製</button>
+                </div>
+                <div class="prompt-content">請幫我編寫一個單一檔案的 HTML 網頁工具，標題為「班級成績分析儀表板」。
+
+功能需求：
+1. 【輸入區】：有一個大文字框，讓我貼上 CSV 格式的成績數據 (欄位包含：姓名, 中文, 英文, 數學)。
+2. 【分析按鈕】：點擊後，用 JavaScript 在本地端進行計算 (不需上傳伺服器)。
+3. 【結果顯示】：
+   - 自動計算每位學生的總分與平均分。
+   - 用表格顯示成績，並將「不及格 (<50分)」的分數用紅色粗體標示。
+   - 顯示全班各科的平均分。
+4. 【AI 擴充】：在表格最右側增加一欄「AI 評語生成」，點擊後會彈出一個視窗，顯示該學生的成績摘要，方便我複製貼給 ChatGPT 生成評語。
+
+請給我完整的 HTML 代碼，包含 CSS 美化 (使用現代化簡潔風格)。</div>
+            </div>
+        </div>
+
+        <!-- Hard Mode -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title"><i class="fa-solid fa-network-wired"></i> Hard Mode: API & PowerApps</div>
+                <span class="tag tag-hard">專家挑戰</span>
+            </div>
+            <div class="desc">
+                整合 Power Automate 與 Gemini API，實現全自動化的全人數據分析 (成績 + 出席 + 行為)。
+            </div>
+            <div class="prompt-box">
+                <div class="prompt-header">
+                    <span>概念指引 (非直接 Prompt)</span>
+                </div>
+                <div class="prompt-content" style="color: #cbd5e1; font-style: italic;">
+此模式需要設定 API Key 與 Power Platform 環境。
+
+核心思路：
+1. 建立 SharePoint List 存放學生成績與出席紀錄。
+2. 設定 Power Automate 流程：當新增資料時 -> 呼叫 HTTP Request (Gemini API)。
+3. Prompt 設定：「分析該生 [成績] 與 [缺席率] 的關聯，並判斷是否需要社工介入。」
+4. 將結果回寫至 PowerApps 手機介面。
+
+(詳細設定請參考工作坊進階講義附錄)</div>
+            </div>
+        </div>
+
+        <!-- PART 4: 5 Tools -->
+        <div class="section-title">
+            <i class="fa-solid fa-toolbox"></i> PART 4: 五大實用工具箱
+        </div>
+
+        <!-- Tool 1: Gemini Simulator -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title"><i class="fa-solid fa-atom"></i> 1. Gemini 模擬器 (理科/抽象)</div>
+                <span class="tag tag-tool">概念具象化</span>
+            </div>
+            <div class="desc">
+                適合物理、生物、化學科。讓抽象概念變成可互動的網頁模擬器。
+            </div>
+            <div class="prompt-box">
+                <div class="prompt-header">
+                    <span>Prompt</span>
+                    <button class="copy-btn" onclick="copyText(this)"><i class="fa-regular fa-copy"></i> 複製</button>
+                </div>
+                <div class="prompt-content">請幫我用 HTML5 Canvas 和 JavaScript 寫一個互動式的物理模擬器。
+
+主題：【拋體運動 (Projectile Motion)】
+功能：
+1. 畫面左側有控制面板，可以調整：發射角度 (Angle)、初速度 (Velocity)、重力加速度 (Gravity)。
+2. 畫面右側是模擬區域，點擊「發射」按鈕後，顯示球體的運動軌跡。
+3. 即時顯示球體的 x, y 座標和最大高度。
+
+請給我一個單一的 HTML 檔案，我可以直接在瀏覽器打開運行。</div>
+            </div>
+        </div>
+
+        <!-- Tool 2: Comics -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title"><i class="fa-solid fa-book-open"></i> 2. 教學漫畫生成 (文科/動機)</div>
+                <span class="tag tag-tool">提升動機</span>
+            </div>
+            <div class="desc">
+                將枯燥的課文或歷史事件，轉化為分鏡腳本或四格漫畫描述，再搭配繪圖 AI (如 Canva/Midjourney) 使用。
+            </div>
+            <div class="prompt-box">
+                <div class="prompt-header">
+                    <span>Prompt</span>
+                    <button class="copy-btn" onclick="copyText(this)"><i class="fa-regular fa-copy"></i> 複製</button>
+                </div>
+                <div class="prompt-content">請將以下這段課文內容，改編為一個有趣的「四格漫畫」分鏡腳本。
+
+課文內容：[在此貼上課文，例如：孔明借東箭]
+
+輸出格式要求：
+- 第一格：(畫面描述) + (角色對白)
+- 第二格：(畫面描述) + (角色對白)
+- 第三格：(畫面描述) + (角色對白)
+- 第四格：(畫面描述) + (角色對白)
+
+風格：幽默風趣，適合中學生閱讀。</div>
+            </div>
+        </div>
+
+        <!-- Tool 3: Kahoot -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title"><i class="fa-solid fa-gamepad"></i> 3. Kahoot! 秒速出題</div>
+                <span class="tag tag-tool">課堂互動</span>
+            </div>
+            <div class="desc">
+                生成符合 Kahoot 匯入格式的表格，只需複製貼上即可完成出題。
+            </div>
+            <div class="prompt-box">
+                <div class="prompt-header">
+                    <span>Prompt</span>
+                    <button class="copy-btn" onclick="copyText(this)"><i class="fa-regular fa-copy"></i> 複製</button>
+                </div>
+                <div class="prompt-content">請根據以下內容，生成 5 條多項選擇題 (Multiple Choice Questions)。
+
+內容主題：[在此輸入主題，例如：光合作用]
+
+請嚴格按照以下表格格式輸出，方便我匯入 Excel：
+| Question | Option 1 | Option 2 | Option 3 | Option 4 | Time limit (sec) | Correct answer (1-4) |
+|---|---|---|---|---|---|---|
+| (題目內容) | (選項A) | (選項B) | (選項C) | (選項D) | 20 | (正確選項數字) |
+
+難度：中等，適合中二學生。</div>
+            </div>
+        </div>
+
+        <!-- Tool 4: AI Tutor -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title"><i class="fa-solid fa-user-graduate"></i> 4. AI 小導師 (Gems)</div>
+                <span class="tag tag-tool">自主學習</span>
+            </div>
+            <div class="desc">
+                這是設定 Gemini "System Instructions" (系統指令) 用的 Prompt，打造蘇格拉底式引導。
+            </div>
+            <div class="prompt-box">
+                <div class="prompt-header">
+                    <span>System Instructions (系統指令)</span>
+                    <button class="copy-btn" onclick="copyText(this)"><i class="fa-regular fa-copy"></i> 複製</button>
+                </div>
+                <div class="prompt-content">**角色設定：**
+你是一位蘇格拉底式的 AI 數學導師。你的目標是引導學生自己思考，而不是直接給出答案。
+
+**互動規則：**
+1. 當學生問問題時，不要直接回答結果。
+2. 你要反問學生一個引導性問題，幫助他拆解步驟。
+3. 如果學生觀念錯誤，請溫柔地指出盲點，並提供一個簡單的類比 (Analogy)。
+4. 語氣要鼓勵、正面，適合初中學生。
+
+**範例：**
+學生：「這題微積分怎麼算？」
+你：「我們先不看計算。你能告訴我，這個函數的圖形大概長什麼樣子嗎？」</div>
+            </div>
+        </div>
+
+        <!-- Tool 5: Remedial -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title"><i class="fa-solid fa-arrow-up-right-dots"></i> 5. 補課練習生成</div>
+                <span class="tag tag-tool">拔尖保底</span>
+            </div>
+            <div class="desc">
+                針對學生答錯的題目，生成「類題」進行鞏固練習，並提供鷹架 (Scaffolding)。
+            </div>
+            <div class="prompt-box">
+                <div class="prompt-header">
+                    <span>Prompt</span>
+                    <button class="copy-btn" onclick="copyText(this)"><i class="fa-regular fa-copy"></i> 複製</button>
+                </div>
+                <div class="prompt-content">學生在以下題目答錯了：
+[在此貼上原題目]
+
+請為這位學生設計「補底練習」：
+1. **錯題分析：** 簡單解釋這題考的關鍵概念是什麼？學生可能在哪個步驟卡住了？
+2. **引導式填充題 (Scaffolding)：** 將原題拆解，挖空關鍵步驟讓學生填寫。
+3. **類題練習：** 生成 3 題與原題概念相同、但數字或情境不同的新題目，供學生練習鞏固。
+
+附上正確答案與詳解 (放在最後)。</div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="footer">
+        <p>© 2024 教師 AI 與適性教學工作坊 | 讓 AI 成為你的神隊友</p>
+    </div>
+
+    <script>
+        function copyText(button) {
+            // Find the sibling element containing the code
+            const content = button.parentElement.nextElementSibling.innerText;
+            
+            // Copy to clipboard
+            navigator.clipboard.writeText(content).then(() => {
+                // Visual feedback
+                const originalText = button.innerHTML;
+                button.innerHTML = '<i class="fa-solid fa-check"></i> 已複製';
+                button.classList.add('copied');
+                
+                // Reset after 2 seconds
+                setTimeout(() => {
+                    button.innerHTML = originalText;
+                    button.classList.remove('copied');
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy: ', err);
+                alert('複製失敗，請手動複製。');
+            });
+        }
+    </script>
+</body>
+</html>
