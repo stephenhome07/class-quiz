@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>互動重力實驗室 (Interactive Gravity Lab)</title>
+    
+    <!-- 1. 引入 Tailwind CSS (樣式庫) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 2. 引入 React 和 ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- 3. 引入 Babel (讓瀏覽器看懂 React 代碼) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- 自定義樣式 -->
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .animate-bounce-slow { animation: bounce 3s infinite; }
+        .animate-float { animation: float 6s ease-in-out infinite; }
+        @keyframes float {
+            0% { transform: translate(0, -20px) rotate(5deg); }
+            50% { transform: translate(0, -40px) rotate(-5deg); }
+            100% { transform: translate(0, -20px) rotate(5deg); }
+        }
+        /* 隱藏滾動條但保留功能 */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-slate-50 text-gray-800">
+
+    <div id="root"></div>
+
+    <!-- 4. React 程式碼邏輯 -->
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // --- 圖標組件 (SVG Icons) ---
+        const IconRocket = ({size=20}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>;
+        const IconGlobe = ({size=20}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>;
+        const IconArrowDown = ({size=20}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>;
+        const IconPlay = ({size=20}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>;
+        const IconRotateCcw = ({size=20}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>;
+        const IconInfo = ({size=20}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>;
+
+        // --- 數據常量 ---
+        const PLANETS = {
+            earth: { id: 'earth', name: '地球', g: 9.81, color: 'bg-blue-100', groundColor: 'bg-green-600', sky: 'from-blue-400 to-blue-200' },
+            moon: { id: 'moon', name: '月球', g: 1.62, color: 'bg-gray-100', groundColor: 'bg-gray-400', sky: 'from-gray-900 to-gray-700' },
+            jupiter: { id: 'jupiter', name: '木星', g: 24.79, color: 'bg-orange-100', groundColor: 'bg-orange-700', sky: 'from-orange-900 to-red-900' },
+            space: { id: 'space', name: '外太空', g: 0, color: 'bg-slate-900', groundColor: 'bg-slate-800', sky: 'from-black to-slate-900' },
+        };
+
+        // --- 通用組件 ---
+        const Button = ({ onClick, active, children, className = "" }) => (
+            <button
+                onClick={onClick}
+                className={`px-4 py-2 rounded-lg font-bold transition-all transform active:scale-95 flex items-center justify-center gap-2 ${
+                    active 
+                        ? 'bg-blue-600 text-white shadow-lg scale-105' 
+                        : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+                } ${className}`}
+            >
+                {children}
+            </button>
+        );
+
+        const Card = ({ title, children, className = "" }) => (
+            <div className={`bg-white p-6 rounded-2xl shadow-xl border border-gray-100 ${className}`}>
+                <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    {title}
+                </h3>
+                {children}
+            </div>
+        );
+
+        // --- 模組 1: 質量 vs 重量 ---
+        const MassWeightSim = () => {
+            const [mass, setMass] = useState(50);
+            const [planet, setPlanet] = useState('earth');
+            const currentPlanet = PLANETS[planet];
+            
+            const weight = (mass * currentPlanet.g).toFixed(1);
+
+            return (
+                <div className="flex flex-col md:flex-row gap-6 h-full">
+                    <div className="w-full md:w-1/3 space-y-4">
+                        <Card title="控制台">
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-600 mb-2">選擇地點</label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {Object.values(PLANETS).map((p) => (
+                                            <Button 
+                                                key={p.id} 
+                                                active={planet === p.id} 
+                                                onClick={() => setPlanet(p.id)}
+                                            >
+                                                {p.name}
+                                            </Button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-600 mb-2">
+                                        太空人的質量 (Mass): <span className="text-blue-600 font-bold text-lg">{mass} kg</span>
+                                    </label>
+                                    <input 
+                                        type="range" 
+                                        min="10" 
+                                        max="100" 
+                                        value={mass} 
+                                        onChange={(e) => setMass(parseInt(e.target.value))}
+                                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">質量代表物體含有多少物質，到哪裡都不會變。</p>
+                                </div>
+                            </div>
+                        </Card>
+
+                        <Card title="測量結果">
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg border border-blue-100">
+                                    <span className="text-gray-600">質量 (Mass)</span>
+                                    <span className="text-2xl font-bold text-blue-700">{mass} kg</span>
+                                </div>
+                                <div className="flex justify-between items-center p-3 bg-orange-50 rounded-lg border border-orange-100">
+                                    <span className="text-gray-600">重量 (Weight)</span>
+                                    <span className="text-2xl font-bold text-orange-700">{weight} N</span>
+                                </div>
+                                <div className="text-sm text-gray-500 bg-gray-50 p-3 rounded">
+                                    公式：重量 (N) = 質量 (kg) × 重力加速度 (N/kg)
+                                    <br/>
+                                    <span className="font-mono text-xs mt-1 block">W = {mass} × {currentPlanet.g} = {weight} N</span>
+                                </div>
+                            </div>
+                        </Card>
+                    </div>
+
+                    <div className="w-full md:w-2/3 relative rounded-2xl overflow-hidden shadow-inner border border-gray-300 min-h-[400px]">
+                        <div className={`absolute inset-0 bg-gradient-to-b ${currentPlanet.sky} transition-colors duration-1000`}></div>
+                        
+                        {(planet === 'space' || planet === 'moon') && (
+                            <div className="absolute inset-0 opacity-80" style={{backgroundImage: 'radial-gradient(white 1px, transparent 1px)', backgroundSize: '50px 50px'}}></div>
+                        )}
+
+                        <div className={`absolute bottom-0 w-full h-1/4 ${currentPlanet.groundColor} transition-colors duration-1000 flex items-start justify-center pt-2`}>
+                            <div className="w-full h-2 bg-black opacity-10 blur-sm absolute top-0"></div>
+                        </div>
+
+                        <div className="absolute bottom-[20%] left-1/2 transform -translate-x-1/2 flex flex-col items-center transition-all duration-500">
+                            <div className="bg-white p-3 rounded-xl rounded-bl-none shadow-lg mb-4 max-w-[200px] animate-bounce-slow">
+                                <p className="text-center text-sm font-bold text-gray-800">
+                                    {planet === 'space' ? '我飄浮起來了！' : '我的質量還是 ' + mass + 'kg！'}
+                                </p>
+                            </div>
+
+                            <svg width="120" height="160" viewBox="0 0 100 130" className={`transition-transform duration-1000 ${planet === 'space' ? 'animate-float' : ''}`}>
+                                <g transform={planet === 'space' ? "translate(0, -20) rotate(5)" : "translate(0,0)"}>
+                                    <rect x="30" y="40" width="40" height="50" rx="5" fill="white" stroke="#374151" strokeWidth="2"/>
+                                    <circle cx="50" cy="30" r="20" fill="white" stroke="#374151" strokeWidth="2"/>
+                                    <circle cx="50" cy="30" r="15" fill="#bae6fd"/>
+                                    <rect x="32" y="90" width="12" height="35" rx="2" fill="white" stroke="#374151" strokeWidth="2"/>
+                                    <rect x="56" y="90" width="12" height="35" rx="2" fill="white" stroke="#374151" strokeWidth="2"/>
+                                    <path d="M 30 50 Q 15 70 20 90" stroke="#374151" strokeWidth="8" strokeLinecap="round" fill="none"/>
+                                    <path d="M 70 50 Q 85 70 80 90" stroke="#374151" strokeWidth="8" strokeLinecap="round" fill="none"/>
+                                    {planet === 'earth' && <text x="42" y="70" fontSize="10">🌏</text>}
+                                    {planet === 'moon' && <text x="42" y="70" fontSize="10">🌑</text>}
+                                </g>
+                            </svg>
+
+                            <div className="w-40 h-12 bg-gray-800 rounded-lg border-t-4 border-gray-600 flex items-center justify-center relative z-10 shadow-xl">
+                                <div className="bg-green-900 px-4 py-1 rounded font-mono text-green-400 font-bold border border-green-700 shadow-[0_0_10px_rgba(74,222,128,0.2)]">
+                                    {weight} N
+                                </div>
+                            </div>
+                            <div className="w-48 h-4 bg-black opacity-20 rounded-full blur-md mt-[-5px]"></div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- 模組 2: 重力的方向 ---
+        const GravityDirectionSim = () => {
+            const canvasRef = useRef(null);
+            const [objects, setObjects] = useState([]);
+            
+            const CENTER = { x: 300, y: 300 };
+            const EARTH_RADIUS = 80;
+
+            useEffect(() => {
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
+                let animationFrameId;
+
+                const render = () => {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                    // 繪製太空背景
+                    ctx.fillStyle = '#1e1b4b';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                    // 繪製重力場線
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+                    ctx.lineWidth = 1;
+                    for (let i = 0; i < 12; i++) {
+                        const angle = (i * 30) * (Math.PI / 180);
+                        ctx.beginPath();
+                        ctx.moveTo(CENTER.x + Math.cos(angle) * 600, CENTER.y + Math.sin(angle) * 600);
+                        ctx.lineTo(CENTER.x, CENTER.y);
+                        ctx.stroke();
+                    }
+
+                    // 繪製地球
+                    ctx.beginPath();
+                    ctx.arc(CENTER.x, CENTER.y, EARTH_RADIUS, 0, 2 * Math.PI);
+                    ctx.fillStyle = '#2563eb';
+                    ctx.fill();
+                    ctx.strokeStyle = '#60a5fa';
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                    
+                    // 陸地
+                    ctx.fillStyle = '#16a34a'; 
+                    ctx.beginPath(); ctx.arc(CENTER.x - 20, CENTER.y - 10, 20, 0, 2 * Math.PI); ctx.fill();
+                    ctx.beginPath(); ctx.arc(CENTER.x + 30, CENTER.y + 20, 15, 0, 2 * Math.PI); ctx.fill();
+
+                    ctx.fillStyle = 'white';
+                    ctx.font = 'bold 16px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('地球', CENTER.x, CENTER.y + 5);
+
+                    // 更新並繪製物件
+                    const nextObjects = [];
+                    objects.forEach(obj => {
+                        const dx = CENTER.x - obj.x;
+                        const dy = CENTER.y - obj.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        
+                        let newObj = { ...obj };
+
+                        // 計算目標角度 (腳朝向地心)
+                        const targetAngle = Math.atan2(dy, dx) - Math.PI / 2;
+
+                        if (dist > EARTH_RADIUS + 10) { 
+                            const dirX = dx / dist;
+                            const dirY = dy / dist;
+                            newObj.vx += dirX * 0.2; 
+                            newObj.vy += dirY * 0.2;
+                            newObj.x += newObj.vx;
+                            newObj.y += newObj.vy;
+                            newObj.angle = targetAngle;
+                            nextObjects.push(newObj);
+                        } else {
+                            newObj.vx = 0; newObj.vy = 0; newObj.angle = targetAngle;
+                            nextObjects.push(newObj);
+                        }
+
+                        // 繪製蘋果
+                        ctx.save();
+                        ctx.translate(newObj.x, newObj.y);
+                        ctx.rotate(newObj.angle);
+                        
+                        ctx.beginPath();
+                        ctx.arc(0, 0, 10, 0, 2 * Math.PI);
+                        ctx.fillStyle = '#ef4444';
+                        ctx.fill();
+                        ctx.beginPath();
+                        ctx.ellipse(0, -10, 3, 6, Math.PI / 4, 0, 2 * Math.PI);
+                        ctx.fillStyle = '#65a30d';
+                        ctx.fill();
+
+                        // 繪製重力向量 (指向中心)
+                        if (dist > EARTH_RADIUS + 15) {
+                            ctx.beginPath();
+                            ctx.moveTo(0, 0);
+                            ctx.lineTo(0, 30); 
+                            ctx.strokeStyle = '#fbbf24';
+                            ctx.lineWidth = 2;
+                            ctx.stroke();
+                            // 箭頭
+                            ctx.beginPath(); ctx.moveTo(-4, 25); ctx.lineTo(0, 30); ctx.lineTo(4, 25);
+                            ctx.strokeStyle = '#fbbf24'; ctx.stroke();
+                            
+                            // G 標籤
+                            ctx.save();
+                            ctx.translate(10, 20);
+                            ctx.fillStyle = '#fbbf24';
+                            ctx.font = '12px Arial';
+                            ctx.fillText("G", 0, 0); 
+                            ctx.restore();
+                        }
+                        ctx.restore();
+                    });
+
+                    if(objects.length > 0) {
+                        setObjects(nextObjects);
+                    }
+                };
+
+                animationFrameId = requestAnimationFrame(render);
+                return () => cancelAnimationFrame(animationFrameId);
+            }, [objects]);
+
+            const handleCanvasClick = (e) => {
+                const rect = canvasRef.current.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                const dx = CENTER.x - x;
+                const dy = CENTER.y - y;
+                if (Math.sqrt(dx*dx + dy*dy) < EARTH_RADIUS) return;
+
+                const initialAngle = Math.atan2(dy, dx) - Math.PI / 2;
+                setObjects(prev => [...prev, { x, y, vx: 0, vy: 0, angle: initialAngle }]);
+            };
+
+            return (
+                <div className="flex flex-col md:flex-row gap-6 h-full items-center">
+                    <div className="w-full md:w-1/3">
+                        <Card title="實驗說明">
+                            <p className="text-gray-600 mb-4">
+                                PPT 中提到「重力指向地心」。在這個模擬中，你可以驗證這件事。
+                            </p>
+                            <ul className="list-disc pl-5 space-y-2 text-gray-700">
+                                <li>點擊黑色區域的任意位置產生一顆蘋果。</li>
+                                <li>觀察蘋果掉落的方向。</li>
+                                <li>黃色箭頭代表重力 (Force of Gravity)。</li>
+                            </ul>
+                            <div className="mt-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                                <span className="font-bold text-yellow-800">觀察重點：</span>
+                                <p className="text-sm text-yellow-800 mt-1">
+                                    無論蘋果在哪裡，它總是向「下」掉，而這裡的「下」就是指向地球中心。
+                                </p>
+                            </div>
+                            <div className="mt-4">
+                                <Button onClick={() => setObjects([])} className="w-full">
+                                    <IconRotateCcw size={16} /> 清除所有蘋果
+                                </Button>
+                            </div>
+                        </Card>
+                    </div>
+                    <div className="w-full md:w-2/3 flex justify-center">
+                        <canvas 
+                            ref={canvasRef}
+                            width={600} 
+                            height={600} 
+                            onClick={handleCanvasClick}
+                            className="cursor-crosshair bg-slate-900 rounded-full shadow-2xl max-w-full h-auto"
+                            style={{maxWidth: '500px', maxHeight: '500px'}}
+                        />
+                    </div>
+                </div>
+            );
+        };
+
+        // --- 模組 3: 拋體運動 ---
+        const ProjectileSim = () => {
+            const [ball, setBall] = useState(null); 
+            const [running, setRunning] = useState(false);
+            const [speed, setSpeed] = useState(15);
+            const [angle, setAngle] = useState(60);
+            
+            useEffect(() => {
+                let interval;
+                if (running && ball) {
+                    interval = setInterval(() => {
+                        setBall(prev => {
+                            if (prev.y > 380) { 
+                                setRunning(false);
+                                return prev;
+                            }
+                            const newVy = prev.vy + 0.5; // Gravity
+                            const newX = prev.x + prev.vx;
+                            const newY = prev.y + newVy;
+                            return {
+                                ...prev,
+                                x: newX, y: newY, vx: prev.vx, vy: newVy,
+                                positions: [...prev.positions, {x: newX, y: newY}] 
+                            };
+                        });
+                    }, 20);
+                }
+                return () => clearInterval(interval);
+            }, [running, ball]);
+
+            const throwBall = () => {
+                const radian = angle * (Math.PI / 180);
+                const vx = speed * Math.cos(radian);
+                const vy = -speed * Math.sin(radian);
+                setBall({ x: 50, y: 340, vx: vx, vy: vy, positions: [{x: 50, y: 340}] }); 
+                setRunning(true);
+            };
+
+            return (
+                <div className="flex flex-col md:flex-row h-full gap-6">
+                    <div className="w-full md:w-1/3 space-y-4">
+                        <Card title="拋體運動 (籃球)">
+                            <div className="space-y-6">
+                                <p className="text-sm text-gray-600">
+                                    當籃球在空中飛行時，重力是如何作用的？設定不同的速度和角度試試看！
+                                </p>
+                                
+                                <div className="space-y-4">
+                                    <div>
+                                        <div className="flex justify-between mb-1">
+                                            <label className="text-sm font-bold text-gray-700">投擲速度 (Speed)</label>
+                                            <span className="text-sm text-blue-600 font-mono">{speed}</span>
+                                        </div>
+                                        <input 
+                                            type="range" min="10" max="25" step="1"
+                                            value={speed} onChange={(e) => setSpeed(Number(e.target.value))}
+                                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                                            disabled={running}
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <div className="flex justify-between mb-1">
+                                            <label className="text-sm font-bold text-gray-700">投擲角度 (Angle)</label>
+                                            <span className="text-sm text-blue-600 font-mono">{angle}°</span>
+                                        </div>
+                                        <input 
+                                            type="range" min="0" max="90" step="5"
+                                            value={angle} onChange={(e) => setAngle(Number(e.target.value))}
+                                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                                            disabled={running}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-2 pt-2">
+                                    <Button onClick={throwBall} active={running} className="flex-1">
+                                        <IconPlay size={16} /> 投球
+                                    </Button>
+                                    <Button onClick={() => {setBall(null); setRunning(false);}}>
+                                        <IconRotateCcw size={16} /> 重置
+                                    </Button>
+                                </div>
+                            </div>
+                        </Card>
+
+                        <div className="bg-yellow-50 p-4 rounded-xl text-sm text-yellow-800 border border-yellow-100 flex gap-2 items-start shadow-sm">
+                            <IconInfo size={18} className="mt-0.5 shrink-0"/>
+                            <p>即使你把球往高處丟（改變角度），或是丟得很用力（增加速度），**重力的方向（黃色箭頭）始終都是垂直向下的**。</p>
+                        </div>
+                    </div>
+
+                    <div className="relative flex-1 bg-sky-100 rounded-2xl overflow-hidden border border-gray-300 shadow-inner min-h-[400px]">
+                        <div className="absolute inset-0" style={{backgroundImage: 'linear-gradient(#e5e7eb 1px, transparent 1px), linear-gradient(90deg, #e5e7eb 1px, transparent 1px)', backgroundSize: '40px 40px'}}></div>
+                        <div className="absolute bottom-0 w-full h-10 bg-green-600"></div>
+                        
+                        <div className="absolute right-10 bottom-40 w-2 h-40 bg-gray-400"></div>
+                        <div className="absolute right-10 bottom-80 w-16 h-2 bg-orange-600"></div>
+                        <div className="absolute right-2 bottom-70 w-16 h-12 border-2 border-orange-600 border-t-0 rounded-b-lg opacity-50"></div>
+
+                        <div className="absolute left-6 bottom-10 flex flex-col items-center">
+                            <span className="text-5xl relative z-10" style={{ transform: `rotate(${-angle/5}deg)` }}>🏃</span>
+                            { !running && (
+                                <div 
+                                    className="absolute top-0 left-8 w-16 h-0.5 bg-blue-400 origin-left border-t border-dashed border-blue-600"
+                                    style={{ transform: `rotate(-${angle}deg)` }}
+                                ></div>
+                            )}
+                        </div>
+
+                        <svg className="absolute inset-0 w-full h-full pointer-events-none">
+                            {ball && ball.positions.length > 1 && (
+                                <polyline 
+                                    points={ball.positions.map(p => `${p.x},${p.y}`).join(' ')} 
+                                    fill="none" 
+                                    stroke="gray" 
+                                    strokeWidth="2" 
+                                    strokeDasharray="4"
+                                />
+                            )}
+                        </svg>
+
+                        {ball && (
+                            <div 
+                                className="absolute w-8 h-8 rounded-full bg-orange-500 border-2 border-orange-700 flex items-center justify-center shadow-sm z-20"
+                                style={{ left: ball.x - 16, top: ball.y - 16 }}
+                            >
+                                <div className="absolute top-full left-1/2 w-[2px] h-12 bg-yellow-500 origin-top transform -translate-x-1/2 flex flex-col items-center">
+                                    <div className="w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[8px] border-t-yellow-500 mt-auto transform rotate-180 translate-y-full"></div>
+                                </div>
+                                <span className="absolute top-14 text-xs font-bold text-yellow-700 bg-white/80 px-1 rounded whitespace-nowrap z-30">重力 mg</span>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        // --- 主程式 ---
+        const App = () => {
+            const [activeTab, setActiveTab] = useState(0);
+
+            const tabs = [
+                { title: '質量 vs 重量', icon: <IconRocket size={20} />, component: <MassWeightSim /> },
+                { title: '重力的方向', icon: <IconGlobe size={20} />, component: <GravityDirectionSim /> },
+                { title: '拋體運動', icon: <IconArrowDown size={20} />, component: <ProjectileSim /> },
+            ];
+
+            return (
+                <div className="min-h-screen p-4 md:p-8">
+                    <div className="max-w-6xl mx-auto h-full flex flex-col">
+                        <header className="mb-6 flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+                            <div>
+                                <h1 className="text-3xl font-black text-gray-800 tracking-tight flex items-center gap-3">
+                                    <span className="text-blue-600 text-4xl">🍎</span> 互動重力實驗室
+                                </h1>
+                                <p className="text-gray-500 mt-1 ml-14">學習物理：重力、質量與重量 (Form 1-2 Science)</p>
+                            </div>
+                            <div className="flex gap-2 mt-4 md:mt-0 bg-gray-100 p-1 rounded-xl overflow-x-auto">
+                                {tabs.map((tab, idx) => (
+                                    <button
+                                        key={idx}
+                                        onClick={() => setActiveTab(idx)}
+                                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-all whitespace-nowrap ${
+                                            activeTab === idx 
+                                                ? 'bg-white text-blue-600 shadow-md' 
+                                                : 'text-gray-500 hover:text-gray-700'
+                                        }`}
+                                    >
+                                        {tab.icon}
+                                        <span>{tab.title}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </header>
+
+                        <main className="flex-1 bg-white rounded-3xl shadow-xl p-6 border border-gray-100 min-h-[600px]">
+                            {tabs[activeTab].component}
+                        </main>
+
+                        <footer className="mt-8 text-center text-gray-400 text-sm pb-8">
+                            <p>© 物理教學輔助工具 | 配合課本第 11.4 章節使用</p>
+                        </footer>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

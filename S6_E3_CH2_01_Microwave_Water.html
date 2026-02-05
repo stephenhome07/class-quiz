@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>微波加熱水分子模擬 (DSE Physics)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1a202c; color: white; }
+        canvas { border: 2px solid #4a5568; border-radius: 8px; background-color: #000; cursor: crosshair; }
+        .panel { background-color: #2d3748; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .btn { transition: all 0.2s; }
+        .btn:active { transform: scale(0.95); }
+        /* Legend for EM Wave */
+        .legend-dot { width: 12px; height: 12px; display: inline-block; border-radius: 50%; margin-right: 5px; }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen p-4">
+
+    <h1 class="text-3xl font-bold mb-2 text-blue-400">微波加熱原理模擬 (Microwave Heating)</h1>
+    <p class="mb-6 text-gray-400 text-sm">中六物理：電磁波 (EM Wave) 與偶極旋轉</p>
+
+    <div class="flex flex-col md:flex-row gap-6 w-full max-w-6xl">
+        
+        <!-- Canvas Container -->
+        <div class="flex-1 flex flex-col items-center">
+            <div class="relative">
+                <canvas id="simCanvas" width="600" height="450"></canvas>
+                <!-- Direction Indicator -->
+                <div id="waveDirection" class="absolute top-4 right-4 text-green-400 font-bold opacity-0 transition-opacity duration-500 bg-black/50 px-2 rounded">
+                    ⚡ 微波射入方向 (Wave Propagation) ⬅️
+                </div>
+            </div>
+            
+            <!-- EM Wave Legend -->
+            <div class="mt-2 flex gap-6 text-sm bg-gray-800 px-4 py-2 rounded-full border border-gray-600">
+                <div class="flex items-center"><span class="legend-dot bg-green-500"></span>電場 (E-field): 驅動水分子旋轉</div>
+                <div class="flex items-center"><span class="legend-dot bg-purple-500"></span>磁場 (B-field): 與電場垂直</div>
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="panel w-full md:w-80 flex flex-col gap-4">
+            <div class="border-b border-gray-600 pb-2 mb-2">
+                <h2 class="text-xl font-semibold text-yellow-400">控制面板</h2>
+            </div>
+
+            <div class="flex flex-col gap-2">
+                <label class="flex items-center justify-between">
+                    <span class="font-bold">微波源 (Microwave):</span>
+                    <span id="statusText" class="text-red-400 font-mono">OFF</span>
+                </label>
+                <button id="toggleBtn" class="btn bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded w-full">
+                    開啟微波 (Turn ON)
+                </button>
+            </div>
+
+            <div class="mt-4">
+                <label class="block text-sm font-bold mb-1">微波強度 (Amplitude)</label>
+                <input type="range" id="intensitySlider" min="0" max="100" value="70" class="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer">
+            </div>
+            
+            <div class="mt-2">
+                <label class="block text-sm font-bold mb-1">頻率 (Frequency)</label>
+                <input type="range" id="freqSlider" min="1" max="20" value="5" class="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer">
+            </div>
+
+            <div class="mt-4 bg-gray-700 p-3 rounded border border-gray-600">
+                <div class="flex justify-between items-end mb-1">
+                    <span class="text-sm">食物溫度 (動能):</span>
+                    <span id="tempDisplay" class="text-2xl font-bold text-green-400">25°C</span>
+                </div>
+                <div class="w-full bg-gray-800 rounded-full h-4">
+                    <div id="tempBar" class="bg-green-500 h-4 rounded-full transition-all duration-200" style="width: 5%"></div>
+                </div>
+            </div>
+
+            <div class="mt-4 text-xs text-gray-300 space-y-2 border-t border-gray-600 pt-2">
+                <p>🔴 <span class="text-red-400">氧 (O)</span>: δ- 負極 (Size UP!)</p>
+                <p>🔵 <span class="text-blue-400">氫 (H)</span>: δ+ 正極</p>
+                <p>⚠️ 觀察：請留意分子如何嘗試與綠色電場線對齊。</p>
+            </div>
+
+            <button id="resetBtn" class="btn mt-auto bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded w-full text-sm">
+                重置模擬 (Reset)
+            </button>
+        </div>
+    </div>
+
+    <!-- Explanation Section -->
+    <div class="mt-8 max-w-4xl text-gray-300 text-sm bg-gray-800 p-6 rounded-lg shadow-lg">
+        <h3 class="text-lg font-bold text-white mb-2">物理原理 (Physics Concept):</h3>
+        <ul class="list-disc pl-5 space-y-2">
+            <li><strong>電磁波結構 (Structure of EM Wave):</strong> 電磁波由互相垂直的<strong>電場 (Electric Field)</strong> 和 <strong>磁場 (Magnetic Field)</strong> 組成。在這個模擬中，電場是垂直震盪 (y軸)，磁場是水平震盪 (z軸/斜向)，波向左傳播。</li>
+            <li><strong>與物質的相互作用 (Interaction):</strong> 水分子是極性分子 (Polar Molecule)。由於氫氧鍵的特性，它有一個永久電偶極。當電磁波通過時，變化的<strong>電場</strong>會對偶極施加力矩 (Torque)，迫使水分子旋轉。</li>
+            <li><strong>加熱機制:</strong> 微波爐的頻率 (2.45 GHz) 使水分子劇烈旋轉並與周圍分子摩擦，將電磁波能量轉化為熱能。</li>
+        </ul>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+        const waveDirectionIndicator = document.getElementById('waveDirection');
+        
+        // State
+        let isMicrowaveOn = false;
+        let molecules = [];
+        let time = 0;
+        let temperature = 25;
+        let maxFieldIntensity = 0.7; // Controlled by slider
+        let frequencySpeed = 0.1; // Controlled by freq slider
+        
+        // Constants
+        const WAVELENGTH = 300; // Pixels per cycle
+        const WAVE_SPEED = 4;   // Pixels per frame
+
+        // UI Elements
+        const toggleBtn = document.getElementById('toggleBtn');
+        const statusText = document.getElementById('statusText');
+        const tempDisplay = document.getElementById('tempDisplay');
+        const tempBar = document.getElementById('tempBar');
+        const intensitySlider = document.getElementById('intensitySlider');
+        const freqSlider = document.getElementById('freqSlider');
+        const resetBtn = document.getElementById('resetBtn');
+
+        // Molecule Class
+        class Molecule {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.angle = Math.random() * Math.PI * 2;
+                this.vx = (Math.random() - 0.5) * 0.5;
+                this.vy = (Math.random() - 0.5) * 0.5;
+                this.angularVelocity = 0;
+                this.size = 14; // Increased size significantly for visibility
+            }
+
+            update(localEField) {
+                // 1. Basic Movement
+                this.x += this.vx;
+                this.y += this.vy;
+                this.angle += this.angularVelocity;
+
+                // 2. Wall Collision (Bounce)
+                if (this.x < 20 || this.x > canvas.width - 20) this.vx *= -1;
+                if (this.y < 20 || this.y > canvas.height - 20) this.vy *= -1;
+                
+                // Keep inside bounds forcefully
+                this.x = Math.max(20, Math.min(canvas.width - 20, this.x));
+                this.y = Math.max(20, Math.min(canvas.height - 20, this.y));
+
+                // 3. Microwave Interaction
+                if (isMicrowaveOn) {
+                    // Torque = pE sin(theta). 
+                    // Target angle: Up = -PI/2, Down = PI/2.
+                    let targetAngle = localEField > 0 ? -Math.PI / 2 : Math.PI / 2;
+                    
+                    // Calculate shortest rotation to target
+                    let diff = targetAngle - this.angle;
+                    while (diff <= -Math.PI) diff += Math.PI * 2;
+                    while (diff > Math.PI) diff -= Math.PI * 2;
+
+                    // Apply torque (Angular acceleration)
+                    // Increased torque constant for snappier rotation visual
+                    this.angularVelocity += diff * 0.02 * Math.abs(localEField);
+
+                    // Friction/Collision (Heating mechanism)
+                    // Increased heat transfer efficiency and damping
+                    if (Math.random() < 0.1) { // More frequent friction events
+                        this.angularVelocity *= 0.5; // Rotational energy lost to friction
+                        // Convert to translational KE (Heat)
+                        let heat = Math.abs(this.angularVelocity) * 3.0; // Higher conversion rate
+                        this.vx += (Math.random() - 0.5) * heat;
+                        this.vy += (Math.random() - 0.5) * heat;
+                    }
+                } else {
+                    this.angularVelocity *= 0.95;
+                }
+
+                // Drag (Reduced drag so they keep speed longer = higher temp)
+                this.vx *= 0.995;
+                this.vy *= 0.995;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle);
+
+                // Draw Oxygen (Red, Negative)
+                ctx.fillStyle = '#ff4444'; 
+                ctx.beginPath();
+                ctx.arc(0, 0, this.size, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Draw Hydrogens (Blue, Positive)
+                ctx.fillStyle = '#4444ff'; 
+                const hOffset = this.size * 0.8;
+                const hSize = this.size * 0.6;
+                
+                ctx.beginPath();
+                ctx.arc(hOffset, -hOffset, hSize, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.beginPath();
+                ctx.arc(-hOffset, -hOffset, hSize, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Polarity Signs (Optional but helpful for big molecules)
+                ctx.fillStyle = "white";
+                ctx.font = "bold 10px Arial";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText("-", -2, 1);
+                ctx.font = "bold 8px Arial";
+                ctx.fillText("+", hOffset, -hOffset);
+                ctx.fillText("+", -hOffset, -hOffset);
+
+                ctx.restore();
+            }
+        }
+
+        function init() {
+            molecules = [];
+            const rows = 5;
+            const cols = 6; // Reduced count slightly to fit larger molecules cleanly
+            const spacingX = canvas.width / (cols + 1);
+            const spacingY = canvas.height / (rows + 1);
+
+            for(let i=0; i<cols; i++) {
+                for(let j=0; j<rows; j++) {
+                    let x = (i+1) * spacingX + (Math.random()-0.5)*30;
+                    let y = (j+1) * spacingY + (Math.random()-0.5)*30;
+                    molecules.push(new Molecule(x, y));
+                }
+            }
+            temperature = 25;
+            time = 0;
+            isMicrowaveOn = false;
+            waveDirectionIndicator.classList.add('opacity-0');
+            updateUI();
+        }
+
+        function getEFieldAt(x, t) {
+            if (!isMicrowaveOn) return 0;
+            const k = (Math.PI * 2) / WAVELENGTH;
+            const phase = (canvas.width - x) * k - t * frequencySpeed * 20; 
+            return Math.sin(phase) * maxFieldIntensity;
+        }
+
+        function getBFieldAt(x, t) {
+            return getEFieldAt(x, t);
+        }
+
+        function drawEMWave() {
+            if (!isMicrowaveOn) return;
+
+            const centerY = canvas.height / 2;
+            const k = (Math.PI * 2) / WAVELENGTH;
+            
+            ctx.lineWidth = 2;
+            
+            // Draw Axis line
+            ctx.strokeStyle = '#555';
+            ctx.beginPath();
+            ctx.moveTo(0, centerY);
+            ctx.lineTo(canvas.width, centerY);
+            ctx.stroke();
+
+            // Draw E-field (Green, Vertical)
+            ctx.strokeStyle = 'rgba(0, 255, 0, 0.5)';
+            ctx.fillStyle = 'rgba(0, 255, 0, 0.1)';
+            ctx.beginPath();
+            for (let x = 0; x <= canvas.width; x += 5) {
+                const E = getEFieldAt(x, time); 
+                const y = centerY - E * 150; 
+                if (x===0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+
+            // Draw Vectors for E-field (Arrows)
+            for (let x = 40; x < canvas.width; x += 60) {
+                const E = getEFieldAt(x, time);
+                const y = centerY - E * 150;
+                
+                if (Math.abs(E) > 0.1) {
+                    drawArrow(x, centerY, x, y, 'rgba(0, 255, 0, 0.6)');
+                }
+            }
+
+            // Draw B-field (Purple, "3D" Diagonal)
+            ctx.strokeStyle = 'rgba(180, 0, 255, 0.5)';
+            ctx.beginPath();
+            for (let x = 0; x <= canvas.width; x += 5) {
+                const B = getBFieldAt(x, time);
+                const zOffset = B * 100; 
+                const px = x + zOffset * 0.5;
+                const py = centerY - zOffset * 0.5;
+                
+                if (x===0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
+            ctx.stroke();
+
+            // Draw Vectors for B-field
+            for (let x = 40; x < canvas.width; x += 60) {
+                const B = getBFieldAt(x, time);
+                const zOffset = B * 100;
+                const px = x + zOffset * 0.5;
+                const py = centerY - zOffset * 0.5;
+
+                if (Math.abs(B) > 0.1) {
+                    drawArrow(x, centerY, px, py, 'rgba(180, 0, 255, 0.6)');
+                }
+            }
+            
+            ctx.fillStyle = "white";
+            ctx.font = "12px Arial";
+            ctx.fillText("Source", canvas.width - 40, centerY + 20);
+        }
+
+        function drawArrow(fromx, fromy, tox, toy, color) {
+            const headlen = 5; 
+            const angle = Math.atan2(toy - fromy, tox - fromx);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(fromx, fromy);
+            ctx.lineTo(tox, toy);
+            ctx.lineTo(tox - headlen * Math.cos(angle - Math.PI / 6), toy - headlen * Math.sin(angle - Math.PI / 6));
+            ctx.moveTo(tox, toy);
+            ctx.lineTo(tox - headlen * Math.cos(angle + Math.PI / 6), toy - headlen * Math.sin(angle + Math.PI / 6));
+            ctx.stroke();
+        }
+
+        // Main Loop
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (isMicrowaveOn) {
+                time += 0.05;
+            }
+
+            drawEMWave();
+
+            let totalSpeed = 0;
+            molecules.forEach(m => {
+                const localE = getEFieldAt(m.x, time);
+                m.update(localE);
+                m.draw();
+                totalSpeed += (m.vx*m.vx + m.vy*m.vy);
+            });
+
+            let currentKE = totalSpeed / molecules.length;
+            // Increased multiplier so temperature rises visibly
+            let targetTemp = 25 + currentKE * 300; 
+            
+            if (targetTemp > temperature) {
+                temperature += (targetTemp - temperature) * 0.05;
+            } else {
+                temperature -= (temperature - targetTemp) * 0.01;
+            }
+
+            updateTempDisplay();
+            requestAnimationFrame(animate);
+        }
+
+        function updateTempDisplay() {
+            let temp = Math.round(temperature);
+            tempDisplay.innerText = temp + "°C";
+            let percentage = Math.min((temperature / 200) * 100, 100);
+            tempBar.style.width = percentage + "%";
+            
+            if (temp < 50) {
+                tempDisplay.className = "text-2xl font-bold text-green-400";
+                tempBar.className = "h-4 rounded-full transition-all duration-200 bg-green-500";
+            } else if (temp < 100) {
+                tempDisplay.className = "text-2xl font-bold text-yellow-400";
+                tempBar.className = "h-4 rounded-full transition-all duration-200 bg-yellow-500";
+            } else {
+                tempDisplay.className = "text-2xl font-bold text-red-500 animate-pulse";
+                tempBar.className = "h-4 rounded-full transition-all duration-200 bg-red-600";
+            }
+        }
+
+        function updateUI() {
+            if (isMicrowaveOn) {
+                toggleBtn.innerText = "關閉微波 (Turn OFF)";
+                toggleBtn.classList.replace("bg-blue-600", "bg-red-600");
+                toggleBtn.classList.replace("hover:bg-blue-500", "hover:bg-red-500");
+                statusText.innerText = "ON";
+                statusText.classList.replace("text-red-400", "text-green-400");
+                waveDirectionIndicator.classList.remove('opacity-0');
+            } else {
+                toggleBtn.innerText = "開啟微波 (Turn ON)";
+                toggleBtn.classList.replace("bg-red-600", "bg-blue-600");
+                toggleBtn.classList.replace("hover:bg-red-500", "hover:bg-blue-500");
+                statusText.innerText = "OFF";
+                statusText.classList.replace("text-green-400", "text-red-400");
+                waveDirectionIndicator.classList.add('opacity-0');
+            }
+        }
+
+        toggleBtn.addEventListener('click', () => { isMicrowaveOn = !isMicrowaveOn; updateUI(); });
+        intensitySlider.addEventListener('input', (e) => { maxFieldIntensity = e.target.value / 100; });
+        freqSlider.addEventListener('input', (e) => { frequencySpeed = e.target.value / 50; });
+        resetBtn.addEventListener('click', init);
+
+        init();
+        animate();
+
+    </script>
+</body>
+</html>
