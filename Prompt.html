@@ -44,20 +44,85 @@
         }
 
         .hero h1 {
-            font-size: 2.5rem;
+            font-size: 2.2rem;
             margin-bottom: 10px;
             font-weight: 700;
         }
 
-        .hero p {
-            font-size: 1.1rem;
-            opacity: 0.9;
+        .hero .school-name {
+            font-size: 1.2rem;
+            font-weight: 500;
+            color: #94a3b8;
+            margin-bottom: 20px;
+            letter-spacing: 1px;
+        }
+
+        .hero .speakers {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+            font-size: 1rem;
+            color: #e2e8f0;
+        }
+        
+        .hero .speakers span {
+            background: rgba(255,255,255,0.1);
+            padding: 5px 15px;
+            border-radius: 20px;
         }
 
         .container {
             max-width: 1000px;
             margin: 0 auto;
             padding: 20px;
+        }
+
+        /* Key Takeaways Section */
+        .key-takeaways {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-top: -40px; /* Overlap effect */
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            border-top: 5px solid var(--warning);
+            margin-bottom: 40px;
+        }
+
+        .kt-title {
+            font-size: 1.5rem;
+            color: var(--primary);
+            margin-bottom: 20px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .kt-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+
+        .kt-item {
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid var(--accent);
+        }
+
+        .kt-item h4 {
+            color: var(--primary);
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+        }
+
+        .kt-item p {
+            font-size: 0.95rem;
+            color: var(--text-light);
+            margin: 0;
         }
 
         /* Section Styling */
@@ -180,6 +245,7 @@
             .hero h1 { font-size: 1.8rem; }
             .container { padding: 15px; }
             .section-title { font-size: 1.4rem; }
+            .kt-grid { grid-template-columns: 1fr; }
         }
 
         .footer {
@@ -187,17 +253,51 @@
             margin-top: 40px;
             color: var(--text-light);
             font-size: 0.9rem;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 20px;
         }
     </style>
 </head>
 <body>
 
     <div class="hero">
+        <div class="school-name">嗇色園主辦可譽中學暨可譽小學</div>
         <h1>教師 AI 與適性教學工作坊</h1>
         <p>實戰 Prompt 懶人包 & 工具指南</p>
+        
+        <div class="speakers">
+            <span><i class="fa-solid fa-chalkboard-user"></i> 盧燕芳老師</span>
+            <span><i class="fa-solid fa-chalkboard-user"></i> 施瑪恩老師</span>
+            <span><i class="fa-solid fa-chalkboard-user"></i> 章景恆老師</span>
+        </div>
     </div>
 
     <div class="container">
+
+        <!-- 新增：工作坊重點精華 -->
+        <div class="key-takeaways">
+            <div class="kt-title"><i class="fa-solid fa-star"></i> 工作坊重點精華 (Key Takeaways)</div>
+            <div class="kt-grid">
+                <div class="kt-item">
+                    <h4><i class="fa-solid fa-bullseye"></i> 核心理念</h4>
+                    <p>為什麼需要 AI？傳統拔尖補底耗時費力，AI 不是要取代老師，而是讓<strong>「差異化教學 (Differentiation)」</strong>真正變得可行。</p>
+                </div>
+                <div class="kt-item">
+                    <h4><i class="fa-solid fa-layer-group"></i> 適性教學三大支柱</h4>
+                    <p>1. <strong>照顧學習風格</strong> (Visualizing Abstract Concepts)<br>
+                       2. <strong>照顧能力差異</strong> (Scaffolding & AI Tutor)<br>
+                       3. <strong>精準評估跟進</strong> (Data-Driven Decisions)</p>
+                </div>
+                <div class="kt-item">
+                    <h4><i class="fa-solid fa-rotate"></i> 實踐流程</h4>
+                    <p><strong>診斷 (Diagnosis)</strong>：了解學生/數據<br>
+                       ⬇<br>
+                       <strong>決策 (Decision)</strong>：選擇合適策略<br>
+                       ⬇<br>
+                       <strong>行動 (Action)</strong>：AI 工具介入</p>
+                </div>
+            </div>
+        </div>
 
         <!-- PART 3: Data Analysis -->
         <div class="section-title">
@@ -429,7 +529,7 @@
     </div>
 
     <div class="footer">
-        <p>© 2024 教師 AI 與適性教學工作坊 | 讓 AI 成為你的神隊友</p>
+        <p>© 2026 嗇色園主辦可譽中學暨可譽小學 | 教師 AI 與適性教學工作坊</p>
     </div>
 
     <script>
