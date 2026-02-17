@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HKDSE Physics Trainer V5.2 (Dashboard Fix)</title>
+    <title>HKDSE Physics Trainer V5.3 (Diagnosis Fix)</title>
     
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -28,7 +28,7 @@
     <div id="loading-screen">
         <div class="spinner"></div>
         <h2 class="text-slate-600 font-bold">系統載入中...</h2>
-        <p class="text-slate-400 text-sm mt-2">正在載入試題地圖與修正模組 (V5.2)</p>
+        <p class="text-slate-400 text-sm mt-2">正在修復診斷算法 (V5.3)</p>
     </div>
 
     <div id="root"></div>
@@ -187,43 +187,36 @@
                         setStudents(data.students || []);
                         setAnswerKeys(data.answerKeys || {});
                         setRecords(data.records || []);
-                        // Init dashStudent if available
-                        if(data.students?.[0]) {
-                            setDashStudent(data.students[0].id);
-                        }
+                        if(data.students?.[0]) setDashStudent(data.students[0].id);
                     } catch(e) {}
                 }
             }, []);
-
-            // Auto-select dashStudent if empty and students exist (Fix for "Blank Dashboard" bug)
-            useEffect(() => {
-                if (!dashStudent && students.length > 0) {
-                    setDashStudent(students[0].id);
-                }
-            }, [students, dashStudent]);
 
             // Save Data
             useEffect(() => {
                 localStorage.setItem('dsePhysV5', JSON.stringify({ students, answerKeys, records }));
             }, [students, answerKeys, records]);
 
+            // FIX: Robust Topic Info Retrieval
             const getTopicInfo = (year, paper, qNum) => {
                 const mapKey = `${year}_${paper}`;
+                // 1. Try Map
                 if (FULL_QUESTION_MAP[mapKey] && FULL_QUESTION_MAP[mapKey][qNum]) {
                     const topicId = FULL_QUESTION_MAP[mapKey][qNum];
                     return { id: topicId, ...SYLLABUS_DATA[topicId], isReal: true };
                 }
+                // 2. Fallback (Safe Modulo)
                 const ids = Object.keys(SYLLABUS_DATA);
-                const mockId = ids[(qNum * 13) % ids.length];
+                const safeQNum = parseInt(qNum) || 1; // Prevent NaN
+                const mockId = ids[(safeQNum * 13) % ids.length];
                 return { id: mockId, ...SYLLABUS_DATA[mockId], isReal: false };
             };
 
-            // --- Sidebar ---
             const Sidebar = () => (
                 <div className="w-64 bg-slate-900 text-white h-screen fixed left-0 top-0 flex flex-col shadow-2xl z-10">
                     <div className="p-6 border-b border-slate-700">
                         <h1 className="text-xl font-bold tracking-wider italic">PHY MASTER</h1>
-                        <div className="text-xs text-green-400 mt-1">V5.2 Fixes Applied</div>
+                        <div className="text-xs text-yellow-400 mt-1">V5.3 Diagnosis Fixed</div>
                     </div>
                     <nav className="p-4 space-y-2 flex-1 overflow-y-auto">
                         {[
@@ -243,6 +236,7 @@
             );
 
             // --- Views ---
+
             const StudentsView = () => {
                 const [name, setName] = useState('');
                 const add = () => {
@@ -309,11 +303,8 @@
                 const keyId = `${year}_${paper}`;
                 const sysKey = answerKeys[keyId] || {};
 
-                // Auto-select student inside InputView
                 useEffect(() => {
-                    if (!studentId && students.length > 0) {
-                        setInputForm(prev => ({ ...prev, studentId: students[0].id }));
-                    }
+                    if (!studentId && students.length > 0) setInputForm(prev => ({ ...prev, studentId: students[0].id }));
                 }, [students]);
 
                 const toggleMC = (q, opt) => {
@@ -330,7 +321,7 @@
                     const newRec = { ...inputForm, id: Date.now(), timestamp: new Date().toISOString() };
                     const others = records.filter(r => !(r.studentId===studentId && r.year==year && r.paper===paper));
                     setRecords([...others, newRec]);
-                    alert('✅ 已儲存');
+                    alert('✅ 已儲存 (Saved)');
                 };
 
                 return (
@@ -366,8 +357,6 @@
                                     const myAns = inputForm.answers[q];
                                     const realAns = sysKey[q];
                                     const topicInfo = getTopicInfo(year, paper, q);
-                                    const isRealMap = topicInfo.isReal;
-
                                     let statusClass = "border-slate-200";
                                     if(myAns && realAns) statusClass = myAns===realAns ? "bg-green-50 border-green-300" : "bg-red-50 border-red-300";
 
@@ -375,9 +364,7 @@
                                         <div key={q} className={`p-2 border rounded flex flex-col ${statusClass}`}>
                                             <div className="flex justify-between items-center mb-1">
                                                 <span className="font-bold text-slate-500">Q{q}</span>
-                                                <span className={`text-[10px] px-1 rounded ${isRealMap ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-400'}`} title={topicInfo.topic}>
-                                                    {topicInfo.id}
-                                                </span>
+                                                <span className="text-[10px] bg-gray-100 px-1 rounded text-gray-400">{topicInfo.id}</span>
                                             </div>
                                             <div className="flex justify-between">
                                                 {['A','B','C','D'].map(opt => (
@@ -412,11 +399,8 @@
             };
 
             const DashboardView = () => {
-                // BUG FIX: Ensure dashStudent is set if empty but students exist
                 useEffect(() => {
-                    if (!dashStudent && students.length > 0) {
-                        setDashStudent(students[0].id);
-                    }
+                    if (!dashStudent && students.length > 0) setDashStudent(students[0].id);
                 }, [students, dashStudent]);
 
                 const subTopicStats = useMemo(() => {
@@ -426,18 +410,25 @@
 
                     myRecs.forEach(r => {
                         Object.entries(r.scores).forEach(([q, score]) => {
+                            // FIX: Ensure score is valid number
+                            const numericScore = parseFloat(score) || 0;
                             const info = getTopicInfo(r.year, r.paper, q);
                             const tid = info.id;
+                            
                             if(!stats[tid]) stats[tid] = { ...info, earned: 0, max: 0, count: 0 };
                             
-                            stats[tid].earned += Number(score);
+                            stats[tid].earned += numericScore;
                             stats[tid].max += (r.paper==='1A' ? 1 : 10);
                             stats[tid].count++;
                         });
                     });
 
                     // Sort: Lowest Percentage first (Weakest)
-                    return Object.values(stats).sort((a,b) => (a.earned/a.max) - (b.earned/b.max)); 
+                    return Object.values(stats).sort((a,b) => {
+                        const pctA = a.max > 0 ? (a.earned/a.max) : 0;
+                        const pctB = b.max > 0 ? (b.earned/b.max) : 0;
+                        return pctA - pctB;
+                    });
                 }, [records, dashStudent]);
 
                 return (
@@ -452,7 +443,7 @@
 
                         {subTopicStats.length === 0 ? (
                             <div className="p-12 text-center text-slate-400 bg-white rounded-xl">
-                                {students.length === 0 ? "請先新增學生" : "尚無成績數據，或未選取學生。"}
+                                {students.length === 0 ? "請先新增學生" : "暫無數據，請先輸入成績 (No data available)"}
                             </div>
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -511,16 +502,21 @@
                     const stats = {};
                     myRecs.forEach(r => {
                         Object.entries(r.scores).forEach(([q, score]) => {
+                            const numericScore = parseFloat(score) || 0;
                             const info = getTopicInfo(r.year, r.paper, q);
                             const tid = info.id;
                             if(!stats[tid]) stats[tid] = { ...info, earned: 0, max: 0 };
-                            stats[tid].earned += Number(score);
+                            stats[tid].earned += numericScore;
                             stats[tid].max += (r.paper==='1A' ? 1 : 10);
                         });
                     });
                     
                     const weaknesses = Object.values(stats)
-                        .sort((a,b) => (a.earned/a.max) - (b.earned/b.max))
+                        .sort((a,b) => {
+                             const pctA = a.max > 0 ? (a.earned/a.max) : 0;
+                             const pctB = b.max > 0 ? (b.earned/b.max) : 0;
+                             return pctA - pctB;
+                        })
                         .slice(0, 5); 
 
                     const prompt = `
