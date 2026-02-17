@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HKDSE Physics Trainer V7.2.1 (Fix Answer Bug)</title>
+    <title>HKDSE Physics Trainer V7.3.0 (History Added)</title>
     
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -31,7 +31,6 @@
         // ==========================================
         
         const PRELOADED_KEYS = {
-            // --- 2016 Paper 1A (真實答案 - 修正版) ---
             "2016_1A": {
                 1: "D", 2: "A", 3: "B", 4: "B", 5: "C",
                 6: "D", 7: "A", 8: "C", 9: "B", 10: "B",
@@ -41,14 +40,10 @@
                 26: "C", 27: "A", 28: "B", 29: "D", 30: "C",
                 31: "D", 32: "A", 33: "D"
             },
-
-            // --- 2016 Paper 2 - E3 Energy ---
             "2016_2_E3": {
                 1: "A", 2: "C", 3: "B", 4: "D", 
                 5: "A", 6: "C", 7: "B", 8: "D" 
             },
-
-            // --- 2016 Paper 2 - E4 Medical ---
             "2016_2_E4": {
                 1: "B", 2: "A", 3: "C", 4: "D", 
                 5: "B", 6: "A", 7: "C", 8: "D" 
@@ -138,7 +133,6 @@
                 26: "4.2.4", 27: "4.3.1", 28: "4.4.1", 29: "4.7.3", 30: "4.4.3",
                 31: "4.8.1", 32: "5.1.2", 33: "5.2.2"
             },
-            
             "2016_1B": [
                 { id: "1a", max: 6, tid: "1.3.2" }, { id: "1b", max: 2, tid: "1.3.2" },
                 { id: "2a", max: 3, tid: "1.5.1" }, { id: "2bi", max: 1, tid: "1.5.1" }, { id: "2bii", max: 1, tid: "1.5.2" }, { id: "2biii", max: 2, tid: "1.5.1" },
@@ -150,7 +144,6 @@
                 { id: "8ai", max: 1, tid: "4.1.3" }, { id: "8aii", max: 2, tid: "4.1.3" }, { id: "8bi", max: 3, tid: "4.5.2" }, { id: "8bii", max: 3, tid: "4.7.1" }, { id: "8biii", max: 2, tid: "4.7.1" },
                 { id: "9a", max: 2, tid: "5.2.2" }, { id: "9bi", max: 2, tid: "5.2.2" }, { id: "9bii", max: 2, tid: "5.2.2" }, { id: "9biii", max: 2, tid: "5.2.2" }
             ],
-
             "2016_2_E3": {
                 1: "E3.1.1", 2: "E3.1.2", 3: "E3.1.3", 4: "E3.2.1",
                 5: "E3.2.2", 6: "E3.3.1", 7: "E3.4.1", 8: "E3.4.2"
@@ -158,7 +151,6 @@
             "2016_2_E3_LQ": [
                 { id: "3a", max: 3, tid: "E3.1.2" }, { id: "3bi", max: 2, tid: "E3.1.3" }, { id: "3bii", max: 2, tid: "E3.2.2" }, { id: "3c", max: 3, tid: "E3.4.1" }
             ],
-
             "2016_2_E4": {
                 1: "E4.1.1", 2: "E4.1.2", 3: "E4.2.1", 4: "E4.2.2",
                 5: "E4.3.1", 6: "E4.4.1", 7: "E4.4.1", 8: "E4.5.1"
@@ -174,20 +166,15 @@
             const [view, setView] = useState('students');
             const [students, setStudents] = useState([]);
             const [records, setRecords] = useState([]);
+            // New State for Generation History
+            const [genHistory, setGenHistory] = useState([]);
 
-            // State Initialization: Merge Saved Keys with Preloaded Defaults
-            // =========================================================================
-            // [BUG FIX]: 原本是 { ...PRELOADED_KEYS, ...savedKeys }
-            // 這導致如果 localStorage 裡存了舊的錯誤答案（例如測試用的全A），會覆蓋正確答案。
-            // 現在改成 { ...savedKeys, ...PRELOADED_KEYS }，確保代碼中的正確答案永遠優先。
-            // =========================================================================
             const [answerKeys, setAnswerKeys] = useState(() => {
                 const saved = localStorage.getItem('dsePhysV7');
                 if (saved) {
                     try {
                         const parsed = JSON.parse(saved);
                         const savedKeys = parsed.answerKeys || {};
-                        // FIX: PRELOADED_KEYS 放在後面，強制覆蓋舊緩存
                         return { ...savedKeys, ...PRELOADED_KEYS }; 
                     } catch(e) { return PRELOADED_KEYS; }
                 }
@@ -204,6 +191,7 @@
             const [selectedTopics, setSelectedTopics] = useState([]);
             const [generatedPrompt, setGeneratedPrompt] = useState('');
 
+            // Load Data
             useEffect(() => {
                 const saved = localStorage.getItem('dsePhysV7');
                 if (saved) {
@@ -211,14 +199,21 @@
                         const data = JSON.parse(saved);
                         setStudents(data.students || []);
                         setRecords(data.records || []);
+                        setGenHistory(data.genHistory || []); // Load History
                         if(data.students?.[0]) setDashStudent(data.students[0].id);
                     } catch(e) {}
                 }
             }, []);
 
+            // Save Data
             useEffect(() => {
-                localStorage.setItem('dsePhysV7', JSON.stringify({ students, answerKeys, records }));
-            }, [students, answerKeys, records]);
+                localStorage.setItem('dsePhysV7', JSON.stringify({ 
+                    students, 
+                    answerKeys, 
+                    records,
+                    genHistory // Save History
+                }));
+            }, [students, answerKeys, records, genHistory]);
 
             const getTopicInfo = (year, paper, qNum) => {
                 let mapKeyMC = `${year}_${paper}`;
@@ -251,7 +246,7 @@
                 <div className="w-64 bg-slate-900 text-white h-screen fixed left-0 top-0 flex flex-col shadow-2xl z-10">
                     <div className="p-6 border-b border-slate-700">
                         <h1 className="text-xl font-bold tracking-wider italic">PHY MASTER</h1>
-                        <div className="text-xs text-orange-400 mt-1">V7.2.1 Pre-Loaded Fix</div>
+                        <div className="text-xs text-orange-400 mt-1">V7.3.0 History Added</div>
                     </div>
                     <nav className="p-4 space-y-2 flex-1 overflow-y-auto">
                         {[
@@ -259,6 +254,7 @@
                             {id: 'input', icon: '📝', label: '輸入成績'},
                             {id: 'dashboard', icon: '📊', label: '診斷報告'},
                             {id: 'generate', icon: '🤖', label: 'AI 練習生成'},
+                            {id: 'history', icon: '📜', label: '生成紀錄'}, // New Item
                             {id: 'data', icon: '💾', label: '數據備份 (Data)'} 
                         ].map(item => (
                             <button key={item.id} onClick={() => setView(item.id)}
@@ -278,11 +274,12 @@
 
                 const handleExport = () => {
                     const data = {
-                        version: "7.2.1",
+                        version: "7.3.0",
                         timestamp: new Date().toISOString(),
                         students,
                         answerKeys,
-                        records
+                        records,
+                        genHistory // Included in backup
                     };
                     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
                     const url = URL.createObjectURL(blob);
@@ -303,6 +300,7 @@
                                 if(data.students) setStudents(data.students);
                                 if(data.answerKeys) setAnswerKeys(prev => ({...prev, ...data.answerKeys}));
                                 if(data.records) setRecords(data.records);
+                                if(data.genHistory) setGenHistory(data.genHistory); // Import History
                                 alert("✅ 導入成功！");
                             }
                         } catch(err) {
@@ -319,7 +317,7 @@
                             <div className="p-6 border-2 border-dashed border-blue-200 rounded-xl bg-blue-50 flex flex-col items-center justify-center text-center">
                                 <span className="text-4xl mb-4">📤</span>
                                 <h3 className="text-xl font-bold text-slate-700 mb-2">導出數據 (Export)</h3>
-                                <p className="text-sm text-slate-500 mb-4">將所有學生、成績和答案設定下載為 JSON 檔案。</p>
+                                <p className="text-sm text-slate-500 mb-4">將所有學生、成績、答案設定及<b>生成紀錄</b>下載為 JSON 檔案。</p>
                                 <button onClick={handleExport} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700 shadow transition">
                                     下載備份檔案
                                 </button>
@@ -334,10 +332,6 @@
                                     選擇檔案上傳
                                 </button>
                             </div>
-                        </div>
-                        
-                        <div className="mt-8 p-4 bg-slate-100 rounded text-sm text-slate-500">
-                            <strong>提示：</strong> 系統已預載 2016 年真實答案。導入數據時，會保留預載答案，並用檔案中的設定覆蓋重複年份。
                         </div>
                     </div>
                 );
@@ -708,6 +702,22 @@ ${topicListText}
 `.trim();
 
                     setGeneratedPrompt(prompt);
+
+                    // ===================================
+                    // NEW: Save Generation Record
+                    // ===================================
+                    const sName = students.find(s=>s.id === dashStudent)?.name || "Unknown";
+                    const newHistoryItem = {
+                        id: Date.now(),
+                        timestamp: new Date().toISOString(),
+                        studentId: dashStudent,
+                        studentName: sName,
+                        topics: selectedTopics,
+                        settings: genSettings,
+                        note: '' // Start with empty note
+                    };
+                    setGenHistory(prev => [newHistoryItem, ...prev]);
+                    alert("Prompt 生成成功！\n已同時建立一條練習紀錄。");
                 };
 
                 const sortedTopicKeys = Object.keys(SYLLABUS_DATA).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
@@ -790,6 +800,88 @@ ${topicListText}
                 );
             };
 
+            // ==========================
+            // NEW: History View
+            // ==========================
+            const HistoryView = () => {
+                const updateNote = (id, newNote) => {
+                    setGenHistory(prev => prev.map(item => item.id === id ? { ...item, note: newNote } : item));
+                };
+
+                const deleteHistory = (id) => {
+                    if(confirm("確定刪除此紀錄?")) {
+                        setGenHistory(prev => prev.filter(item => item.id !== id));
+                    }
+                };
+
+                return (
+                    <div className="max-w-6xl mx-auto bg-white p-8 rounded-xl shadow-sm min-h-[80vh]">
+                        <h2 className="text-2xl font-bold mb-6 text-slate-800 flex items-center gap-2">📜 練習生成紀錄 (History)</h2>
+                        
+                        {genHistory.length === 0 ? (
+                            <div className="text-center py-20 text-slate-400 bg-slate-50 rounded-lg">
+                                尚未生成任何練習。前往「AI 練習生成」開始吧！
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-slate-100 text-slate-600 text-sm">
+                                            <th className="p-3 rounded-tl-lg">時間 / 學生</th>
+                                            <th className="p-3">設定</th>
+                                            <th className="p-3">課題 (Topics)</th>
+                                            <th className="p-3 w-1/3">備註 / 分數 (Note & Score)</th>
+                                            <th className="p-3 rounded-tr-lg text-right">操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="text-sm">
+                                        {genHistory.map(item => (
+                                            <tr key={item.id} className="border-b border-slate-100 hover:bg-slate-50">
+                                                <td className="p-3 align-top">
+                                                    <div className="font-bold text-slate-800">{new Date(item.timestamp).toLocaleDateString()}</div>
+                                                    <div className="text-xs text-slate-400">{new Date(item.timestamp).toLocaleTimeString()}</div>
+                                                    <div className="mt-1 text-blue-600 font-bold">{item.studentName}</div>
+                                                </td>
+                                                <td className="p-3 align-top">
+                                                    <div className="flex flex-col gap-1">
+                                                        <span className="bg-gray-200 text-gray-700 px-2 py-0.5 rounded text-xs w-fit">{item.settings.difficulty}</span>
+                                                        <span className="bg-gray-200 text-gray-700 px-2 py-0.5 rounded text-xs w-fit">{item.settings.type}</span>
+                                                        <span className="bg-gray-200 text-gray-700 px-2 py-0.5 rounded text-xs w-fit">{item.settings.lang}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="p-3 align-top">
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {item.topics.map(t => (
+                                                            <span key={t} className="border border-slate-300 px-1 rounded text-xs font-mono" title={SYLLABUS_DATA[t]?.topic}>
+                                                                {t}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </td>
+                                                <td className="p-3 align-top">
+                                                    <textarea 
+                                                        className="w-full border border-blue-200 bg-blue-50 p-2 rounded text-xs focus:ring-1 focus:ring-blue-500 outline-none resize-none"
+                                                        rows="3"
+                                                        placeholder="在此輸入分數或備註..."
+                                                        value={item.note || ''}
+                                                        onChange={(e) => updateNote(item.id, e.target.value)}
+                                                    ></textarea>
+                                                </td>
+                                                <td className="p-3 align-top text-right">
+                                                    <button onClick={() => deleteHistory(item.id)} className="text-slate-400 hover:text-red-500 p-2">
+                                                        ✕
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+                );
+            };
+
             return (
                 <div className="flex min-h-screen">
                     <Sidebar />
@@ -798,6 +890,7 @@ ${topicListText}
                         {view === 'input' && <InputView />}
                         {view === 'dashboard' && <DashboardView />}
                         {view === 'generate' && <GenerateView />}
+                        {view === 'history' && <HistoryView />}
                         {view === 'data' && <DataView />}
                     </div>
                 </div>
