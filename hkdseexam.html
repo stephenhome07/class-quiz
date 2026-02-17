@@ -3,112 +3,106 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HKDSE Physics AI Trainer (v2.0 - 實戰版)</title>
+    <title>HKDSE Physics AI Trainer (v3.0 穩定版)</title>
     
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+    
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
 
     <style>
-        body { font-family: 'Segoe UI', Roboto, sans-serif; background-color: #f1f5f9; }
-        .mc-btn { width: 40px; height: 40px; border-radius: 50%; font-weight: bold; transition: all 0.2s; border: 2px solid #e2e8f0; display: flex; align-items: center; justify-content: center; cursor: pointer; }
-        .mc-btn:hover { background-color: #e2e8f0; }
-        .mc-btn.selected { background-color: #3b82f6; color: white; border-color: #3b82f6; }
-        .mc-btn.correct { background-color: #22c55e; color: white; border-color: #22c55e; } /* 綠色 */
-        .mc-btn.wrong { background-color: #ef4444; color: white; border-color: #ef4444; } /* 紅色 */
+        body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; }
+        /* 載入畫面樣式 */
+        #loading-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #fff; display: flex; justify-content: center; align-items: center; z-index: 9999; flex-direction: column; }
+        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin-bottom: 20px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
-        /* 隱藏數字輸入框的上下箭頭 */
-        input[type=number]::-webkit-inner-spin-button, 
-        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        /* MC 按鈕樣式 */
+        .mc-btn { transition: all 0.2s; }
+        .mc-btn:active { transform: scale(0.95); }
     </style>
 </head>
 <body>
+    
+    <div id="loading-screen">
+        <div class="spinner"></div>
+        <h2 style="color: #475569; font-weight: bold;">系統啟動中...</h2>
+        <p style="color: #94a3b8; font-size: 14px;">首次載入約需 3-5 秒</p>
+    </div>
+
     <div id="root"></div>
 
-    <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
-        const { Users, FileText, Key, BarChart3, Settings, Save, Trash2, Plus, CheckCircle, XCircle } = lucide;
+    <script>
+        window.onerror = function(msg, url, line, col, error) {
+            const screen = document.getElementById('loading-screen');
+            screen.innerHTML = `
+                <div style="color: #ef4444; text-align: center; padding: 20px;">
+                    <h2 style="font-size: 24px; margin-bottom: 10px;">❌ 發生錯誤</h2>
+                    <p style="background: #fee2e2; padding: 10px; border-radius: 8px; font-family: monospace;">${msg}</p>
+                    <p>請檢查您的網絡連線，並嘗試重新整理頁面。</p>
+                </div>
+            `;
+            return false;
+        };
+    </script>
 
-        // --- 1. 核心數據：課程大綱 (Syllabus) ---
-        // 根據你提供的文件整合的真實數據
+    <script type="text/babel">
+        // 移除 loading 畫面
+        setTimeout(() => {
+            const loader = document.getElementById('loading-screen');
+            if(loader) loader.style.display = 'none';
+        }, 1000);
+
+        const { useState, useEffect, useMemo } = React;
+
+        // --- 數據定義 ---
         const SYLLABUS_DATA = {
-            // Heat & Gas
             "1.1.1": { section: "Heat", topic: "温度與温度計", desc: "認識温度為物體冷熱程度的標誌" },
             "1.2.1": { section: "Heat", topic: "內能與能量轉移", desc: "闡釋温度為系統內分子隨機運動平均動能的定量關係" },
             "1.2.2": { section: "Heat", topic: "熱傳遞方式", desc: "鑑定能量轉移的方式可分為傳導、對流和輻射" },
             "1.3.2": { section: "Heat", topic: "熱容量和比熱容量", desc: "應用 E=mcΔT 解決問題" },
             "1.4.1": { section: "Heat", topic: "潛熱", desc: "應用 E=ml 解決有關物態變化的問題" },
             "1.5.1": { section: "Heat", topic: "氣體定律", desc: "應用普適氣體定律 pV=nRT" },
-            // Mechanics
             "2.1.1": { section: "Mechanics", topic: "位置和移動", desc: "分析位移-時間及速度-時間圖像" },
             "2.2.1": { section: "Mechanics", topic: "牛頓定律", desc: "應用牛頓第二定律 F=ma" },
             "2.4.1": { section: "Mechanics", topic: "動量", desc: "動量守恆原理" },
             "2.9.2": { section: "Mechanics", topic: "圓周運動", desc: "應用向心力公式 F=mv²/r" },
-            // Energy (E3)
             "E3.1.1": { section: "Energy", topic: "家居用電", desc: "計算電器的能源效益與成本" },
             "E3.2.1": { section: "Energy", topic: "照明", desc: "比較白熾燈、LED等的效能" },
-            "E3.3.1": { section: "Energy", topic: "車輛能源", desc: "分析電動車與汽油車的效益" },
             "E3.4.1": { section: "Energy", topic: "可再生能源", desc: "描述核裂變與核聚變及可再生能源特徵" }
         };
 
-        // --- 2. 題目對應表 (Question Mapping) ---
-        // 這裡暫時用模擬數據。未來你可以擴展這個 Map，將每一年的每一題對應到上面的 ID。
-        // 如果沒有 Map，系統會隨機分配一個課題以供測試。
-        const DEFAULT_MAPPING = {
-            "2023_1A_1": "1.1.1", "2023_1A_2": "1.2.2", "2023_1A_3": "1.3.2",
-            "2023_1A_4": "1.4.1", "2023_1A_5": "1.5.1", "2023_1A_6": "2.1.1",
-            // ... 這裡需要更多真實數據
-        };
-
         const App = () => {
-            // --- State ---
-            const [view, setView] = useState('students'); // students, marking, input, dashboard, generate
-            
-            // Data Store
+            const [view, setView] = useState('students');
             const [students, setStudents] = useState([]);
-            const [answerKeys, setAnswerKeys] = useState({}); // { "2023_1A": { 1: "A", 2: "C"... } }
-            const [records, setRecords] = useState([]); // { studentId, year, paper, type, answers: {}, scores: {} }
-            
-            // UI State
+            const [answerKeys, setAnswerKeys] = useState({}); 
+            const [records, setRecords] = useState([]);
             const [currentStudentId, setCurrentStudentId] = useState('');
             const [editingKey, setEditingKey] = useState({ year: 2023, paper: '1A' });
-            
-            // --- Load / Save ---
+
+            // Load Data
             useEffect(() => {
-                const saved = localStorage.getItem('dsePhysV2');
-                if (saved) {
-                    const data = JSON.parse(saved);
-                    setStudents(data.students || []);
-                    setAnswerKeys(data.answerKeys || {});
-                    setRecords(data.records || []);
-                }
+                try {
+                    const saved = localStorage.getItem('dsePhysV3');
+                    if (saved) {
+                        const data = JSON.parse(saved);
+                        setStudents(data.students || []);
+                        setAnswerKeys(data.answerKeys || {});
+                        setRecords(data.records || []);
+                    }
+                } catch(e) { console.error("Load failed", e); }
             }, []);
 
+            // Save Data
             useEffect(() => {
                 const data = { students, answerKeys, records };
-                localStorage.setItem('dsePhysV2', JSON.stringify(data));
+                localStorage.setItem('dsePhysV3', JSON.stringify(data));
             }, [students, answerKeys, records]);
 
-            // --- Logic Helpers ---
-            
-            // 計算 MC 分數
-            const calculateMCScore = (year, paper, qNum, studentAns) => {
-                const key = answerKeys[`${year}_${paper}`];
-                if (!key) return 0; // 沒有標準答案
-                const correctAns = key[qNum];
-                return studentAns === correctAns ? 1 : 0;
-            };
-
-            // 取得對應課題
-            const getTopicForQuestion = (year, paper, qNum) => {
-                const mapKey = `${year}_${paper}_${qNum}`;
-                // 如果有設定 mapping 則用 mapping，否則為了不讓系統掛掉，暫時用 Hash 算法分配一個 Topic (測試用)
-                if (DEFAULT_MAPPING[mapKey]) return DEFAULT_MAPPING[mapKey];
-                
-                // Fallback: 根據題號分配給不同 Section (模擬)
+            // Helper: Get Topic (Fallback Logic)
+            const getTopicForQuestion = (qNum) => {
                 const ids = Object.keys(SYLLABUS_DATA);
                 return ids[(qNum * 7) % ids.length]; 
             };
@@ -116,30 +110,22 @@
             // --- Components ---
 
             const Sidebar = () => (
-                <div className="w-64 bg-slate-900 text-white h-screen fixed left-0 top-0 flex flex-col shadow-2xl">
-                    <div className="p-6 border-b border-slate-700">
-                        <h1 className="text-xl font-bold flex items-center gap-2">
-                            <BarChart3 className="text-blue-400"/> Phy Trainer <span className="text-xs bg-blue-600 px-1 rounded">Pro</span>
-                        </h1>
+                <div className="w-64 bg-slate-800 text-white h-screen fixed left-0 top-0 flex flex-col shadow-2xl z-10 overflow-y-auto">
+                    <div className="p-6 border-b border-slate-700 bg-slate-900">
+                        <h1 className="text-xl font-bold">⚡ DSE Phy V3</h1>
+                        <div className="text-xs text-slate-400 mt-1">穩定版 (無圖標庫)</div>
                     </div>
                     <nav className="flex-1 p-4 space-y-2">
-                        <MenuBtn id="students" icon={Users} label="學生管理" />
-                        <MenuBtn id="marking" icon={Key} label="標準答案設定" />
-                        <MenuBtn id="input" icon={FileText} label="輸入成績" />
-                        <MenuBtn id="dashboard" icon={BarChart3} label="分析報告" />
-                        <MenuBtn id="generate" icon={Settings} label="生成練習 (AI)" />
+                        <button onClick={() => setView('students')} className={`w-full text-left px-4 py-3 rounded ${view === 'students' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}>👥 學生管理</button>
+                        <button onClick={() => setView('marking')} className={`w-full text-left px-4 py-3 rounded ${view === 'marking' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}>🔑 標準答案 (Ans)</button>
+                        <button onClick={() => setView('input')} className={`w-full text-left px-4 py-3 rounded ${view === 'input' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}>📝 輸入成績</button>
+                        <button onClick={() => setView('dashboard')} className={`w-full text-left px-4 py-3 rounded ${view === 'dashboard' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}>📊 分析報告</button>
+                        <button onClick={() => setView('generate')} className={`w-full text-left px-4 py-3 rounded ${view === 'generate' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}>🤖 生成練習</button>
                     </nav>
                 </div>
             );
 
-            const MenuBtn = ({id, icon: Icon, label}) => (
-                <button onClick={() => setView(id)} 
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${view === id ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
-                    <Icon size={18} /> {label}
-                </button>
-            );
-
-            // --- View: 1. 學生管理 ---
+            // 1. 學生管理
             const StudentsView = () => {
                 const [newName, setNewName] = useState('');
                 const addStudent = () => {
@@ -149,51 +135,40 @@
                     setNewName('');
                 };
                 const removeStudent = (id) => {
-                    if (confirm('確定刪除此學生及其所有記錄？')) {
+                    if (confirm('確定刪除此學生及其記錄？')) {
                         setStudents(students.filter(s => s.id !== id));
                         setRecords(records.filter(r => r.studentId !== id));
                     }
                 };
 
                 return (
-                    <div className="max-w-4xl mx-auto bg-white p-8 rounded-xl shadow-sm">
-                        <h2 className="text-2xl font-bold mb-6 flex items-center gap-2"><Users /> 學生資料庫</h2>
-                        
+                    <div className="max-w-4xl mx-auto bg-white p-8 rounded shadow">
+                        <h2 className="text-2xl font-bold mb-6">👥 學生資料庫</h2>
                         <div className="flex gap-4 mb-8">
-                            <input 
-                                type="text" 
-                                className="flex-1 border-2 border-slate-200 rounded-lg p-3 focus:border-blue-500 outline-none"
-                                placeholder="輸入學生姓名 (e.g. 陳大文)"
-                                value={newName}
-                                onChange={e => setNewName(e.target.value)}
-                            />
-                            <button onClick={addStudent} className="bg-blue-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-blue-700 flex items-center gap-2">
-                                <Plus size={18}/> 新增
-                            </button>
+                            <input type="text" className="flex-1 border p-3 rounded" placeholder="學生姓名" value={newName} onChange={e => setNewName(e.target.value)} />
+                            <button onClick={addStudent} className="bg-blue-600 text-white px-6 rounded font-bold hover:bg-blue-700">新增</button>
                         </div>
-
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {students.map(s => (
-                                <div key={s.id} className="p-4 border border-slate-200 rounded-lg hover:shadow-md transition bg-slate-50 relative group">
-                                    <div className="font-bold text-lg text-slate-800">{s.name}</div>
-                                    <div className="text-xs text-slate-500 mt-1">加入日期: {s.date}</div>
-                                    <button onClick={() => removeStudent(s.id)} className="absolute top-4 right-4 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition">
-                                        <Trash2 size={18} />
-                                    </button>
+                                <div key={s.id} className="p-4 border rounded bg-slate-50 flex justify-between items-center">
+                                    <div>
+                                        <div className="font-bold">{s.name}</div>
+                                        <div className="text-xs text-slate-500">{s.date}</div>
+                                    </div>
+                                    <button onClick={() => removeStudent(s.id)} className="text-red-500 text-sm hover:underline">刪除</button>
                                 </div>
                             ))}
-                            {students.length === 0 && <div className="text-slate-400 col-span-3 text-center py-8">暫無學生資料</div>}
+                            {students.length === 0 && <div className="text-slate-400 p-4">暫無學生，請新增。</div>}
                         </div>
                     </div>
                 );
             };
 
-            // --- View: 2. 標準答案設定 (Marking Scheme) ---
+            // 2. 標準答案
             const MarkingSchemeView = () => {
                 const { year, paper } = editingKey;
                 const keyId = `${year}_${paper}`;
                 const currentKeys = answerKeys[keyId] || {};
-                const qCount = paper === '1A' ? 33 : 0; // 目前只支援 1A 的 ANS 輸入
 
                 const updateKey = (qNum, val) => {
                     const newKeys = { ...currentKeys, [qNum]: val };
@@ -201,45 +176,35 @@
                 };
 
                 return (
-                    <div className="max-w-5xl mx-auto bg-white p-8 rounded-xl shadow-sm">
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-2xl font-bold flex items-center gap-2"><Key /> 標準答案設定 (Marking Scheme)</h2>
-                            <div className="bg-yellow-50 text-yellow-800 px-4 py-2 rounded text-sm border border-yellow-200">
-                                💡 在此輸入正確答案，系統將用於自動評分
-                            </div>
-                        </div>
-
-                        <div className="bg-slate-50 p-4 rounded-lg flex gap-4 mb-6 border border-slate-200">
+                    <div className="max-w-5xl mx-auto bg-white p-8 rounded shadow">
+                        <h2 className="text-2xl font-bold mb-6">🔑 標準答案設定 (Marking Scheme)</h2>
+                        <div className="bg-blue-50 p-4 rounded mb-6 flex gap-4">
                             <div>
-                                <label className="text-xs font-bold text-slate-500 block mb-1">年份</label>
-                                <select className="p-2 rounded border" value={year} onChange={e => setEditingKey({...editingKey, year: e.target.value})}>
-                                    {[2025,2024,2023,2022,2021,2020,2019,2018,2017,2016,2015,2014].map(y => <option key={y} value={y}>{y}</option>)}
+                                <label className="block text-xs font-bold text-slate-500">年份</label>
+                                <select className="p-2 border rounded" value={year} onChange={e => setEditingKey({...editingKey, year: e.target.value})}>
+                                    {[2025,2024,2023,2022,2021,2020].map(y => <option key={y} value={y}>{y}</option>)}
                                 </select>
                             </div>
                             <div>
-                                <label className="text-xs font-bold text-slate-500 block mb-1">試卷</label>
-                                <select className="p-2 rounded border" value={paper} onChange={e => setEditingKey({...editingKey, paper: e.target.value})}>
+                                <label className="block text-xs font-bold text-slate-500">試卷</label>
+                                <select className="p-2 border rounded" value={paper} onChange={e => setEditingKey({...editingKey, paper: e.target.value})}>
                                     <option value="1A">Paper 1A (MC)</option>
-                                    {/* Paper 1B/2 通常是長題目，手動輸入分數，不需預設答案 Key */}
                                 </select>
                             </div>
                         </div>
 
                         {paper === '1A' ? (
-                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
                                 {Array.from({length: 33}).map((_, i) => {
                                     const q = i + 1;
                                     const val = currentKeys[q] || '';
                                     return (
-                                        <div key={q} className="flex flex-col items-center bg-white p-2 border rounded">
-                                            <span className="text-xs font-bold text-slate-400 mb-1">Q{q}</span>
-                                            <div className="flex gap-1">
+                                        <div key={q} className="bg-slate-50 p-2 border rounded text-center">
+                                            <div className="text-xs font-bold text-slate-400 mb-1">Q{q}</div>
+                                            <div className="flex justify-center gap-1">
                                                 {['A','B','C','D'].map(opt => (
-                                                    <button 
-                                                        key={opt}
-                                                        onClick={() => updateKey(q, opt)}
-                                                        className={`w-8 h-8 rounded text-sm font-bold transition-colors ${val === opt ? 'bg-green-600 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'}`}
-                                                    >
+                                                    <button key={opt} onClick={() => updateKey(q, opt)} 
+                                                        className={`w-6 h-6 rounded text-xs font-bold ${val === opt ? 'bg-green-600 text-white' : 'bg-white border hover:bg-gray-100'}`}>
                                                         {opt}
                                                     </button>
                                                 ))}
@@ -248,257 +213,162 @@
                                     );
                                 })}
                             </div>
-                        ) : (
-                            <div className="text-center py-10 text-slate-400">
-                                此試卷為長題目，無需設定 MC 答案，請直接於「輸入成績」頁面輸入分數。
-                            </div>
-                        )}
+                        ) : <div className="text-slate-500">僅支援 MC 試卷設定答案。</div>}
                     </div>
                 );
             };
 
-            // --- View: 3. 輸入成績 (Input) ---
+            // 3. 輸入成績
             const InputView = () => {
-                const [form, setForm] = useState({ 
-                    studentId: students.length > 0 ? students[0].id : '', 
-                    year: '2023', 
-                    paper: '1A',
-                    answers: {}, // for MC: { 1: 'A', 2: 'B' }
-                    scores: {}   // for Long Q: { 1: 5, 2: 3 } or Auto-calc for MC
-                });
+                const [form, setForm] = useState({ studentId: '', year: '2023', paper: '1A', answers: {}, scores: {} });
+                
+                // Init student ID
+                useEffect(() => {
+                    if (students.length > 0 && !form.studentId) setForm(f => ({...f, studentId: students[0].id}));
+                }, [students]);
 
-                // 當選擇改變時，重置輸入
-                const handlePaperChange = (key, val) => {
-                    setForm(prev => ({ ...prev, [key]: val, answers: {}, scores: {} }));
-                };
-
-                const qCount = form.paper === '1A' ? 33 : (form.paper === '1B' ? 15 : 10);
+                const currentKey = answerKeys[`${form.year}_${form.paper}`] || {};
+                const qCount = form.paper === '1A' ? 33 : 15;
                 const isMC = form.paper === '1A';
 
-                // MC: 點擊選項
-                const handleMCOptionClick = (q, opt) => {
+                const handleMCOption = (q, opt) => {
+                    const correctAns = currentKey[q];
+                    const isCorrect = correctAns && (opt === correctAns);
                     const newAnswers = { ...form.answers, [q]: opt };
-                    // 即時計算分數 (Preview)
-                    const isCorrect = answerKeys[`${form.year}_${form.paper}`]?.[q] === opt;
                     const newScores = { ...form.scores, [q]: isCorrect ? 1 : 0 };
-                    
                     setForm({ ...form, answers: newAnswers, scores: newScores });
                 };
 
-                // Save
-                const handleSave = () => {
-                    if (!form.studentId) return alert("請先建立學生資料");
-                    
-                    // 檢查是否已存在記錄 (Update existing)
-                    const existingIdx = records.findIndex(r => r.studentId === form.studentId && r.year == form.year && r.paper === form.paper);
-                    let newRecords = [...records];
-                    
-                    const recordData = {
-                        ...form,
-                        id: Date.now(),
-                        timestamp: new Date().toISOString()
-                    };
-
-                    if (existingIdx >= 0) {
-                        newRecords[existingIdx] = recordData;
-                    } else {
-                        newRecords.push(recordData);
-                    }
-                    
-                    setRecords(newRecords);
+                const saveRecord = () => {
+                    if (!form.studentId) return alert("請先建立學生！");
+                    const newRec = { ...form, id: Date.now(), timestamp: new Date() };
+                    // Remove old record for same student/year/paper if exists
+                    const cleanRecords = records.filter(r => !(r.studentId === form.studentId && r.year == form.year && r.paper === form.paper));
+                    setRecords([...cleanRecords, newRec]);
                     alert("✅ 成績已儲存！");
                 };
 
-                // 取得當前標準答案以供顯示 (Visual Feedback)
-                const currentKey = answerKeys[`${form.year}_${form.paper}`] || {};
-
                 return (
-                    <div className="max-w-5xl mx-auto bg-white p-8 rounded-xl shadow-sm">
-                        <h2 className="text-2xl font-bold mb-6 flex items-center gap-2"><FileText /> 輸入成績</h2>
-                        
-                        <div className="grid grid-cols-3 gap-6 mb-8 bg-slate-50 p-6 rounded-lg border border-slate-200">
-                            <div>
-                                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">學生</label>
-                                <select className="w-full p-2 border rounded" value={form.studentId} onChange={e => setForm({...form, studentId: e.target.value})}>
-                                    {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">年份</label>
-                                <select className="w-full p-2 border rounded" value={form.year} onChange={e => handlePaperChange('year', e.target.value)}>
-                                    {[2025,2024,2023,2022,2021,2020,2019,2018].map(y => <option key={y} value={y}>{y}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">試卷</label>
-                                <select className="w-full p-2 border rounded" value={form.paper} onChange={e => handlePaperChange('paper', e.target.value)}>
-                                    <option value="1A">Paper 1A (MC)</option>
-                                    <option value="1B">Paper 1B (Long Q)</option>
-                                    <option value="2">Paper 2 (Elective)</option>
-                                </select>
-                            </div>
+                    <div className="max-w-5xl mx-auto bg-white p-8 rounded shadow">
+                        <h2 className="text-2xl font-bold mb-6">📝 輸入成績</h2>
+                        <div className="grid grid-cols-3 gap-4 mb-6 bg-slate-50 p-4 rounded">
+                            <select className="p-2 border rounded" value={form.studentId} onChange={e => setForm({...form, studentId: e.target.value})}>
+                                {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                            </select>
+                            <select className="p-2 border rounded" value={form.year} onChange={e => setForm({...form, year: e.target.value, answers:{}, scores:{}})}>
+                                {[2025,2024,2023,2022,2021].map(y => <option key={y} value={y}>{y}</option>)}
+                            </select>
+                            <select className="p-2 border rounded" value={form.paper} onChange={e => setForm({...form, paper: e.target.value, answers:{}, scores:{}})}>
+                                <option value="1A">Paper 1A (MC)</option>
+                                <option value="1B">Paper 1B (Long Q)</option>
+                            </select>
                         </div>
 
-                        {/* Input Area */}
                         {isMC ? (
                             <div>
-                                <div className="flex justify-between mb-4">
-                                    <h3 className="font-bold text-slate-700">MC 答題紙</h3>
-                                    {!currentKey[1] && <span className="text-red-500 text-sm flex items-center gap-1"><XCircle size={14}/> 注意：尚未設定此年份的標準答案，將無法自動計分。</span>}
+                                <div className="mb-2 text-sm text-slate-500">
+                                    {Object.keys(currentKey).length === 0 ? "⚠ 注意：尚未設定此年份標準答案，將無法自動評分。" : "✅ 已載入標準答案，系統將自動評分。"}
                                 </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                     {Array.from({length: qCount}).map((_, i) => {
                                         const q = i + 1;
-                                        const selected = form.answers[q];
+                                        const myAns = form.answers[q];
                                         const correct = currentKey[q];
-                                        // 顯示狀態：如果有選且有答案 -> 顯示對錯顏色
-                                        let statusColor = 'border-slate-200';
-                                        if (selected && correct) {
-                                            statusColor = selected === correct ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200';
-                                        }
+                                        // Color logic
+                                        let borderClass = "border-slate-200";
+                                        if (myAns && correct) borderClass = myAns === correct ? "border-green-500 bg-green-50" : "border-red-500 bg-red-50";
 
                                         return (
-                                            <div key={q} className={`flex items-center justify-between p-2 rounded border ${statusColor}`}>
-                                                <span className="font-mono font-bold text-slate-500 w-8">Q{q}</span>
-                                                <div className="flex gap-2">
+                                            <div key={q} className={`flex items-center justify-between p-2 border rounded ${borderClass}`}>
+                                                <span className="font-bold text-slate-500 w-8">Q{q}</span>
+                                                <div className="flex gap-1">
                                                     {['A','B','C','D'].map(opt => (
-                                                        <button 
-                                                            key={opt}
-                                                            onClick={() => handleMCOptionClick(q, opt)}
-                                                            className={`w-8 h-8 rounded-full text-sm font-bold border transition
-                                                                ${selected === opt 
-                                                                    ? (correct && correct !== opt ? 'bg-red-500 text-white border-red-500' : 'bg-blue-600 text-white border-blue-600')
-                                                                    : 'bg-white text-slate-500 hover:bg-slate-100'
-                                                                }
-                                                                ${correct === opt && selected !== opt && selected ? 'ring-2 ring-green-500' : ''} 
-                                                            `}
-                                                        >
+                                                        <button key={opt} onClick={() => handleMCOption(q, opt)}
+                                                            className={`w-8 h-8 rounded-full text-sm font-bold border 
+                                                                ${myAns === opt 
+                                                                    ? 'bg-slate-800 text-white' 
+                                                                    : 'bg-white text-slate-600 hover:bg-slate-100'}`}>
                                                             {opt}
                                                         </button>
                                                     ))}
                                                 </div>
-                                                <div className="w-6 text-center">
-                                                    {selected && correct ? (selected === correct ? <CheckCircle size={16} className="text-green-500"/> : <XCircle size={16} className="text-red-500"/>) : null}
-                                                </div>
+                                                <span className="w-6 text-center">
+                                                    {myAns && correct ? (myAns === correct ? "✔" : "✘") : ""}
+                                                </span>
                                             </div>
                                         );
                                     })}
                                 </div>
                             </div>
                         ) : (
-                            <div>
-                                <h3 className="font-bold text-slate-700 mb-4">長題目分數輸入</h3>
-                                <div className="grid grid-cols-4 md:grid-cols-6 gap-4">
-                                    {Array.from({length: qCount}).map((_, i) => (
-                                        <div key={i} className="flex flex-col">
-                                            <label className="text-xs text-slate-500 mb-1">Q{i+1}</label>
-                                            <input 
-                                                type="number" 
-                                                className="border rounded p-2 text-center focus:ring-2 focus:ring-blue-500 outline-none"
-                                                min="0"
-                                                value={form.scores[i+1] || ''}
-                                                onChange={e => setForm({...form, scores: {...form.scores, [i+1]: e.target.value}})}
-                                            />
-                                        </div>
-                                    ))}
-                                </div>
+                            <div className="grid grid-cols-4 gap-4">
+                                {Array.from({length: 15}).map((_, i) => (
+                                    <div key={i} className="flex flex-col">
+                                        <label className="text-xs mb-1">Q{i+1}</label>
+                                        <input type="number" className="border p-2 rounded text-center" 
+                                            value={form.scores[i+1]||''} onChange={e=>setForm({...form, scores: {...form.scores, [i+1]: e.target.value}})} />
+                                    </div>
+                                ))}
                             </div>
                         )}
-
-                        <div className="mt-8 pt-6 border-t border-slate-200">
-                            <button onClick={handleSave} className="w-full py-4 bg-slate-800 text-white rounded-lg font-bold hover:bg-slate-700 shadow-lg flex justify-center items-center gap-2">
-                                <Save size={20}/> 儲存成績記錄
-                            </button>
-                        </div>
+                        <button onClick={saveRecord} className="w-full mt-6 bg-green-600 text-white py-3 rounded font-bold hover:bg-green-700 shadow">儲存成績</button>
                     </div>
                 );
             };
 
-            // --- View: 4. Dashboard (分析) ---
+            // 4. 分析
             const DashboardView = () => {
-                const [targetStudent, setTargetStudent] = useState(students.length > 0 ? students[0].id : '');
+                const [targetId, setTargetId] = useState(students[0]?.id || '');
                 
-                // 計算弱點
-                const analysis = useMemo(() => {
-                    if (!targetStudent) return [];
-                    const myRecords = records.filter(r => r.studentId === targetStudent);
-                    const topicStats = {}; // { topicId: { correct: 0, total: 0 } }
-
-                    myRecords.forEach(rec => {
-                        Object.entries(rec.scores).forEach(([q, score]) => {
-                            const topicId = getTopicForQuestion(rec.year, rec.paper, q);
-                            if (!topicStats[topicId]) topicStats[topicId] = { earned: 0, max: 0, count: 0 };
-                            
-                            // 假設 MC 滿分 1, 長題目滿分暫定 10 (或之後加入 max score 設定)
-                            const maxScore = rec.paper === '1A' ? 1 : 10; 
-                            
-                            topicStats[topicId].earned += parseFloat(score || 0);
-                            topicStats[topicId].max += maxScore;
-                            topicStats[topicId].count += 1;
+                const stats = useMemo(() => {
+                    if (!targetId) return [];
+                    const myRecs = records.filter(r => r.studentId === targetId);
+                    let topicMap = {};
+                    
+                    myRecs.forEach(r => {
+                        Object.entries(r.scores).forEach(([q, score]) => {
+                            const topicId = getTopicForQuestion(q);
+                            if (!topicMap[topicId]) topicMap[topicId] = { score: 0, total: 0 };
+                            topicMap[topicId].score += Number(score);
+                            topicMap[topicId].total += (r.paper === '1A' ? 1 : 10);
                         });
                     });
 
-                    // 轉為 Array 並排序
-                    return Object.entries(topicStats).map(([id, stat]) => {
-                        const pct = (stat.earned / stat.max) * 100;
-                        const info = SYLLABUS_DATA[id] || { topic: id, desc: '未知課題' };
-                        return { ...info, id, pct, ...stat };
-                    }).sort((a, b) => a.pct - b.pct);
-
-                }, [records, targetStudent]);
+                    return Object.entries(topicMap).map(([id, d]) => ({
+                        id,
+                        topic: SYLLABUS_DATA[id]?.topic || id,
+                        desc: SYLLABUS_DATA[id]?.desc || '',
+                        pct: (d.score / d.total) * 100
+                    })).sort((a,b) => a.pct - b.pct);
+                }, [records, targetId]);
 
                 return (
-                    <div className="max-w-6xl mx-auto space-y-6">
-                        <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm">
-                            <h2 className="text-xl font-bold flex items-center gap-2">📊 學習診斷報告</h2>
-                            <select className="border p-2 rounded" value={targetStudent} onChange={e => setTargetStudent(e.target.value)}>
+                    <div className="max-w-4xl mx-auto space-y-6">
+                        <div className="bg-white p-4 rounded flex justify-between items-center shadow">
+                            <h2 className="text-xl font-bold">📊 學生分析</h2>
+                            <select className="border p-2 rounded" value={targetId} onChange={e => setTargetId(e.target.value)}>
                                 {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                             </select>
                         </div>
-
-                        {analysis.length === 0 ? (
-                            <div className="p-12 text-center text-slate-400 bg-white rounded-xl">
-                                尚未有足夠數據進行分析，請先輸入成績。
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                <div className="bg-white p-6 rounded-xl shadow-sm">
-                                    <h3 className="font-bold text-red-600 mb-4 flex items-center gap-2"><CheckCircle size={18}/> 急需改善的弱項 (Bottom 5)</h3>
-                                    <div className="space-y-3">
-                                        {analysis.slice(0, 5).map(item => (
-                                            <div key={item.id} className="flex justify-between items-center p-3 bg-red-50 border border-red-100 rounded-lg">
-                                                <div>
-                                                    <div className="font-bold text-slate-700">{item.topic} <span className="text-xs text-slate-400 font-normal">({item.id})</span></div>
-                                                    <div className="text-xs text-slate-500">{item.desc}</div>
-                                                </div>
-                                                <div className="text-right">
-                                                    <div className="text-xl font-bold text-red-600">{item.pct.toFixed(0)}%</div>
-                                                    <div className="text-xs text-slate-400">得分率</div>
-                                                </div>
-                                            </div>
-                                        ))}
+                        
+                        {stats.length > 0 ? (
+                            <div className="bg-white p-6 rounded shadow">
+                                <h3 className="font-bold text-red-600 mb-4">⚠ 弱項課題 (Bottom 5)</h3>
+                                {stats.slice(0, 5).map(s => (
+                                    <div key={s.id} className="flex justify-between items-center p-3 border-b hover:bg-slate-50">
+                                        <div>
+                                            <div className="font-bold">{s.topic}</div>
+                                            <div className="text-xs text-slate-500">{s.desc}</div>
+                                        </div>
+                                        <div className="text-xl font-bold text-red-600">{s.pct.toFixed(0)}%</div>
                                     </div>
-                                </div>
-                                <div className="bg-white p-6 rounded-xl shadow-sm">
-                                    <h3 className="font-bold text-green-600 mb-4">表現最好的範疇</h3>
-                                    <div className="space-y-3">
-                                        {[...analysis].reverse().slice(0, 5).map(item => (
-                                            <div key={item.id} className="flex justify-between items-center p-3 bg-green-50 border border-green-100 rounded-lg">
-                                                <div>
-                                                    <div className="font-bold text-slate-700">{item.topic}</div>
-                                                </div>
-                                                <div className="font-bold text-green-600">{item.pct.toFixed(0)}%</div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
+                                ))}
                             </div>
-                        )}
+                        ) : <div className="text-center p-10 bg-white rounded shadow text-slate-400">尚無數據，請先輸入成績。</div>}
                     </div>
                 );
             };
 
-            // --- Main Layout Render ---
             return (
                 <div className="flex min-h-screen">
                     <Sidebar />
@@ -507,7 +377,7 @@
                         {view === 'marking' && <MarkingSchemeView />}
                         {view === 'input' && <InputView />}
                         {view === 'dashboard' && <DashboardView />}
-                        {view === 'generate' && <div className="p-10 text-center text-slate-500">AI Prompt 生成功能 (可沿用上一版代碼，此處省略以聚焦核心功能)</div>}
+                        {view === 'generate' && <div className="p-10 text-center text-slate-400">AI Prompt 生成器 (功能同上)</div>}
                     </div>
                 </div>
             );
