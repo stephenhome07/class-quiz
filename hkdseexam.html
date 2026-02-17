@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HKDSE Physics Trainer V5.4 (Display Limit Fix)</title>
+    <title>HKDSE Physics Trainer V6.0 (Dynamic LQ Support)</title>
     
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -13,7 +13,7 @@
     <style>
         body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; }
         .sub-topic-tag { font-family: 'Courier New', monospace; font-weight: bold; }
-        /* Custom Scrollbar for the lists */
+        /* Custom Scrollbar */
         .stats-list { max-height: 500px; overflow-y: auto; padding-right: 5px; }
         .stats-list::-webkit-scrollbar { width: 6px; }
         .stats-list::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 3px; }
@@ -28,7 +28,7 @@
         const { useState, useEffect, useMemo } = React;
 
         // ==========================================
-        // 1. 完整課程大綱 (SYLLABUS) - 保持不變
+        // 1. 完整課程大綱 (SYLLABUS)
         // ==========================================
         const SYLLABUS_DATA = {
             "1.1.1": { section: "Heat", topic: "量度温度", desc: "温度為物體冷熱程度的標誌" },
@@ -131,7 +131,11 @@
             "5.3.3": { section: "Rad", topic: "核能", desc: "反應堆原理" }
         };
 
+        // ==========================================
+        // 2. QUESTION MAP DATABASE
+        // ==========================================
         const FULL_QUESTION_MAP = {
+            // Paper 1A (MC) uses Object Key mapping: "QuestionNumber": "TopicID"
             "2016_1A": {
                 1: "1.2.2", 2: "1.4.1", 3: "1.5.2", 4: "2.1.3", 5: "2.1.3",
                 6: "2.3.7", 7: "2.2.3", 8: "2.6.2", 9: "2.6.1", 10: "2.8.2",
@@ -140,13 +144,55 @@
                 21: "3.5.3", 22: "3.3.4", 23: "3.7.3", 24: "4.1.3", 25: "4.2.4",
                 26: "4.2.4", 27: "4.3.1", 28: "4.4.1", 29: "4.7.3", 30: "4.4.3",
                 31: "4.8.1", 32: "5.1.2", 33: "5.2.2"
-            }
+            },
+            
+            // Paper 1B (LQ) uses Array of Objects mapping to support '1a', '2bi' etc.
+            "2016_1B": [
+                { id: "1a", max: 6, tid: "1.3.2" },
+                { id: "1b", max: 2, tid: "1.3.2" },
+                { id: "2a", max: 3, tid: "1.5.1" },
+                { id: "2bi", max: 1, tid: "1.5.1" },
+                { id: "2bii", max: 1, tid: "1.5.2" },
+                { id: "2biii", max: 2, tid: "1.5.1" },
+                { id: "3a", max: 2, tid: "2.2.2" },
+                { id: "3b", max: 3, tid: "2.3.3" },
+                { id: "3ci", max: 2, tid: "2.2.2" },
+                { id: "3cii", max: 2, tid: "2.2.2" },
+                { id: "4a", max: 3, tid: "2.3.7" },
+                { id: "4b", max: 1, tid: "2.3.1" },
+                { id: "4ci", max: 2, tid: "2.7.2" },
+                { id: "4cii", max: 3, tid: "2.6.4" },
+                { id: "4d", max: 2, tid: "2.6.3" },
+                { id: "5ai", max: 2, tid: "3.3.1" },
+                { id: "5aii", max: 1, tid: "3.3.2" },
+                { id: "5bi", max: 2, tid: "3.3.4" },
+                { id: "5bii", max: 3, tid: "3.3.2" },
+                { id: "5biii", max: 1, tid: "3.3.4" },
+                { id: "5biv", max: 2, tid: "3.3.4" },
+                { id: "6ai", max: 3, tid: "3.6.2" },
+                { id: "6aii", max: 2, tid: "3.5.3" },
+                { id: "6bi", max: 3, tid: "3.6.3" },
+                { id: "6bii", max: 2, tid: "3.6.3" },
+                { id: "7ai", max: 3, tid: "4.3.1" },
+                { id: "7aii", max: 2, tid: "4.3.2" },
+                { id: "7bi", max: 2, tid: "4.3.2" },
+                { id: "7bii", max: 2, tid: "2.1.4" },
+                { id: "8ai", max: 1, tid: "4.1.3" },
+                { id: "8aii", max: 2, tid: "4.1.3" },
+                { id: "8bi", max: 3, tid: "4.5.2" },
+                { id: "8bii", max: 3, tid: "4.7.1" },
+                { id: "8biii", max: 2, tid: "4.7.1" },
+                { id: "9a", max: 2, tid: "5.2.2" },
+                { id: "9bi", max: 2, tid: "5.2.2" },
+                { id: "9bii", max: 2, tid: "5.2.2" },
+                { id: "9biii", max: 2, tid: "5.2.2" }
+            ]
         };
 
         const YEAR_OPTIONS = Array.from({length: 12}, (_, i) => 2025 - i);
 
         const App = () => {
-            const [view, setView] = useState('dashboard'); // Default to dashboard for checking
+            const [view, setView] = useState('students');
             const [students, setStudents] = useState([]);
             const [answerKeys, setAnswerKeys] = useState({}); 
             const [records, setRecords] = useState([]);
@@ -155,11 +201,15 @@
             const [editingKey, setEditingKey] = useState({ year: 2016, paper: '1A' });
             const [inputForm, setInputForm] = useState({ studentId: '', year: '2016', paper: '1A', answers: {}, scores: {} });
             const [dashStudent, setDashStudent] = useState('');
-            const [aiConfig, setAiConfig] = useState({ type: 'mixed', lang: 'zh' });
+            
+            // AI Settings
+            const [genSettings, setGenSettings] = useState({ difficulty: 'medium', type: 'mixed', lang: 'zh' });
+            const [selectedTopics, setSelectedTopics] = useState([]);
             const [generatedPrompt, setGeneratedPrompt] = useState('');
 
+            // Load Data
             useEffect(() => {
-                const saved = localStorage.getItem('dsePhysV5');
+                const saved = localStorage.getItem('dsePhysV6');
                 if (saved) {
                     try {
                         const data = JSON.parse(saved);
@@ -172,28 +222,36 @@
             }, []);
 
             useEffect(() => {
-                localStorage.setItem('dsePhysV5', JSON.stringify({ students, answerKeys, records }));
+                localStorage.setItem('dsePhysV6', JSON.stringify({ students, answerKeys, records }));
             }, [students, answerKeys, records]);
 
+            // Retrieve Topic Info (Handles MC Object and LQ Array)
             const getTopicInfo = (year, paper, qNum) => {
                 const mapKey = `${year}_${paper}`;
-                let topicData = null;
+                const mapData = FULL_QUESTION_MAP[mapKey];
                 let topicId = null;
 
-                if (FULL_QUESTION_MAP[mapKey] && FULL_QUESTION_MAP[mapKey][qNum]) {
-                    topicId = FULL_QUESTION_MAP[mapKey][qNum];
+                if (paper === '1A') {
+                    // MC Logic (Object Key)
+                    if (mapData && mapData[qNum]) topicId = mapData[qNum];
                 } else {
-                    // Fallback
-                    const ids = Object.keys(SYLLABUS_DATA);
-                    const safeQNum = parseInt(qNum) || 1;
-                    topicId = ids[(safeQNum * 13) % ids.length];
+                    // LQ Logic (Array search)
+                    if (Array.isArray(mapData)) {
+                        const qItem = mapData.find(item => item.id === qNum);
+                        if (qItem) topicId = qItem.tid;
+                    }
                 }
 
-                // Safety: Ensure topicId exists in Syllabus
-                topicData = SYLLABUS_DATA[topicId] || { 
-                    section: 'Gen', 
-                    topic: `Topic ${topicId}`, 
-                    desc: 'Unknown Topic Description' 
+                // Fallback for analysis if map missing
+                if (!topicId) {
+                    const ids = Object.keys(SYLLABUS_DATA);
+                    // Simple hash for consistency on unknown items
+                    const hash = String(qNum).split('').reduce((a,b)=>a+b.charCodeAt(0),0);
+                    topicId = ids[hash % ids.length];
+                }
+
+                const topicData = SYLLABUS_DATA[topicId] || { 
+                    section: 'Gen', topic: `Topic ${topicId}`, desc: 'Unknown' 
                 };
 
                 return { id: topicId, ...topicData };
@@ -203,7 +261,7 @@
                 <div className="w-64 bg-slate-900 text-white h-screen fixed left-0 top-0 flex flex-col shadow-2xl z-10">
                     <div className="p-6 border-b border-slate-700">
                         <h1 className="text-xl font-bold tracking-wider italic">PHY MASTER</h1>
-                        <div className="text-xs text-yellow-400 mt-1">V5.4 Display Fix</div>
+                        <div className="text-xs text-purple-400 mt-1">V6.0 Dynamic LQ Support</div>
                     </div>
                     <nav className="p-4 space-y-2 flex-1 overflow-y-auto">
                         {[
@@ -222,8 +280,8 @@
                 </div>
             );
 
-            // ... StudentsView, MarkingView, InputView (Code is identical to V5.3, omitted for brevity but assumed present)
-            
+            // --- Views ---
+
             const StudentsView = () => {
                 const [name, setName] = useState('');
                 const add = () => {
@@ -258,7 +316,7 @@
 
                 return (
                     <div className="max-w-5xl mx-auto bg-white p-8 rounded-xl shadow-sm">
-                        <h2 className="text-2xl font-bold mb-6">🔑 設定標準答案 (Marking Scheme)</h2>
+                        <h2 className="text-2xl font-bold mb-6">🔑 設定標準答案 (MC Only)</h2>
                         <div className="flex gap-4 mb-6">
                             <select className="border p-2 rounded w-32 font-bold" value={year} onChange={e=>setEditingKey({...editingKey, year: e.target.value})}>
                                 {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
@@ -285,10 +343,16 @@
                 );
             };
 
+            // *** UPDATED INPUT VIEW FOR DYNAMIC LQ ***
             const InputView = () => {
                 const { studentId, year, paper } = inputForm;
                 const keyId = `${year}_${paper}`;
                 const sysKey = answerKeys[keyId] || {};
+                
+                // Retrieve LQ Config if exists
+                const lqConfig = (paper !== '1A' && Array.isArray(FULL_QUESTION_MAP[keyId])) 
+                                ? FULL_QUESTION_MAP[keyId] 
+                                : null;
 
                 useEffect(() => {
                     if (!studentId && students.length > 0) setInputForm(prev => ({ ...prev, studentId: students[0].id }));
@@ -303,12 +367,24 @@
                     });
                 };
 
+                const updateScore = (qKey, val, max) => {
+                    let numVal = parseFloat(val);
+                    if(val === '') numVal = ''; 
+                    else if(numVal < 0) numVal = 0;
+                    else if(numVal > max) numVal = max; // Cap at max
+                    
+                    setInputForm({
+                        ...inputForm,
+                        scores: {...inputForm.scores, [qKey]: numVal}
+                    });
+                };
+
                 const save = () => {
                     if(!studentId) return alert('請選擇學生');
                     const newRec = { ...inputForm, id: Date.now(), timestamp: new Date().toISOString() };
                     const others = records.filter(r => !(r.studentId===studentId && r.year==year && r.paper===paper));
                     setRecords([...others, newRec]);
-                    alert('✅ 已儲存 (Saved)');
+                    alert('✅ 已儲存');
                 };
 
                 return (
@@ -337,13 +413,13 @@
                             </div>
                         </div>
                         
+                        {/* MC INPUT */}
                         {paper === '1A' && (
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                 {Array.from({length: 33}).map((_, i) => {
                                     const q = i+1;
                                     const myAns = inputForm.answers[q];
                                     const realAns = sysKey[q];
-                                    const topicInfo = getTopicInfo(year, paper, q);
                                     let statusClass = "border-slate-200";
                                     if(myAns && realAns) statusClass = myAns===realAns ? "bg-green-50 border-green-300" : "bg-red-50 border-red-300";
 
@@ -351,7 +427,6 @@
                                         <div key={q} className={`p-2 border rounded flex flex-col ${statusClass}`}>
                                             <div className="flex justify-between items-center mb-1">
                                                 <span className="font-bold text-slate-500">Q{q}</span>
-                                                <span className="text-[10px] bg-gray-100 px-1 rounded text-gray-400">{topicInfo.id}</span>
                                             </div>
                                             <div className="flex justify-between">
                                                 {['A','B','C','D'].map(opt => (
@@ -366,8 +441,33 @@
                                 })}
                             </div>
                         )}
-                        {paper !== '1A' && (
+
+                        {/* LQ INPUT (DYNAMIC) */}
+                        {paper !== '1A' && lqConfig && (
+                             <div className="grid grid-cols-3 md:grid-cols-5 gap-4">
+                                {lqConfig.map((item) => (
+                                    <div key={item.id} className="flex flex-col">
+                                        <div className="flex justify-between items-end mb-1">
+                                            <span className="text-sm font-bold text-slate-700">Q{item.id}</span>
+                                            <span className="text-[10px] text-slate-400 bg-slate-100 px-1 rounded">/{item.max}</span>
+                                        </div>
+                                        <input type="number" className="border p-2 rounded text-center focus:ring-2 focus:ring-blue-500 outline-none"
+                                            placeholder="-"
+                                            value={inputForm.scores[item.id] ?? ''}
+                                            onChange={e => updateScore(item.id, e.target.value, item.max)}
+                                        />
+                                        <span className="text-[9px] text-center text-slate-300 mt-1 truncate" title={item.tid}>{item.tid}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* FALLBACK LQ (For years without specific map) */}
+                        {paper !== '1A' && !lqConfig && (
                              <div className="grid grid-cols-4 md:grid-cols-6 gap-4">
+                                <div className="col-span-full text-sm text-yellow-600 bg-yellow-50 p-2 rounded mb-2">
+                                    ⚠ 注意：{year} 尚未載入詳細題目地圖，顯示通用輸入格 (Q1-Q15)。
+                                </div>
                                 {Array.from({length: 15}).map((_,i) => (
                                     <div key={i} className="flex flex-col">
                                         <span className="text-xs text-slate-500 mb-1">Q{i+1}</span>
@@ -385,9 +485,6 @@
                 );
             };
 
-            // ==========================================
-            // FIX: DASHBOARD LOGIC (Removed Slice)
-            // ==========================================
             const DashboardView = () => {
                 useEffect(() => {
                     if (!dashStudent && students.length > 0) setDashStudent(students[0].id);
@@ -407,12 +504,25 @@
                             if(!stats[tid]) stats[tid] = { ...info, earned: 0, max: 0, count: 0 };
                             
                             stats[tid].earned += numericScore;
-                            stats[tid].max += (r.paper==='1A' ? 1 : 10);
+                            // Dynamic Max Score Calculation
+                            let qMax = 0;
+                            if (r.paper === '1A') {
+                                qMax = 1;
+                            } else {
+                                // Find max from map if exists, else guess 10
+                                const key = `${r.year}_${r.paper}`;
+                                if(Array.isArray(FULL_QUESTION_MAP[key])) {
+                                    const qItem = FULL_QUESTION_MAP[key].find(i => i.id === q);
+                                    qMax = qItem ? qItem.max : 10;
+                                } else {
+                                    qMax = 10;
+                                }
+                            }
+                            stats[tid].max += qMax;
                             stats[tid].count++;
                         });
                     });
 
-                    // Sort: Lowest Percentage first
                     return Object.values(stats).sort((a,b) => {
                         const pctA = a.max > 0 ? (a.earned/a.max) : 0;
                         const pctB = b.max > 0 ? (b.earned/b.max) : 0;
@@ -420,11 +530,7 @@
                     });
                 }, [records, dashStudent]);
 
-                // Separate Weakest (Bottom half) and Strongest (Top half)
-                // BUT SHOW ALL. If there are 20 topics, split them 10/10 or just list them.
-                // The previous bug was `.slice(0, 8)` which hid the middle ones.
-                
-                const weakestList = subTopicStats.slice(0, 50); // Show UP TO 50 (Basically all)
+                const weakestList = subTopicStats.slice(0, 50); 
                 const strongestList = [...subTopicStats].reverse().slice(0, 50);
 
                 return (
@@ -446,7 +552,6 @@
                             </div>
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-[70vh]">
-                                {/* Weakest Column */}
                                 <div className="bg-white p-4 rounded-xl shadow-sm border-t-4 border-red-500 flex flex-col h-full">
                                     <h3 className="font-bold text-lg mb-4 text-red-600 flex items-center gap-2 flex-shrink-0">
                                         <span className="text-2xl">⚠</span> 待改善 (Weakest to Stronger)
@@ -469,8 +574,6 @@
                                         ))}
                                     </div>
                                 </div>
-
-                                {/* Strongest Column */}
                                 <div className="bg-white p-4 rounded-xl shadow-sm border-t-4 border-green-500 flex flex-col h-full">
                                     <h3 className="font-bold text-lg mb-4 text-green-600 flex items-center gap-2 flex-shrink-0">
                                         <span className="text-2xl">★</span> 表現列表 (Strongest to Weaker)
@@ -494,63 +597,53 @@
                     </div>
                 );
             };
-// ==========================================
-            // V5.5 UPDATE: AI Generator with Topic Selection
-            // ==========================================
-            const GenerateView = () => {
-                // Local State for Generator Settings
-                const [genSettings, setGenSettings] = useState({
-                    difficulty: 'medium', // low, medium, high
-                    type: 'mixed',        // mc, lq, mixed
-                    lang: 'zh'
-                });
-                const [selectedTopics, setSelectedTopics] = useState([]); // Array of Topic IDs
-                const [generatedPrompt, setGeneratedPrompt] = useState('');
 
-                // Calculate stats for the selected student to show percentages
-                const studentStats = useMemo(() => {
-                    if (!dashStudent) return {};
+            const GenerateView = () => {
+                const [studentStats, setStudentStats] = useState({});
+
+                // Calculate stats for topic selection colors
+                useEffect(() => {
+                    if (!dashStudent) return;
                     const myRecs = records.filter(r => r.studentId === dashStudent);
                     const stats = {};
-
-                    // Initialize all syllabus topics with 0 data
                     Object.keys(SYLLABUS_DATA).forEach(tid => {
-                        stats[tid] = { ...SYLLABUS_DATA[tid], earned: 0, max: 0, count: 0 };
+                        stats[tid] = { earned: 0, max: 0 };
                     });
 
-                    // Fill in actual data
                     myRecs.forEach(r => {
                         Object.entries(r.scores).forEach(([q, score]) => {
                             const numericScore = parseFloat(score) || 0;
                             const info = getTopicInfo(r.year, r.paper, q);
                             const tid = info.id;
                             
-                            if (stats[tid]) {
+                            // Determine max score for this question
+                            let qMax = 0;
+                            if (r.paper === '1A') qMax = 1;
+                            else {
+                                const key = `${r.year}_${r.paper}`;
+                                if(Array.isArray(FULL_QUESTION_MAP[key])) {
+                                    const qItem = FULL_QUESTION_MAP[key].find(i => i.id === q);
+                                    qMax = qItem ? qItem.max : 10;
+                                } else qMax = 10;
+                            }
+
+                            if(stats[tid]) {
                                 stats[tid].earned += numericScore;
-                                stats[tid].max += (r.paper === '1A' ? 1 : 10); // Weighting assumption
-                                stats[tid].count++;
+                                stats[tid].max += qMax;
                             }
                         });
                     });
-                    return stats;
+                    setStudentStats(stats);
                 }, [dashStudent, records]);
 
-                // Toggle Checkbox
                 const toggleTopic = (tid) => {
-                    if (selectedTopics.includes(tid)) {
-                        setSelectedTopics(selectedTopics.filter(t => t !== tid));
-                    } else {
-                        setSelectedTopics([...selectedTopics, tid]);
-                    }
+                    if (selectedTopics.includes(tid)) setSelectedTopics(selectedTopics.filter(t => t !== tid));
+                    else setSelectedTopics([...selectedTopics, tid]);
                 };
 
-                // Select All / Clear All
                 const toggleAll = () => {
-                    if (selectedTopics.length === Object.keys(SYLLABUS_DATA).length) {
-                        setSelectedTopics([]);
-                    } else {
-                        setSelectedTopics(Object.keys(SYLLABUS_DATA));
-                    }
+                    if (selectedTopics.length === Object.keys(SYLLABUS_DATA).length) setSelectedTopics([]);
+                    else setSelectedTopics(Object.keys(SYLLABUS_DATA));
                 };
 
                 const generate = () => {
@@ -558,9 +651,9 @@
                     if (selectedTopics.length === 0) return alert("請至少選擇一個課題");
 
                     const topicListText = selectedTopics.sort().map(tid => {
-                        const s = studentStats[tid];
+                        const s = studentStats[tid] || {earned:0, max:0};
                         const pct = s.max > 0 ? Math.round((s.earned / s.max) * 100) + '%' : 'No Data';
-                        return `- [${tid}] ${s.topic} (Student Prev. Performance: ${pct})`;
+                        return `- [${tid}] ${SYLLABUS_DATA[tid].topic} (Student Prev. Performance: ${pct})`;
                     }).join('\n');
 
                     const difficultyMap = { low: 'Foundation/Easy', medium: 'Standard HKDSE', high: 'Challenging/5**' };
@@ -591,21 +684,12 @@ ${topicListText}
                     setGeneratedPrompt(prompt);
                 };
 
-                // Get sorted list of topics for the UI
-                const sortedTopicKeys = Object.keys(SYLLABUS_DATA).sort((a, b) => {
-                    // Natural sort for strings like "1.1.1" vs "1.10.1"
-                    return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
-                });
+                const sortedTopicKeys = Object.keys(SYLLABUS_DATA).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
 
                 return (
                     <div className="max-w-6xl mx-auto flex gap-6 h-[85vh]">
-                        {/* LEFT COLUMN: Settings */}
                         <div className="w-5/12 bg-white p-5 rounded-xl shadow-sm flex flex-col h-full border border-slate-200">
-                            <h2 className="text-lg font-bold mb-4 flex items-center gap-2 text-slate-700">
-                                🛠️ 生成設定 (Settings)
-                            </h2>
-                            
-                            {/* Top Controls */}
+                            <h2 className="text-lg font-bold mb-4 flex items-center gap-2 text-slate-700">🛠️ 生成設定 (Settings)</h2>
                             <div className="grid grid-cols-2 gap-3 mb-4">
                                 <div>
                                     <label className="block text-xs font-bold text-slate-500 mb-1">目標學生</label>
@@ -637,22 +721,16 @@ ${topicListText}
                                     </select>
                                 </div>
                             </div>
-
-                            {/* Topic Selection Area */}
                             <div className="flex-1 flex flex-col min-h-0 border rounded-lg bg-slate-50">
                                 <div className="p-2 border-b bg-slate-100 flex justify-between items-center">
                                     <span className="text-xs font-bold text-slate-600">選擇課題 ({selectedTopics.length})</span>
-                                    <button onClick={toggleAll} className="text-xs text-blue-600 hover:underline">
-                                        {selectedTopics.length === sortedTopicKeys.length ? '全不選' : '全選'}
-                                    </button>
+                                    <button onClick={toggleAll} className="text-xs text-blue-600 hover:underline">{selectedTopics.length === sortedTopicKeys.length ? '全不選' : '全選'}</button>
                                 </div>
                                 <div className="overflow-y-auto p-2 space-y-1 flex-1">
                                     {sortedTopicKeys.map(tid => {
-                                        const s = studentStats[tid] || {};
+                                        const s = studentStats[tid] || {earned:0, max:0};
                                         const hasData = s.max > 0;
                                         const pct = hasData ? Math.round((s.earned / s.max) * 100) : 0;
-                                        
-                                        // Color coding based on performance
                                         let scoreColor = 'text-slate-400';
                                         if (hasData) {
                                             if (pct < 40) scoreColor = 'text-red-500 font-bold';
@@ -661,19 +739,12 @@ ${topicListText}
                                         }
 
                                         return (
-                                            <label key={tid} className="flex items-center gap-2 p-2 hover:bg-white rounded cursor-pointer border border-transparent hover:border-slate-200 transition-colors">
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={selectedTopics.includes(tid)}
-                                                    onChange={() => toggleTopic(tid)}
-                                                    className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
-                                                />
+                                            <label key={tid} className="flex items-center gap-2 p-2 hover:bg-white rounded cursor-pointer border border-transparent hover:border-slate-200">
+                                                <input type="checkbox" checked={selectedTopics.includes(tid)} onChange={() => toggleTopic(tid)} className="w-4 h-4 rounded text-blue-600" />
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex justify-between items-center">
                                                         <span className="text-xs font-mono font-bold text-slate-700">{tid}</span>
-                                                        <span className={`text-xs ${scoreColor}`}>
-                                                            {hasData ? `${pct}%` : '--'}
-                                                        </span>
+                                                        <span className={`text-xs ${scoreColor}`}>{hasData ? `${pct}%` : '--'}</span>
                                                     </div>
                                                     <div className="text-xs text-slate-500 truncate">{SYLLABUS_DATA[tid].topic}</div>
                                                 </div>
@@ -682,31 +753,12 @@ ${topicListText}
                                     })}
                                 </div>
                             </div>
-
-                            <button onClick={generate} className="w-full py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-bold hover:shadow-lg mt-4 transition-all transform active:scale-95">
-                                生成 Prompt ✨
-                            </button>
+                            <button onClick={generate} className="w-full py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-bold mt-4 shadow hover:shadow-lg">生成 Prompt ✨</button>
                         </div>
-
-                        {/* RIGHT COLUMN: Output */}
                         <div className="flex-1 bg-white p-6 rounded-xl shadow-sm h-full flex flex-col border border-slate-200">
-                            <h3 className="font-bold text-slate-700 mb-2 flex items-center gap-2">
-                                📝 生成結果 (Prompt Output)
-                            </h3>
-                            <div className="flex-1 relative">
-                                <textarea 
-                                    className="w-full h-full bg-slate-50 border p-4 rounded-lg font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    value={generatedPrompt}
-                                    readOnly
-                                    placeholder="請在左側選擇課題與設定，然後點擊「生成 Prompt」..."
-                                ></textarea>
-                            </div>
-                            <button 
-                                onClick={()=>{navigator.clipboard.writeText(generatedPrompt); alert("已複製到剪貼簿!")}} 
-                                className="mt-4 py-3 bg-slate-800 text-white rounded-lg hover:bg-slate-700 font-bold flex justify-center gap-2 transition-colors"
-                            >
-                                📋 複製並貼給 AI (Copy)
-                            </button>
+                            <h3 className="font-bold text-slate-700 mb-2">📝 生成結果 (Prompt Output)</h3>
+                            <textarea className="flex-1 w-full bg-slate-50 border p-4 rounded-lg font-mono text-sm resize-none outline-none" value={generatedPrompt} readOnly placeholder="請在左側選擇課題與設定，然後點擊「生成 Prompt」..."></textarea>
+                            <button onClick={()=>{navigator.clipboard.writeText(generatedPrompt); alert("已複製!")}} className="mt-4 py-3 bg-slate-800 text-white rounded-lg hover:bg-slate-700 font-bold flex justify-center gap-2">📋 複製並貼給 AI</button>
                         </div>
                     </div>
                 );
@@ -731,4 +783,3 @@ ${topicListText}
     </script>
 </body>
 </html>
-
