@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HKDSE Physics AI Trainer Pro</title>
+    <title>HKDSE Physics AI Trainer (Safe Mode)</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -14,24 +14,40 @@
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <script src="https://unpkg.com/lucide@latest"></script>
-
     <style>
         body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f3f4f6; }
-        .sidebar-link { transition: all 0.2s; }
-        .sidebar-link:hover, .sidebar-link.active { background-color: #e0e7ff; color: #4338ca; }
-        input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        .sidebar-link { cursor: pointer; }
+        .sidebar-link:hover { background-color: #e0e7ff; }
+        /* 錯誤訊息樣式 */
+        #error-box { display: none; background: #fee2e2; color: #991b1b; padding: 20px; border: 2px solid #ef4444; margin: 20px; border-radius: 8px; }
     </style>
 </head>
 <body>
-    <div id="root"></div>
+    <div id="error-box">
+        <h3 style="font-weight:bold">發生錯誤 (Error Occurred):</h3>
+        <pre id="error-message"></pre>
+        <p>請檢查您的網絡連線，或嘗試使用 Chrome / Edge 瀏覽器打開。</p>
+    </div>
+
+    <div id="root">
+        <div style="text-align: center; padding-top: 50px; color: #666;">
+            <h2 style="font-size: 24px;">🚀 系統啟動中...</h2>
+            <p>正在載入組件，請稍候...</p>
+        </div>
+    </div>
+
+    <script>
+        window.onerror = function(message, source, lineno, colno, error) {
+            document.getElementById('root').style.display = 'none';
+            document.getElementById('error-box').style.display = 'block';
+            document.getElementById('error-message').textContent = message + '\nLine: ' + lineno;
+        };
+    </script>
 
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
-        const { LineChart, PieChart, Activity, BookOpen, Settings, Save, Upload, Download, Trash2, FileText, BrainCircuit, History } = lucide;
 
-        // --- 1. 模擬課程數據庫 (基於 ch_obj 文件) ---
-        // 實際應用中，這裡應包含完整的 DSE 物理課程綱要
+        // --- 1. 模擬課程數據庫 (SYLLABUS) ---
         const SYLLABUS_DATA = {
             "1.1.1": { section: "熱和氣體", topic: "温度與温度計", desc: "量度温度, 認識温度為物體冷熱程度的標誌" },
             "1.2.1": { section: "熱和氣體", topic: "內能與能量轉移", desc: "闡釋温度為系統內分子隨機運動平均動能的定量關係" },
@@ -47,9 +63,7 @@
             "E3.4.1": { section: "能量和能源 (E3)", topic: "可再生能源", desc: "描述核裂變與核聚變的原理" }
         };
 
-        // --- 模擬題目地圖 (Question Mapping) ---
-        // 這是系統的核心邏輯：將年份+題號 對應到 Syllabus ID
-        // 在真實系統中，這需要一個完整的資料庫
+        // --- 模擬題目地圖 (Mapping) ---
         const MOCK_QUESTION_MAP = {
             "2023_1A_1": "1.1.1", "2023_1A_2": "1.2.2", "2023_1A_3": "1.3.2",
             "2023_1B_1": "1.5.1", "2023_1B_2": "2.2.1",
@@ -58,56 +72,55 @@
         };
 
         const App = () => {
-            // --- State Management ---
-            const [view, setView] = useState('dashboard'); // dashboard, input, generate, history
+            const [view, setView] = useState('dashboard'); 
             const [students, setStudents] = useState([]);
             const [currentStudentId, setCurrentStudentId] = useState('');
-            
-            // Records: { id, studentId, year, paper (1A/1B/2), scores: { "1": 5, "2": 3... } }
             const [records, setRecords] = useState([]);
-            
-            // Generation History
             const [promptHistory, setPromptHistory] = useState([]);
 
-            // AI Settings (Global)
+            // AI Settings
             const [aiSettings, setAiSettings] = useState({
                 role: "DSE Physics Expert Tutor",
                 language: "繁體中文",
-                type: "mixed", // mc, long, mixed
+                type: "mixed",
                 weaknessFocus: 20,
                 customInstructions: ""
             });
 
-            // --- Load/Save Logic ---
+            // Load Data
             useEffect(() => {
-                const savedData = localStorage.getItem('dsePhysicsData');
-                if (savedData) {
-                    const parsed = JSON.parse(savedData);
-                    setStudents(parsed.students || []);
-                    setRecords(parsed.records || []);
-                    setPromptHistory(parsed.history || []);
-                    if(parsed.students?.[0]) setCurrentStudentId(parsed.students[0].id);
-                } else {
-                    // Init dummy data
-                    const newId = Date.now().toString();
-                    setStudents([{ id: newId, name: "陳大文 (Demo)" }]);
-                    setCurrentStudentId(newId);
+                try {
+                    const savedData = localStorage.getItem('dsePhysicsData');
+                    if (savedData) {
+                        const parsed = JSON.parse(savedData);
+                        setStudents(parsed.students || []);
+                        setRecords(parsed.records || []);
+                        setPromptHistory(parsed.history || []);
+                        if(parsed.students?.[0]) setCurrentStudentId(parsed.students[0].id);
+                    } else {
+                        const newId = Date.now().toString();
+                        setStudents([{ id: newId, name: "陳大文 (Demo)" }]);
+                        setCurrentStudentId(newId);
+                    }
+                } catch (e) {
+                    console.error("Load Error", e);
                 }
             }, []);
 
+            // Auto Save
             useEffect(() => {
-                const data = { students, records, history: promptHistory };
-                localStorage.setItem('dsePhysicsData', JSON.stringify(data));
+                if(students.length > 0) {
+                    const data = { students, records, history: promptHistory };
+                    localStorage.setItem('dsePhysicsData', JSON.stringify(data));
+                }
             }, [students, records, promptHistory]);
 
             const handleExport = () => {
                 const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ students, records, history: promptHistory }));
-                const downloadAnchorNode = document.createElement('a');
-                downloadAnchorNode.setAttribute("href", dataStr);
-                downloadAnchorNode.setAttribute("download", "dse_physics_data.json");
-                document.body.appendChild(downloadAnchorNode);
-                downloadAnchorNode.click();
-                downloadAnchorNode.remove();
+                const link = document.createElement('a');
+                link.href = dataStr;
+                link.download = "dse_physics_data.json";
+                link.click();
             };
 
             const handleImport = (event) => {
@@ -120,37 +133,29 @@
                         setStudents(parsed.students || []);
                         setRecords(parsed.records || []);
                         setPromptHistory(parsed.history || []);
-                        alert("匯入成功！");
+                        alert("✅ 匯入成功！");
                     } catch (err) {
-                        alert("檔案格式錯誤");
+                        alert("❌ 檔案格式錯誤");
                     }
                 };
                 reader.readAsText(file);
             };
 
-            // --- Logic: Analysis ---
             const getStudentWeaknesses = (studentId) => {
                 const studentRecords = records.filter(r => r.studentId === studentId);
-                let topicStats = {}; // { "1.1.1": { obtained: 10, total: 20 } }
+                let topicStats = {}; 
 
                 studentRecords.forEach(record => {
                     Object.entries(record.scores).forEach(([qNum, score]) => {
-                        // Attempt to map question to topic
                         const mapKey = `${record.year}_${record.paper}_${qNum}`;
-                        const topicId = MOCK_QUESTION_MAP[mapKey] || "Unknown"; // Default to Unknown if not mapped
-                        
-                        // For demo, if unknown, randomly assign to a syllabus topic to show UI
-                        const finalTopicId = topicId === "Unknown" ? Object.keys(SYLLABUS_DATA)[qNum % Object.keys(SYLLABUS_DATA).length] : topicId;
+                        const topicId = MOCK_QUESTION_MAP[mapKey] || Object.keys(SYLLABUS_DATA)[qNum % Object.keys(SYLLABUS_DATA).length];
 
-                        if (!topicStats[finalTopicId]) topicStats[finalTopicId] = { obtained: 0, total: 0, count: 0 };
-                        
-                        topicStats[finalTopicId].obtained += parseInt(score || 0);
-                        topicStats[finalTopicId].total += 10; // Assuming each Q is out of 10 for simplicity in this demo
-                        topicStats[finalTopicId].count += 1;
+                        if (!topicStats[topicId]) topicStats[topicId] = { obtained: 0, total: 0 };
+                        topicStats[topicId].obtained += parseInt(score || 0);
+                        topicStats[topicId].total += 10; 
                     });
                 });
 
-                // Calculate percentage and filter
                 let weaknesses = [];
                 Object.entries(topicStats).forEach(([id, stats]) => {
                     const pct = (stats.obtained / stats.total) * 100;
@@ -159,49 +164,41 @@
                             id,
                             name: SYLLABUS_DATA[id].topic,
                             desc: SYLLABUS_DATA[id].desc,
-                            section: SYLLABUS_DATA[id].section,
                             pct: pct.toFixed(1)
                         });
                     }
                 });
 
-                return weaknesses.sort((a, b) => a.pct - b.pct); // Lowest first
+                return weaknesses.sort((a, b) => a.pct - b.pct);
             };
 
-            // --- Components ---
+            // --- Views ---
 
             const Sidebar = () => (
-                <div className="w-64 bg-indigo-900 text-white flex flex-col h-screen fixed left-0 top-0 shadow-xl z-10">
-                    <div className="p-6 border-b border-indigo-800">
-                        <h1 className="font-bold text-xl flex items-center gap-2">
-                            <BrainCircuit className="text-yellow-400" />
-                            DSE Phy Trainer
-                        </h1>
-                        <p className="text-xs text-indigo-300 mt-1">v1.0 (Based on ch_obj)</p>
+                <div className="w-64 bg-slate-800 text-white flex flex-col h-screen fixed left-0 top-0 shadow-xl overflow-y-auto">
+                    <div className="p-6 border-b border-slate-700">
+                        <h1 className="font-bold text-lg">⚡ DSE Phy Trainer</h1>
                     </div>
                     <nav className="flex-1 p-4 space-y-2">
-                        {[
-                            { id: 'dashboard', icon: Activity, label: '總覽與分析' },
-                            { id: 'input', icon: FileText, label: '輸入分數' },
-                            { id: 'generate', icon: Settings, label: '生成 AI 練習' },
-                            { id: 'history', icon: History, label: '練習記錄' },
-                        ].map(item => (
-                            <button 
-                                key={item.id}
-                                onClick={() => setView(item.id)}
-                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${view === item.id ? 'bg-indigo-700 text-white shadow-inner' : 'text-indigo-200 hover:bg-indigo-800'}`}
-                            >
-                                <item.icon size={18} />
-                                {item.label}
-                            </button>
-                        ))}
+                        <button onClick={() => setView('dashboard')} className={`w-full text-left px-4 py-3 rounded ${view === 'dashboard' ? 'bg-slate-600' : 'hover:bg-slate-700'}`}>
+                            📊 總覽與分析
+                        </button>
+                        <button onClick={() => setView('input')} className={`w-full text-left px-4 py-3 rounded ${view === 'input' ? 'bg-slate-600' : 'hover:bg-slate-700'}`}>
+                            📝 輸入分數
+                        </button>
+                        <button onClick={() => setView('generate')} className={`w-full text-left px-4 py-3 rounded ${view === 'generate' ? 'bg-slate-600' : 'hover:bg-slate-700'}`}>
+                            🧠 生成 AI 練習
+                        </button>
+                        <button onClick={() => setView('history')} className={`w-full text-left px-4 py-3 rounded ${view === 'history' ? 'bg-slate-600' : 'hover:bg-slate-700'}`}>
+                            🕒 練習記錄
+                        </button>
                     </nav>
-                    <div className="p-4 bg-indigo-950">
-                        <div className="text-xs text-indigo-400 mb-2 font-bold">數據管理</div>
+                    <div className="p-4 bg-slate-900 border-t border-slate-700">
+                        <div className="text-xs text-slate-400 mb-2">數據管理</div>
                         <div className="flex gap-2">
-                            <button onClick={handleExport} className="flex-1 bg-indigo-800 hover:bg-indigo-700 p-2 rounded text-center" title="匯出 JSON"><Download size={16} className="mx-auto"/></button>
-                            <label className="flex-1 bg-indigo-800 hover:bg-indigo-700 p-2 rounded text-center cursor-pointer" title="匯入 JSON">
-                                <Upload size={16} className="mx-auto"/>
+                            <button onClick={handleExport} className="flex-1 bg-blue-600 hover:bg-blue-500 py-2 rounded text-sm">匯出 JSON</button>
+                            <label className="flex-1 bg-green-600 hover:bg-green-500 py-2 rounded text-center cursor-pointer text-sm">
+                                匯入
                                 <input type="file" onChange={handleImport} className="hidden" accept=".json" />
                             </label>
                         </div>
@@ -211,8 +208,6 @@
 
             const InputView = () => {
                 const [form, setForm] = useState({ year: '2023', paper: '1A', scores: {} });
-                
-                // Generate question inputs based on paper type
                 const questionCount = form.paper === '1A' ? 33 : (form.paper === '1B' ? 15 : 10);
                 
                 const handleSave = () => {
@@ -224,73 +219,64 @@
                         date: new Date().toISOString()
                     };
                     setRecords([...records, newRecord]);
-                    alert("分數已儲存！");
+                    alert("✅ 分數已儲存！");
                     setView('dashboard');
                 };
 
                 return (
-                    <div className="max-w-4xl mx-auto">
-                        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-6">
-                            <h2 className="text-xl font-bold mb-4 flex items-center gap-2"><FileText className="text-blue-600"/> 輸入歷屆試題分數</h2>
-                            <div className="grid grid-cols-3 gap-4 mb-6">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">年份</label>
-                                    <select className="w-full p-2 border rounded" value={form.year} onChange={e => setForm({...form, year: e.target.value})}>
-                                        {[2023,2022,2021,2020,2019,2018].map(y => <option key={y} value={y}>{y}</option>)}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">試卷 (Paper)</label>
-                                    <select className="w-full p-2 border rounded" value={form.paper} onChange={e => setForm({...form, paper: e.target.value, scores: {}})}>
-                                        <option value="1A">Paper 1A (MC)</option>
-                                        <option value="1B">Paper 1B (Long Q)</option>
-                                        <option value="2">Paper 2 (Elective)</option>
-                                    </select>
-                                </div>
+                    <div className="max-w-4xl mx-auto bg-white p-6 rounded-lg shadow">
+                        <h2 className="text-xl font-bold mb-4">📝 輸入歷屆試題分數</h2>
+                        <div className="grid grid-cols-2 gap-4 mb-6">
+                            <div>
+                                <label className="block text-sm font-bold mb-1">年份</label>
+                                <select className="w-full p-2 border rounded" value={form.year} onChange={e => setForm({...form, year: e.target.value})}>
+                                    {[2023,2022,2021,2020,2019,2018].map(y => <option key={y} value={y}>{y}</option>)}
+                                </select>
                             </div>
-                            
-                            <div className="bg-blue-50 p-4 rounded-lg mb-4">
-                                <h3 className="text-sm font-bold text-blue-800 mb-2">輸入分數 (每題滿分假定為 10 分以供測試)</h3>
-                                <div className="grid grid-cols-5 gap-3">
-                                    {Array.from({length: questionCount}).map((_, i) => (
-                                        <div key={i} className="flex flex-col">
-                                            <label className="text-xs text-gray-500 mb-1">Q{i+1}</label>
-                                            <input 
-                                                type="number" 
-                                                className="p-2 border rounded text-center focus:ring-2 focus:ring-blue-500 outline-none"
-                                                min="0" max="10"
-                                                value={form.scores[i+1] || ''}
-                                                onChange={(e) => setForm({
-                                                    ...form, 
-                                                    scores: { ...form.scores, [i+1]: e.target.value } 
-                                                })}
-                                            />
-                                        </div>
-                                    ))}
-                                </div>
+                            <div>
+                                <label className="block text-sm font-bold mb-1">試卷</label>
+                                <select className="w-full p-2 border rounded" value={form.paper} onChange={e => setForm({...form, paper: e.target.value, scores: {}})}>
+                                    <option value="1A">Paper 1A (MC)</option>
+                                    <option value="1B">Paper 1B (Long Q)</option>
+                                    <option value="2">Paper 2 (Elective)</option>
+                                </select>
                             </div>
-
-                            <button onClick={handleSave} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition">
-                                儲存記錄
-                            </button>
                         </div>
+                        
+                        <div className="bg-blue-50 p-4 rounded mb-4">
+                            <h3 className="text-sm font-bold text-blue-800 mb-2">每題分數 (測試用：滿分 10)</h3>
+                            <div className="grid grid-cols-5 gap-2">
+                                {Array.from({length: questionCount}).map((_, i) => (
+                                    <div key={i}>
+                                        <label className="text-xs text-gray-500 block">Q{i+1}</label>
+                                        <input 
+                                            type="number" 
+                                            className="w-full p-1 border rounded text-center"
+                                            min="0" max="10"
+                                            value={form.scores[i+1] || ''}
+                                            onChange={(e) => setForm({
+                                                ...form, 
+                                                scores: { ...form.scores, [i+1]: e.target.value } 
+                                            })}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        <button onClick={handleSave} className="w-full bg-blue-600 text-white py-3 rounded font-bold hover:bg-blue-700">儲存記錄</button>
                     </div>
                 );
             };
 
             const DashboardView = () => {
                 const weaknesses = useMemo(() => getStudentWeaknesses(currentStudentId), [records, currentStudentId]);
-                const currentStudent = students.find(s => s.id === currentStudentId);
-
-                // Simple Chart Data
+                
                 useEffect(() => {
-                    if (view === 'dashboard' && weaknesses.length > 0) {
+                    if (weaknesses.length > 0) {
                         const ctx = document.getElementById('weaknessChart');
                         if (ctx) {
-                            // Destroy old chart if exists (simplified)
-                            const chartStatus = Chart.getChart("weaknessChart"); 
-                            if (chartStatus != undefined) chartStatus.destroy();
-
+                            const chartInstance = Chart.getChart("weaknessChart");
+                            if (chartInstance) chartInstance.destroy();
                             new Chart(ctx, {
                                 type: 'bar',
                                 data: {
@@ -298,75 +284,48 @@
                                     datasets: [{
                                         label: '得分率 (%)',
                                         data: weaknesses.slice(0, 5).map(w => w.pct),
-                                        backgroundColor: 'rgba(239, 68, 68, 0.6)',
-                                        borderColor: 'rgba(239, 68, 68, 1)',
-                                        borderWidth: 1
+                                        backgroundColor: '#ef4444'
                                     }]
                                 },
-                                options: {
-                                    scales: { y: { beginAtZero: true, max: 100 } },
-                                    responsive: true,
-                                    plugins: { legend: { display: false } }
-                                }
+                                options: { scales: { y: { beginAtZero: true, max: 100 } } }
                             });
                         }
                     }
-                }, [view, weaknesses]);
+                }, [weaknesses]);
 
                 return (
                     <div className="space-y-6">
-                        <header className="flex justify-between items-center bg-white p-4 rounded-lg shadow-sm">
-                            <div>
-                                <h2 className="text-2xl font-bold text-gray-800">學生分析儀表板</h2>
-                                <p className="text-gray-500">當前學生: <span className="font-bold text-blue-600">{currentStudent?.name}</span></p>
-                            </div>
-                            <select 
-                                className="p-2 border rounded-lg bg-gray-50"
-                                value={currentStudentId}
-                                onChange={(e) => setCurrentStudentId(e.target.value)}
-                            >
+                        <div className="flex justify-between items-center bg-white p-4 rounded shadow">
+                            <h2 className="text-xl font-bold">📊 學生分析儀表板</h2>
+                            <select className="p-2 border rounded" value={currentStudentId} onChange={(e) => setCurrentStudentId(e.target.value)}>
                                 {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                             </select>
-                        </header>
+                        </div>
 
                         {records.length === 0 ? (
-                            <div className="text-center py-20 bg-white rounded-lg border-2 border-dashed border-gray-300">
-                                <p className="text-gray-400">暫無數據，請前往「輸入分數」頁面新增記錄。</p>
+                            <div className="text-center py-20 bg-white rounded border-dashed border-2 border-gray-300">
+                                <p className="text-gray-500">暫無數據，請先去「📝 輸入分數」。</p>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                {/* Weakness List */}
-                                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                                    <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Activity size={20} className="text-red-500"/> 識別出的弱項課題</h3>
-                                    <div className="space-y-3">
-                                        {weaknesses.slice(0, 5).map(w => (
-                                            <div key={w.id} className="p-3 bg-red-50 rounded-lg border border-red-100 flex justify-between items-center group cursor-pointer hover:shadow-md transition">
-                                                <div>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="bg-red-200 text-red-800 text-xs px-2 py-0.5 rounded-full font-bold">{w.id}</span>
-                                                        <span className="font-bold text-gray-800">{w.name}</span>
-                                                    </div>
-                                                    <p className="text-xs text-gray-600 mt-1">{w.desc}</p>
-                                                </div>
-                                                <div className="text-right">
-                                                    <span className="text-2xl font-bold text-red-600">{w.pct}%</span>
-                                                    <div className="text-xs text-gray-400">得分率</div>
-                                                </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="bg-white p-6 rounded shadow">
+                                    <h3 className="font-bold text-lg mb-4 text-red-600">⚠ 弱項課題 Top 5</h3>
+                                    {weaknesses.slice(0, 5).map(w => (
+                                        <div key={w.id} className="mb-3 p-3 bg-red-50 rounded border-l-4 border-red-500 flex justify-between">
+                                            <div>
+                                                <span className="font-bold block">{w.id} {w.name}</span>
+                                                <span className="text-xs text-gray-600">{w.desc}</span>
                                             </div>
-                                        ))}
-                                    </div>
-                                    <button onClick={() => setView('generate')} className="mt-4 w-full py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition flex items-center justify-center gap-2">
-                                        <BrainCircuit size={16}/> 針對這些弱項生成練習
+                                            <span className="font-bold text-red-700 text-xl">{w.pct}%</span>
+                                        </div>
+                                    ))}
+                                    <button onClick={() => setView('generate')} className="w-full mt-2 py-2 bg-slate-800 text-white rounded hover:bg-slate-700">
+                                        針對弱項生成練習 ➔
                                     </button>
                                 </div>
-
-                                {/* Chart */}
-                                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                                    <h3 className="font-bold text-lg mb-4">表現概覽</h3>
+                                <div className="bg-white p-6 rounded shadow">
+                                    <h3 className="font-bold text-lg mb-4">表現圖表</h3>
                                     <canvas id="weaknessChart"></canvas>
-                                    <div className="mt-4 text-sm text-gray-500">
-                                        * 圖表顯示得分率最低的 5 個課題。數據基於輸入的 Past Paper 題目映射。
-                                    </div>
                                 </div>
                             </div>
                         )}
@@ -376,181 +335,50 @@
 
             const GenerateView = () => {
                 const [generatedPrompt, setGeneratedPrompt] = useState('');
-                const weaknesses = getStudentWeaknesses(currentStudentId).slice(0, 3); // Top 3 weaknesses
+                const weaknesses = getStudentWeaknesses(currentStudentId).slice(0, 3);
 
                 const generatePrompt = () => {
                     const weakListText = weaknesses.map(w => `- [${w.id}] ${w.name}: ${w.desc} (得分率: ${w.pct}%)`).join('\n');
-                    
-                    const prompt = `
-**角色設定**: ${aiSettings.role}
-**語言**: ${aiSettings.language}
-**目標對象**: HKDSE 物理科學生
-**任務**: 請根據以下學生的弱項數據，生成一份針對性的練習卷。
-
-**學生弱項分析**:
-${weakListText || "暫無具體弱項數據，請生成綜合練習。"}
-
-**練習卷要求**:
-1. **題型**: ${aiSettings.type === 'mixed' ? '混合 (MC + 長題目)' : (aiSettings.type === 'mc' ? '純 MC (多項選擇題)' : '純長題目')}。
-2. **弱項針對性**: 請確保 ${aiSettings.weaknessFocus}% 的題目直接對應上述弱項，其餘為相關課題的鞏固。
-3. **格式**: 
-   - 請先列出題目。
-   - 在題目後提供「詳細題解」及「評分參考 (Marking Scheme)」。
-   - 對於弱項題目，請加入「常犯錯誤 (Common Mistakes)」提示。
-
-**自訂指令**:
-${aiSettings.customInstructions}
-
-請現在開始生成。
-                    `.trim();
+                    const prompt = `**角色**: ${aiSettings.role}\n**任務**: 針對以下 DSE 物理學生弱項製作練習。\n\n**弱項數據**:\n${weakListText || "無數據"}\n\n**設定**:\n- 語言: ${aiSettings.language}\n- 題型: ${aiSettings.type}\n- 弱項佔比: ${aiSettings.weaknessFocus}%\n- 指令: ${aiSettings.customInstructions}\n\n請生成題目、詳細題解及 Marking Scheme。`;
                     setGeneratedPrompt(prompt);
-                    
-                    // Save to history
-                    const newHistory = {
-                        id: Date.now(),
-                        date: new Date().toLocaleString(),
-                        studentId: currentStudentId,
-                        promptSnippet: prompt.substring(0, 50) + "...",
-                        fullPrompt: prompt
-                    };
-                    setPromptHistory([newHistory, ...promptHistory]);
+                    setPromptHistory([{id: Date.now(), date: new Date().toLocaleString(), promptSnippet: prompt.substring(0,30)+"...", fullPrompt: prompt}, ...promptHistory]);
                 };
 
                 return (
-                    <div className="flex gap-6 h-full">
-                        {/* Settings Panel */}
-                        <div className="w-1/3 space-y-4">
-                            <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
-                                <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                                    <Settings size={18} /> AI 提示詞進階設定
-                                </h3>
-                                
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">AI 角色</label>
-                                        <input type="text" className="w-full p-2 border rounded text-sm" value={aiSettings.role} onChange={e => setAiSettings({...aiSettings, role: e.target.value})} />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">語言</label>
-                                        <select className="w-full p-2 border rounded text-sm" value={aiSettings.language} onChange={e => setAiSettings({...aiSettings, language: e.target.value})}>
-                                            <option value="繁體中文">繁體中文</option>
-                                            <option value="English">English</option>
-                                            <option value="中英對照">中英對照</option>
-                                        </select>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">題型</label>
-                                        <select className="w-full p-2 border rounded text-sm" value={aiSettings.type} onChange={e => setAiSettings({...aiSettings, type: e.target.value})}>
-                                            <option value="mixed">混合 (MC + 長題目)</option>
-                                            <option value="mc">純 MC</option>
-                                            <option value="long">純長題目</option>
-                                        </select>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">弱項針對比例 ({aiSettings.weaknessFocus}%)</label>
-                                        <input 
-                                            type="range" min="0" max="100" step="10" 
-                                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                                            value={aiSettings.weaknessFocus} 
-                                            onChange={e => setAiSettings({...aiSettings, weaknessFocus: e.target.value})}
-                                        />
-                                        <p className="text-xs text-gray-400 mt-1">AI 將確保約 {aiSettings.weaknessFocus}% 題目針對 Concept Detail 弱點。</p>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">自訂指令</label>
-                                        <textarea 
-                                            className="w-full p-2 border rounded text-sm h-20" 
-                                            placeholder="例如：題目要包含圖表題..."
-                                            value={aiSettings.customInstructions}
-                                            onChange={e => setAiSettings({...aiSettings, customInstructions: e.target.value})}
-                                        ></textarea>
-                                    </div>
-                                </div>
-
-                                <button onClick={generatePrompt} className="w-full mt-6 bg-indigo-600 text-white py-3 rounded-lg font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition">
-                                    生成 Prompt
-                                </button>
-                            </div>
+                    <div className="flex flex-col md:flex-row gap-6 h-full">
+                        <div className="w-full md:w-1/3 bg-white p-5 rounded shadow space-y-4">
+                            <h3 className="font-bold border-b pb-2">⚙️ AI 設定</h3>
+                            <div><label className="text-xs font-bold block">AI 角色</label><input className="w-full border p-1 rounded" value={aiSettings.role} onChange={e => setAiSettings({...aiSettings, role: e.target.value})} /></div>
+                            <div><label className="text-xs font-bold block">語言</label><select className="w-full border p-1 rounded" value={aiSettings.language} onChange={e => setAiSettings({...aiSettings, language: e.target.value})}><option>繁體中文</option><option>English</option></select></div>
+                            <div><label className="text-xs font-bold block">題型</label><select className="w-full border p-1 rounded" value={aiSettings.type} onChange={e => setAiSettings({...aiSettings, type: e.target.value})}><option value="mixed">混合</option><option value="mc">MC</option></select></div>
+                            <div><label className="text-xs font-bold block">弱項比例 ({aiSettings.weaknessFocus}%)</label><input type="range" className="w-full" min="0" max="100" step="10" value={aiSettings.weaknessFocus} onChange={e => setAiSettings({...aiSettings, weaknessFocus: e.target.value})} /></div>
+                            <div><label className="text-xs font-bold block">自訂指令</label><textarea className="w-full border p-1 rounded" value={aiSettings.customInstructions} onChange={e => setAiSettings({...aiSettings, customInstructions: e.target.value})}></textarea></div>
+                            <button onClick={generatePrompt} className="w-full bg-green-600 text-white py-2 rounded font-bold hover:bg-green-700">生成 Prompt ✨</button>
                         </div>
-
-                        {/* Output Panel */}
-                        <div className="flex-1 bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col">
-                            <div className="flex justify-between items-center mb-4">
-                                <h3 className="font-bold text-gray-800">生成的 Prompt</h3>
-                                <button 
-                                    onClick={() => {navigator.clipboard.writeText(generatedPrompt); alert('已複製！');}}
-                                    className="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded flex items-center gap-1"
-                                    disabled={!generatedPrompt}
-                                >
-                                    <FileText size={14}/> 複製
-                                </button>
-                            </div>
-                            <textarea 
-                                className="flex-1 w-full p-4 bg-gray-50 border rounded-lg font-mono text-sm leading-relaxed resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                value={generatedPrompt}
-                                readOnly
-                                placeholder="點擊左側按鈕生成提示詞..."
-                            ></textarea>
-                            <div className="mt-4 p-3 bg-yellow-50 text-yellow-800 text-sm rounded-lg flex gap-2">
-                                <BookOpen size={18} />
-                                <div>
-                                    <strong>建議用法：</strong> 將此 Prompt 貼給 Gemini，然後讓學生直接在 Gemini 對話中作答，或將 Gemini 生成的內容整理成 PDF。
-                                </div>
-                            </div>
+                        <div className="flex-1 bg-white p-5 rounded shadow flex flex-col">
+                            <h3 className="font-bold mb-2">📋 結果 (複製給 Gemini)</h3>
+                            <textarea className="flex-1 w-full bg-gray-50 border p-2 rounded font-mono text-sm" value={generatedPrompt} readOnly></textarea>
                         </div>
                     </div>
                 );
             };
 
             const HistoryView = () => (
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                    <h2 className="text-xl font-bold mb-6 flex items-center gap-2"><History /> 生成歷史記錄</h2>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left">
-                            <thead>
-                                <tr className="border-b border-gray-200 text-gray-500 text-sm">
-                                    <th className="pb-3 pl-4">日期</th>
-                                    <th className="pb-3">摘要</th>
-                                    <th className="pb-3 text-right pr-4">操作</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {promptHistory.map(h => (
-                                    <tr key={h.id} className="border-b border-gray-100 hover:bg-gray-50">
-                                        <td className="py-3 pl-4 text-sm text-gray-600">{h.date}</td>
-                                        <td className="py-3 text-sm font-mono text-indigo-600">{h.promptSnippet}</td>
-                                        <td className="py-3 text-right pr-4">
-                                            <button 
-                                                onClick={() => {navigator.clipboard.writeText(h.fullPrompt); alert('已複製歷史 Prompt');}}
-                                                className="text-gray-400 hover:text-indigo-600 mr-3" title="複製"
-                                            >
-                                                <FileText size={16}/>
-                                            </button>
-                                            <button 
-                                                onClick={() => setPromptHistory(promptHistory.filter(x => x.id !== h.id))}
-                                                className="text-gray-400 hover:text-red-500" title="刪除"
-                                            >
-                                                <Trash2 size={16}/>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
-                                {promptHistory.length === 0 && (
-                                    <tr><td colSpan="3" className="text-center py-8 text-gray-400">暫無記錄</td></tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+                <div className="bg-white p-6 rounded shadow">
+                    <h2 className="text-xl font-bold mb-4">🕒 記錄</h2>
+                    <ul className="space-y-2">
+                        {promptHistory.map(h => (
+                            <li key={h.id} className="border-b p-2 flex justify-between hover:bg-gray-50">
+                                <span><span className="text-gray-500 text-sm">{h.date}</span> - {h.promptSnippet}</span>
+                                <button onClick={() => {navigator.clipboard.writeText(h.fullPrompt); alert("已複製")}} className="text-blue-600 text-sm">複製</button>
+                            </li>
+                        ))}
+                    </ul>
                 </div>
             );
 
-            // --- Main Layout ---
             return (
-                <div className="flex min-h-screen bg-gray-100 text-gray-800">
+                <div className="flex min-h-screen">
                     <Sidebar />
                     <div className="flex-1 ml-64 p-8 overflow-y-auto h-screen">
                         {view === 'dashboard' && <DashboardView />}
