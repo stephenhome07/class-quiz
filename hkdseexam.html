@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HKDSE Physics Trainer V6.0 (Dynamic LQ Support)</title>
+    <title>HKDSE Physics Trainer V7.0 (Paper 2 Support)</title>
     
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -13,7 +13,6 @@
     <style>
         body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; }
         .sub-topic-tag { font-family: 'Courier New', monospace; font-weight: bold; }
-        /* Custom Scrollbar */
         .stats-list { max-height: 500px; overflow-y: auto; padding-right: 5px; }
         .stats-list::-webkit-scrollbar { width: 6px; }
         .stats-list::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 3px; }
@@ -28,114 +27,81 @@
         const { useState, useEffect, useMemo } = React;
 
         // ==========================================
-        // 1. 完整課程大綱 (SYLLABUS)
+        // 1. 完整課程大綱 (SYLLABUS) - 含 E3/E4
         // ==========================================
         const SYLLABUS_DATA = {
+            // --- Core (Book 1-5) ---
             "1.1.1": { section: "Heat", topic: "量度温度", desc: "温度為物體冷熱程度的標誌" },
-            "1.1.2": { section: "Heat", topic: "攝氏温標", desc: "攝氏度為温度的單位" },
             "1.2.1": { section: "Heat", topic: "內能與能量轉移", desc: "温度為分子平均動能" },
             "1.2.2": { section: "Heat", topic: "熱傳遞方式", desc: "傳導、對流和輻射" },
-            "1.3.1": { section: "Heat", topic: "功率與能量", desc: "功率 = E/t" },
             "1.3.2": { section: "Heat", topic: "熱容量和比熱容量", desc: "E=mcΔT" },
-            "1.4.1": { section: "Heat", topic: "潛熱", desc: "E=ml (熔解/汽化)" },
-            "1.4.2": { section: "Heat", topic: "蒸發與凝結", desc: "蒸發的冷卻效應" },
+            "1.4.1": { section: "Heat", topic: "潛熱", desc: "E=ml" },
             "1.5.1": { section: "Heat", topic: "氣體定律", desc: "pV=nRT" },
             "1.5.2": { section: "Heat", topic: "氣體分子運動論", desc: "微觀詮釋" },
-            "2.1.1": { section: "Mech", topic: "長度和時間", desc: "基本物理量" },
-            "2.1.2": { section: "Mech", topic: "距離和位移", desc: "標量與矢量" },
-            "2.1.3": { section: "Mech", topic: "速率、速度和加速度", desc: "瞬時速率與平均速度" },
-            "2.1.4": { section: "Mech", topic: "誤差估算", desc: "反應時間與誤差" },
-            "2.2.1": { section: "Mech", topic: "描述直線運動", desc: "矢量描述" },
-            "2.2.2": { section: "Mech", topic: "運動線圖", desc: "s-t, v-t, a-t 圖像" },
-            "2.2.3": { section: "Mech", topic: "勻加速運動方程", desc: "SUVAT 方程" },
-            "2.2.4": { section: "Mech", topic: "重力下的垂直運動", desc: "自由落體" },
-            "2.3.1": { section: "Mech", topic: "力", desc: "隔離體圖 (FBD)" },
-            "2.3.2": { section: "Mech", topic: "牛頓第一定律", desc: "慣性" },
+            "2.1.3": { section: "Mech", topic: "速率、速度和加速度", desc: "運動學基礎" },
+            "2.2.2": { section: "Mech", topic: "運動線圖", desc: "s-t, v-t, a-t" },
+            "2.2.3": { section: "Mech", topic: "勻加速運動方程", desc: "SUVAT" },
+            "2.3.1": { section: "Mech", topic: "力", desc: "FBD" },
             "2.3.3": { section: "Mech", topic: "牛頓第二定律", desc: "F=ma" },
-            "2.3.4": { section: "Mech", topic: "重量與質量", desc: "W=mg" },
-            "2.3.5": { section: "Mech", topic: "流體阻力", desc: "終端速度" },
-            "2.3.6": { section: "Mech", topic: "摩擦力", desc: "靜摩擦與動摩擦" },
             "2.3.7": { section: "Mech", topic: "牛頓第三定律", desc: "作用力與反作用力" },
-            "2.4.1": { section: "Mech", topic: "物體組成的系統", desc: "連接體運動" },
-            "2.4.2": { section: "Mech", topic: "力的合成和分解", desc: "矢量加法" },
-            "2.4.3": { section: "Mech", topic: "共面力", desc: "力的平衡" },
-            "2.5.1": { section: "Mech", topic: "力的轉動效應", desc: "力矩 (Moment)" },
-            "2.5.2": { section: "Mech", topic: "剛體的平衡", desc: "力矩平衡" },
-            "2.6.1": { section: "Mech", topic: "功", desc: "W = Fs cos θ" },
-            "2.6.2": { section: "Mech", topic: "機械能", desc: "動能與勢能" },
-            "2.6.3": { section: "Mech", topic: "能量守恆", desc: "能量轉換與損耗" },
-            "2.6.4": { section: "Mech", topic: "功率", desc: "P = Fv" },
+            "2.6.1": { section: "Mech", topic: "功", desc: "W=Fs" },
+            "2.6.2": { section: "Mech", topic: "機械能", desc: "KE/PE" },
+            "2.6.3": { section: "Mech", topic: "能量守恆", desc: "能量轉換" },
+            "2.6.4": { section: "Mech", topic: "功率", desc: "P=Fv" },
             "2.7.1": { section: "Mech", topic: "動量守恆", desc: "碰撞" },
-            "2.7.2": { section: "Mech", topic: "動量變化", desc: "衝量 (Impulse)" },
-            "2.8.1": { section: "Mech", topic: "拋體運動 (Ext)", desc: "獨立性原理" },
-            "2.8.2": { section: "Mech", topic: "分析拋體運動", desc: "水平與垂直分量" },
-            "2.9.1": { section: "Mech", topic: "描述圓周運動 (Ext)", desc: "角速度" },
-            "2.9.2": { section: "Mech", topic: "向心力與向心加速度", desc: "a = v²/r" },
-            "2.9.3": { section: "Mech", topic: "圓周運動的例子", desc: "傾斜路面/單擺" },
-            "2.10.1": { section: "Mech", topic: "萬有引力 (Ext)", desc: "GMm/r²" },
-            "2.10.2": { section: "Mech", topic: "引力下的圓周運動", desc: "衛星運動" },
-            "3.1.1": { section: "Waves", topic: "光線", desc: "光束性質" },
-            "3.1.2": { section: "Waves", topic: "反射與平面鏡", desc: "反射定律" },
+            "2.7.2": { section: "Mech", topic: "動量變化", desc: "衝量" },
+            "2.8.2": { section: "Mech", topic: "分析拋體運動", desc: "拋體" },
+            "2.9.2": { section: "Mech", topic: "向心力", desc: "圓周運動" },
+            "2.10.2": { section: "Mech", topic: "引力", desc: "衛星運動" },
             "3.2.1": { section: "Waves", topic: "折射", desc: "Snell's Law" },
-            "3.2.2": { section: "Waves", topic: "全內反射", desc: "臨界角" },
-            "3.3.1": { section: "Waves", topic: "透鏡種類", desc: "凸透鏡與凹透鏡" },
-            "3.3.2": { section: "Waves", topic: "凸透鏡成像", desc: "作圖法" },
-            "3.3.3": { section: "Waves", topic: "凹透鏡成像", desc: "作圖法" },
-            "3.3.4": { section: "Waves", topic: "物、像以及透鏡的關係", desc: "透鏡公式" },
-            "3.4.1": { section: "Waves", topic: "波的簡介", desc: "縱波與橫波" },
-            "3.4.2": { section: "Waves", topic: "橫波的波動", desc: "v = fλ" },
-            "3.4.3": { section: "Waves", topic: "橫波的粒子振動", desc: "相位" },
-            "3.4.4": { section: "Waves", topic: "以線圖描述橫波", desc: "位移-距離/時間圖" },
-            "3.5.1": { section: "Waves", topic: "水波", desc: "水波槽實驗" },
-            "3.5.2": { section: "Waves", topic: "反射與折射(波)", desc: "深淺水域" },
-            "3.5.3": { section: "Waves", topic: "衍射與干涉", desc: "路程差" },
-            "3.5.4": { section: "Waves", topic: "駐波", desc: "波腹與波節" },
-            "3.6.1": { section: "Waves", topic: "光的波動本質", desc: "光是橫波" },
-            "3.6.2": { section: "Waves", topic: "楊氏雙縫實驗", desc: "Δy = λD/a" },
-            "3.6.3": { section: "Waves", topic: "平面透射光柵", desc: "d sin θ = nλ" },
-            "3.6.4": { section: "Waves", topic: "電磁波", desc: "電磁波譜" },
-            "3.7.1": { section: "Waves", topic: "縱波", desc: "聲波特性" },
-            "3.7.2": { section: "Waves", topic: "聲音的本質", desc: "介質傳播" },
-            "3.7.3": { section: "Waves", topic: "聲音的其他特性", desc: "超聲波與分貝" },
-            "4.1.1": { section: "Elec", topic: "電荷", desc: "摩擦起電" },
-            "4.1.2": { section: "Elec", topic: "靜電力", desc: "庫倫定律" },
-            "4.1.3": { section: "Elec", topic: "電場", desc: "電場強度 E" },
-            "4.2.1": { section: "Elec", topic: "電流", desc: "I = Q/t" },
-            "4.2.2": { section: "Elec", topic: "電壓", desc: "電動勢與電勢差" },
-            "4.2.3": { section: "Elec", topic: "電阻", desc: "R = ρl/A" },
-            "4.2.4": { section: "Elec", topic: "電阻器網絡", desc: "串聯與並聯" },
-            "4.2.5": { section: "Elec", topic: "電功率", desc: "P = VI" },
-            "4.3.1": { section: "Elec", topic: "分析電路", desc: "電位降與分壓器" },
-            "4.3.2": { section: "Elec", topic: "實際儀表", desc: "內阻影響" },
-            "4.4.1": { section: "Elec", topic: "家用電器", desc: "功率與能量 (kWh)" },
-            "4.4.2": { section: "Elec", topic: "家居安全", desc: "保險絲與接地" },
-            "4.4.3": { section: "Elec", topic: "交流電 (Ext)", desc: "RMS 值" },
-            "4.5.1": { section: "Elec", topic: "磁力與磁場", desc: "磁場線" },
-            "4.5.2": { section: "Elec", topic: "電流的磁效應", desc: "右手握拳定則" },
-            "4.6.1": { section: "Elec", topic: "作用於導體的磁力", desc: "F = BIL sinθ" },
-            "4.6.2": { section: "Elec", topic: "直流電動機", desc: "換向器原理" },
-            "4.6.3": { section: "Elec", topic: "洛倫茲力", desc: "F = Bqv" },
-            "4.7.1": { section: "Elec", topic: "磁場產生的電流", desc: "楞次定律" },
-            "4.7.2": { section: "Elec", topic: "電磁感應應用", desc: "發電機" },
-            "4.7.3": { section: "Elec", topic: "法拉第定律 (Ext)", desc: "磁通量變化率" },
-            "4.8.1": { section: "Elec", topic: "變壓器 (Ext)", desc: "Vp/Vs = Np/Ns" },
-            "4.8.2": { section: "Elec", topic: "輸電 (Ext)", desc: "高壓傳輸優勢" },
-            "5.1.1": { section: "Rad", topic: "致電離輻射", desc: "X射線" },
-            "5.1.2": { section: "Rad", topic: "核輻射", desc: "α, β, γ 性質" },
-            "5.1.3": { section: "Rad", topic: "輻射安全", desc: "劑量 (Sv)" },
-            "5.2.1": { section: "Rad", topic: "原子模型", desc: "同位素" },
+            "3.3.1": { section: "Waves", topic: "透鏡種類", desc: "凸/凹透鏡" },
+            "3.3.2": { section: "Waves", topic: "透鏡成像", desc: "作圖法" },
+            "3.3.4": { section: "Waves", topic: "透鏡公式", desc: "1/u+1/v=1/f" },
+            "3.4.2": { section: "Waves", topic: "波動方程", desc: "v=fλ" },
+            "3.4.4": { section: "Waves", topic: "波的線圖", desc: "位移-距離/時間" },
+            "3.5.3": { section: "Waves", topic: "衍射與干涉", desc: "干涉現象" },
+            "3.5.4": { section: "Waves", topic: "駐波", desc: "波腹/波節" },
+            "3.6.2": { section: "Waves", topic: "雙縫實驗", desc: "Young's Double Slit" },
+            "3.6.3": { section: "Waves", topic: "光柵", desc: "d sinθ = nλ" },
+            "3.7.3": { section: "Waves", topic: "聲音特性", desc: "超聲波" },
+            "4.1.3": { section: "Elec", topic: "電場", desc: "E-field" },
+            "4.2.4": { section: "Elec", topic: "電阻網絡", desc: "串聯/並聯" },
+            "4.3.1": { section: "Elec", topic: "分析電路", desc: "電路計算" },
+            "4.3.2": { section: "Elec", topic: "實際儀表", desc: "內阻" },
+            "4.4.1": { section: "Elec", topic: "家用電器", desc: "功率/能量" },
+            "4.4.3": { section: "Elec", topic: "交流電", desc: "RMS" },
+            "4.5.2": { section: "Elec", topic: "電流磁效應", desc: "B-field" },
+            "4.7.1": { section: "Elec", topic: "電磁感應", desc: "Lenz Law" },
+            "4.7.3": { section: "Elec", topic: "法拉第定律", desc: "Flux" },
+            "4.8.1": { section: "Elec", topic: "變壓器", desc: "Vp/Vs=Np/Ns" },
+            "5.1.2": { section: "Rad", topic: "核輻射", desc: "Alpha/Beta/Gamma" },
             "5.2.2": { section: "Rad", topic: "放射衰變", desc: "半衰期" },
-            "5.2.3": { section: "Rad", topic: "同位素應用", desc: "追蹤劑與定年法" },
-            "5.3.1": { section: "Rad", topic: "裂變與聚變", desc: "能量來源" },
-            "5.3.2": { section: "Rad", topic: "質能關係", desc: "E = mc²" },
-            "5.3.3": { section: "Rad", topic: "核能", desc: "反應堆原理" }
+            
+            // --- Elective E3: Energy ---
+            "E3.1.1": { section: "E3", topic: "家居用電", desc: "能源效益標籤 (EELS)" },
+            "E3.1.2": { section: "E3", topic: "無火烹調", desc: "電磁爐/微波爐原理" },
+            "E3.1.3": { section: "E3", topic: "抽熱", desc: "冷氣機/熱泵 (COP)" },
+            "E3.2.1": { section: "E3", topic: "電燈", desc: "LED/白熾燈比較" },
+            "E3.2.2": { section: "E3", topic: "量度亮度", desc: "光通量/照度 (Illuminance)" },
+            "E3.3.1": { section: "E3", topic: "電動車", desc: "混合動力/全電動" },
+            "E3.4.1": { section: "E3", topic: "可再生能源", desc: "太陽能/風能/核能 (Binding Energy)" },
+            "E3.4.2": { section: "E3", topic: "環境衝擊", desc: "温室氣體" },
+
+            // --- Elective E4: Medical ---
+            "E4.1.1": { section: "E4", topic: "人類視覺", desc: "眼的調節/視桿視錐" },
+            "E4.1.2": { section: "E4", topic: "視覺缺陷", desc: "近視/遠視/散光及矯正" },
+            "E4.2.1": { section: "E4", topic: "光纖", desc: "全內反射/光纖結構" },
+            "E4.2.2": { section: "E4", topic: "內窺鏡", desc: "相干束/非相干束" },
+            "E4.3.1": { section: "E4", topic: "超聲波診斷", desc: "壓電效應/A-scan/B-scan" },
+            "E4.4.1": { section: "E4", topic: "X射線成像", desc: "衰減機制/CT Scan" },
+            "E4.5.1": { section: "E4", topic: "放射醫學", desc: "放射性追蹤/Gamma Camera" }
         };
 
         // ==========================================
-        // 2. QUESTION MAP DATABASE
+        // 2. QUESTION MAP DATABASE (Paper 1 & 2)
         // ==========================================
         const FULL_QUESTION_MAP = {
-            // Paper 1A (MC) uses Object Key mapping: "QuestionNumber": "TopicID"
+            // --- Paper 1A (MC) ---
             "2016_1A": {
                 1: "1.2.2", 2: "1.4.1", 3: "1.5.2", 4: "2.1.3", 5: "2.1.3",
                 6: "2.3.7", 7: "2.2.3", 8: "2.6.2", 9: "2.6.1", 10: "2.8.2",
@@ -146,46 +112,45 @@
                 31: "4.8.1", 32: "5.1.2", 33: "5.2.2"
             },
             
-            // Paper 1B (LQ) uses Array of Objects mapping to support '1a', '2bi' etc.
+            // --- Paper 1B (LQ) ---
             "2016_1B": [
-                { id: "1a", max: 6, tid: "1.3.2" },
-                { id: "1b", max: 2, tid: "1.3.2" },
-                { id: "2a", max: 3, tid: "1.5.1" },
-                { id: "2bi", max: 1, tid: "1.5.1" },
-                { id: "2bii", max: 1, tid: "1.5.2" },
-                { id: "2biii", max: 2, tid: "1.5.1" },
-                { id: "3a", max: 2, tid: "2.2.2" },
-                { id: "3b", max: 3, tid: "2.3.3" },
-                { id: "3ci", max: 2, tid: "2.2.2" },
-                { id: "3cii", max: 2, tid: "2.2.2" },
-                { id: "4a", max: 3, tid: "2.3.7" },
-                { id: "4b", max: 1, tid: "2.3.1" },
-                { id: "4ci", max: 2, tid: "2.7.2" },
-                { id: "4cii", max: 3, tid: "2.6.4" },
-                { id: "4d", max: 2, tid: "2.6.3" },
-                { id: "5ai", max: 2, tid: "3.3.1" },
-                { id: "5aii", max: 1, tid: "3.3.2" },
-                { id: "5bi", max: 2, tid: "3.3.4" },
-                { id: "5bii", max: 3, tid: "3.3.2" },
-                { id: "5biii", max: 1, tid: "3.3.4" },
-                { id: "5biv", max: 2, tid: "3.3.4" },
-                { id: "6ai", max: 3, tid: "3.6.2" },
-                { id: "6aii", max: 2, tid: "3.5.3" },
-                { id: "6bi", max: 3, tid: "3.6.3" },
-                { id: "6bii", max: 2, tid: "3.6.3" },
-                { id: "7ai", max: 3, tid: "4.3.1" },
-                { id: "7aii", max: 2, tid: "4.3.2" },
-                { id: "7bi", max: 2, tid: "4.3.2" },
-                { id: "7bii", max: 2, tid: "2.1.4" },
-                { id: "8ai", max: 1, tid: "4.1.3" },
-                { id: "8aii", max: 2, tid: "4.1.3" },
-                { id: "8bi", max: 3, tid: "4.5.2" },
-                { id: "8bii", max: 3, tid: "4.7.1" },
-                { id: "8biii", max: 2, tid: "4.7.1" },
-                { id: "9a", max: 2, tid: "5.2.2" },
-                { id: "9bi", max: 2, tid: "5.2.2" },
-                { id: "9bii", max: 2, tid: "5.2.2" },
-                { id: "9biii", max: 2, tid: "5.2.2" }
+                { id: "1a", max: 6, tid: "1.3.2" }, { id: "1b", max: 2, tid: "1.3.2" },
+                { id: "2a", max: 3, tid: "1.5.1" }, { id: "2bi", max: 1, tid: "1.5.1" }, { id: "2bii", max: 1, tid: "1.5.2" }, { id: "2biii", max: 2, tid: "1.5.1" },
+                { id: "3a", max: 2, tid: "2.2.2" }, { id: "3b", max: 3, tid: "2.3.3" }, { id: "3ci", max: 2, tid: "2.2.2" }, { id: "3cii", max: 2, tid: "2.2.2" },
+                { id: "4a", max: 3, tid: "2.3.7" }, { id: "4b", max: 1, tid: "2.3.1" }, { id: "4ci", max: 2, tid: "2.7.2" }, { id: "4cii", max: 3, tid: "2.6.4" }, { id: "4d", max: 2, tid: "2.6.3" },
+                { id: "5ai", max: 2, tid: "3.3.1" }, { id: "5aii", max: 1, tid: "3.3.2" }, { id: "5bi", max: 2, tid: "3.3.4" }, { id: "5bii", max: 3, tid: "3.3.2" }, { id: "5biii", max: 1, tid: "3.3.4" }, { id: "5biv", max: 2, tid: "3.3.4" },
+                { id: "6ai", max: 3, tid: "3.6.2" }, { id: "6aii", max: 2, tid: "3.5.3" }, { id: "6bi", max: 3, tid: "3.6.3" }, { id: "6bii", max: 2, tid: "3.6.3" },
+                { id: "7ai", max: 3, tid: "4.3.1" }, { id: "7aii", max: 2, tid: "4.3.2" }, { id: "7bi", max: 2, tid: "4.3.2" }, { id: "7bii", max: 2, tid: "2.1.4" },
+                { id: "8ai", max: 1, tid: "4.1.3" }, { id: "8aii", max: 2, tid: "4.1.3" }, { id: "8bi", max: 3, tid: "4.5.2" }, { id: "8bii", max: 3, tid: "4.7.1" }, { id: "8biii", max: 2, tid: "4.7.1" },
+                { id: "9a", max: 2, tid: "5.2.2" }, { id: "9bi", max: 2, tid: "5.2.2" }, { id: "9bii", max: 2, tid: "5.2.2" }, { id: "9biii", max: 2, tid: "5.2.2" }
+            ],
+
+            // --- Paper 2: E3 (Energy) ---
+            // MC 1-8
+            "2016_2_E3": {
+                1: "E3.1.1", 2: "E3.1.2", 3: "E3.1.3", 4: "E3.2.1",
+                5: "E3.2.2", 6: "E3.3.1", 7: "E3.4.1", 8: "E3.4.2"
+            },
+            // LQ Q3 (Variable parts)
+            "2016_2_E3_LQ": [
+                { id: "3a", max: 3, tid: "E3.1.2" },
+                { id: "3bi", max: 2, tid: "E3.1.3" },
+                { id: "3bii", max: 2, tid: "E3.2.2" },
+                { id: "3c", max: 3, tid: "E3.4.1" }
+            ],
+
+            // --- Paper 2: E4 (Medical) ---
+            // MC 1-8
+            "2016_2_E4": {
+                1: "E4.1.1", 2: "E4.1.2", 3: "E4.2.1", 4: "E4.2.2",
+                5: "E4.3.1", 6: "E4.4.1", 7: "E4.4.1", 8: "E4.5.1"
+            },
+            // LQ Q4 (Variable parts)
+            "2016_2_E4_LQ": [
+                { id: "4ai", max: 2, tid: "E4.1.1" },
+                { id: "4aii", max: 2, tid: "E4.1.2" },
+                { id: "4b", max: 3, tid: "E4.3.1" },
+                { id: "4c", max: 3, tid: "E4.4.1" }
             ]
         };
 
@@ -201,15 +166,15 @@
             const [editingKey, setEditingKey] = useState({ year: 2016, paper: '1A' });
             const [inputForm, setInputForm] = useState({ studentId: '', year: '2016', paper: '1A', answers: {}, scores: {} });
             const [dashStudent, setDashStudent] = useState('');
+            const [dashPaperType, setDashPaperType] = useState('core'); // 'core' or 'elective'
             
             // AI Settings
             const [genSettings, setGenSettings] = useState({ difficulty: 'medium', type: 'mixed', lang: 'zh' });
             const [selectedTopics, setSelectedTopics] = useState([]);
             const [generatedPrompt, setGeneratedPrompt] = useState('');
 
-            // Load Data
             useEffect(() => {
-                const saved = localStorage.getItem('dsePhysV6');
+                const saved = localStorage.getItem('dsePhysV7');
                 if (saved) {
                     try {
                         const data = JSON.parse(saved);
@@ -222,30 +187,45 @@
             }, []);
 
             useEffect(() => {
-                localStorage.setItem('dsePhysV6', JSON.stringify({ students, answerKeys, records }));
+                localStorage.setItem('dsePhysV7', JSON.stringify({ students, answerKeys, records }));
             }, [students, answerKeys, records]);
 
-            // Retrieve Topic Info (Handles MC Object and LQ Array)
+            // Topic Info Retrieval
             const getTopicInfo = (year, paper, qNum) => {
-                const mapKey = `${year}_${paper}`;
-                const mapData = FULL_QUESTION_MAP[mapKey];
+                // Determine Map Keys
+                let mapKeyMC = `${year}_${paper}`;
+                let mapKeyLQ = `${year}_${paper}`;
+                
+                // Adjust for Paper 2 Structure in Map
+                // Input form saves paper as '2_E3' or '2_E4'
+                if (paper.includes('2_')) {
+                    mapKeyLQ = `${year}_${paper}_LQ`; // e.g. 2016_2_E3_LQ
+                } else if (paper === '1B') {
+                    // mapKeyLQ remains 2016_1B
+                }
+
+                // Check MC Map
+                const mapDataMC = FULL_QUESTION_MAP[mapKeyMC];
+                // Check LQ Map
+                const mapDataLQ = FULL_QUESTION_MAP[mapKeyLQ];
+
                 let topicId = null;
 
-                if (paper === '1A') {
-                    // MC Logic (Object Key)
-                    if (mapData && mapData[qNum]) topicId = mapData[qNum];
-                } else {
-                    // LQ Logic (Array search)
-                    if (Array.isArray(mapData)) {
-                        const qItem = mapData.find(item => item.id === qNum);
+                // MC Logic
+                if (paper === '1A' || (paper.includes('2_') && !isNaN(qNum) && parseInt(qNum) <= 8)) {
+                    if (mapDataMC && mapDataMC[qNum]) topicId = mapDataMC[qNum];
+                } 
+                // LQ Logic
+                else {
+                    if (Array.isArray(mapDataLQ)) {
+                        const qItem = mapDataLQ.find(item => item.id === qNum);
                         if (qItem) topicId = qItem.tid;
                     }
                 }
 
-                // Fallback for analysis if map missing
+                // Fallback
                 if (!topicId) {
                     const ids = Object.keys(SYLLABUS_DATA);
-                    // Simple hash for consistency on unknown items
                     const hash = String(qNum).split('').reduce((a,b)=>a+b.charCodeAt(0),0);
                     topicId = ids[hash % ids.length];
                 }
@@ -261,7 +241,7 @@
                 <div className="w-64 bg-slate-900 text-white h-screen fixed left-0 top-0 flex flex-col shadow-2xl z-10">
                     <div className="p-6 border-b border-slate-700">
                         <h1 className="text-xl font-bold tracking-wider italic">PHY MASTER</h1>
-                        <div className="text-xs text-purple-400 mt-1">V6.0 Dynamic LQ Support</div>
+                        <div className="text-xs text-orange-400 mt-1">V7.0 Paper 2 Support</div>
                     </div>
                     <nav className="p-4 space-y-2 flex-1 overflow-y-auto">
                         {[
@@ -280,8 +260,7 @@
                 </div>
             );
 
-            // --- Views ---
-
+            // ... StudentsView (Unchanged)
             const StudentsView = () => {
                 const [name, setName] = useState('');
                 const add = () => {
@@ -314,6 +293,8 @@
                 const currentKey = answerKeys[keyId] || {};
                 const setKey = (q, val) => setAnswerKeys({...answerKeys, [keyId]: {...currentKey, [q]: val}});
 
+                const mcCount = paper === '1A' ? 33 : 8; // Paper 2 only has 8 MCs per elective
+
                 return (
                     <div className="max-w-5xl mx-auto bg-white p-8 rounded-xl shadow-sm">
                         <h2 className="text-2xl font-bold mb-6">🔑 設定標準答案 (MC Only)</h2>
@@ -321,10 +302,14 @@
                             <select className="border p-2 rounded w-32 font-bold" value={year} onChange={e=>setEditingKey({...editingKey, year: e.target.value})}>
                                 {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
                             </select>
-                            <select className="border p-2 rounded w-32 bg-slate-100" disabled><option>Paper 1A</option></select>
+                            <select className="border p-2 rounded w-48 font-bold" value={paper} onChange={e=>setEditingKey({...editingKey, paper: e.target.value})}>
+                                <option value="1A">Paper 1A (33Q)</option>
+                                <option value="2_E3">Paper 2 - E3 (8Q)</option>
+                                <option value="2_E4">Paper 2 - E4 (8Q)</option>
+                            </select>
                         </div>
                         <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
-                            {Array.from({length: 33}).map((_, i) => {
+                            {Array.from({length: mcCount}).map((_, i) => {
                                 const q = i+1;
                                 const ans = currentKey[q];
                                 return (
@@ -343,16 +328,15 @@
                 );
             };
 
-            // *** UPDATED INPUT VIEW FOR DYNAMIC LQ ***
             const InputView = () => {
                 const { studentId, year, paper } = inputForm;
                 const keyId = `${year}_${paper}`;
                 const sysKey = answerKeys[keyId] || {};
                 
-                // Retrieve LQ Config if exists
-                const lqConfig = (paper !== '1A' && Array.isArray(FULL_QUESTION_MAP[keyId])) 
-                                ? FULL_QUESTION_MAP[keyId] 
-                                : null;
+                // LQ Config Retrieval
+                let lqConfig = null;
+                if (paper === '1B') lqConfig = FULL_QUESTION_MAP[`${year}_1B`];
+                else if (paper.includes('2_')) lqConfig = FULL_QUESTION_MAP[`${year}_${paper}_LQ`];
 
                 useEffect(() => {
                     if (!studentId && students.length > 0) setInputForm(prev => ({ ...prev, studentId: students[0].id }));
@@ -371,7 +355,7 @@
                     let numVal = parseFloat(val);
                     if(val === '') numVal = ''; 
                     else if(numVal < 0) numVal = 0;
-                    else if(numVal > max) numVal = max; // Cap at max
+                    else if(numVal > max) numVal = max;
                     
                     setInputForm({
                         ...inputForm,
@@ -386,6 +370,11 @@
                     setRecords([...others, newRec]);
                     alert('✅ 已儲存');
                 };
+
+                // Logic to show/hide MC section and LQ section
+                const showMC = paper === '1A' || paper.includes('2_');
+                const mcCount = paper === '1A' ? 33 : 8;
+                const showLQ = paper === '1B' || paper.includes('2_');
 
                 return (
                     <div className="max-w-5xl mx-auto bg-white p-8 rounded-xl shadow-sm">
@@ -406,77 +395,76 @@
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-slate-500 mb-1">試卷</label>
-                                <select className="w-full border p-2 rounded" value={paper} onChange={e=>setInputForm({...inputForm, paper:e.target.value, answers:{}, scores:{}})}>
-                                    <option value="1A">Paper 1A (MC)</option>
-                                    <option value="1B">Paper 1B</option>
+                                <select className="w-full border p-2 rounded font-bold" value={paper} onChange={e=>setInputForm({...inputForm, paper:e.target.value, answers:{}, scores:{}})}>
+                                    <optgroup label="Core (必修)">
+                                        <option value="1A">Paper 1A (MC)</option>
+                                        <option value="1B">Paper 1B (LQ)</option>
+                                    </optgroup>
+                                    <optgroup label="Electives (選修 Paper 2)">
+                                        <option value="2_E3">E3 - Energy (MC+LQ)</option>
+                                        <option value="2_E4">E4 - Medical (MC+LQ)</option>
+                                    </optgroup>
                                 </select>
                             </div>
                         </div>
                         
                         {/* MC INPUT */}
-                        {paper === '1A' && (
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                {Array.from({length: 33}).map((_, i) => {
-                                    const q = i+1;
-                                    const myAns = inputForm.answers[q];
-                                    const realAns = sysKey[q];
-                                    let statusClass = "border-slate-200";
-                                    if(myAns && realAns) statusClass = myAns===realAns ? "bg-green-50 border-green-300" : "bg-red-50 border-red-300";
+                        {showMC && (
+                            <div className="mb-8">
+                                <h3 className="font-bold text-slate-600 mb-3 border-b pb-2">MC 部份 (Q1-{mcCount})</h3>
+                                <div className={`grid gap-3 ${paper==='1A'?'grid-cols-2 md:grid-cols-4':'grid-cols-2 md:grid-cols-4'}`}>
+                                    {Array.from({length: mcCount}).map((_, i) => {
+                                        const q = i+1;
+                                        const myAns = inputForm.answers[q];
+                                        const realAns = sysKey[q];
+                                        let statusClass = "border-slate-200";
+                                        if(myAns && realAns) statusClass = myAns===realAns ? "bg-green-50 border-green-300" : "bg-red-50 border-red-300";
 
-                                    return (
-                                        <div key={q} className={`p-2 border rounded flex flex-col ${statusClass}`}>
-                                            <div className="flex justify-between items-center mb-1">
-                                                <span className="font-bold text-slate-500">Q{q}</span>
+                                        return (
+                                            <div key={q} className={`p-2 border rounded flex flex-col ${statusClass}`}>
+                                                <div className="flex justify-between items-center mb-1">
+                                                    <span className="font-bold text-slate-500">Q{q}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    {['A','B','C','D'].map(opt => (
+                                                        <button key={opt} onClick={()=>toggleMC(q, opt)} 
+                                                            className={`w-6 h-6 text-xs rounded font-bold ${myAns===opt?'bg-slate-800 text-white':'bg-white text-slate-400 border'}`}>
+                                                            {opt}
+                                                        </button>
+                                                    ))}
+                                                </div>
                                             </div>
-                                            <div className="flex justify-between">
-                                                {['A','B','C','D'].map(opt => (
-                                                    <button key={opt} onClick={()=>toggleMC(q, opt)} 
-                                                        className={`w-6 h-6 text-xs rounded font-bold ${myAns===opt?'bg-slate-800 text-white':'bg-white text-slate-400 border'}`}>
-                                                        {opt}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )
-                                })}
-                            </div>
-                        )}
-
-                        {/* LQ INPUT (DYNAMIC) */}
-                        {paper !== '1A' && lqConfig && (
-                             <div className="grid grid-cols-3 md:grid-cols-5 gap-4">
-                                {lqConfig.map((item) => (
-                                    <div key={item.id} className="flex flex-col">
-                                        <div className="flex justify-between items-end mb-1">
-                                            <span className="text-sm font-bold text-slate-700">Q{item.id}</span>
-                                            <span className="text-[10px] text-slate-400 bg-slate-100 px-1 rounded">/{item.max}</span>
-                                        </div>
-                                        <input type="number" className="border p-2 rounded text-center focus:ring-2 focus:ring-blue-500 outline-none"
-                                            placeholder="-"
-                                            value={inputForm.scores[item.id] ?? ''}
-                                            onChange={e => updateScore(item.id, e.target.value, item.max)}
-                                        />
-                                        <span className="text-[9px] text-center text-slate-300 mt-1 truncate" title={item.tid}>{item.tid}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-
-                        {/* FALLBACK LQ (For years without specific map) */}
-                        {paper !== '1A' && !lqConfig && (
-                             <div className="grid grid-cols-4 md:grid-cols-6 gap-4">
-                                <div className="col-span-full text-sm text-yellow-600 bg-yellow-50 p-2 rounded mb-2">
-                                    ⚠ 注意：{year} 尚未載入詳細題目地圖，顯示通用輸入格 (Q1-Q15)。
+                                        )
+                                    })}
                                 </div>
-                                {Array.from({length: 15}).map((_,i) => (
-                                    <div key={i} className="flex flex-col">
-                                        <span className="text-xs text-slate-500 mb-1">Q{i+1}</span>
-                                        <input type="number" className="border p-2 rounded text-center"
-                                            value={inputForm.scores[i+1]||''}
-                                            onChange={e=>setInputForm({...inputForm, scores:{...inputForm.scores, [i+1]:e.target.value}})}
-                                        />
+                            </div>
+                        )}
+
+                        {/* LQ INPUT */}
+                        {showLQ && (
+                            <div>
+                                <h3 className="font-bold text-slate-600 mb-3 border-b pb-2">長題目部份 (LQ)</h3>
+                                {lqConfig ? (
+                                    <div className="grid grid-cols-3 md:grid-cols-5 gap-4">
+                                        {lqConfig.map((item) => (
+                                            <div key={item.id} className="flex flex-col">
+                                                <div className="flex justify-between items-end mb-1">
+                                                    <span className="text-sm font-bold text-slate-700">Q{item.id}</span>
+                                                    <span className="text-[10px] text-slate-400 bg-slate-100 px-1 rounded">/{item.max}</span>
+                                                </div>
+                                                <input type="number" className="border p-2 rounded text-center focus:ring-2 focus:ring-blue-500 outline-none"
+                                                    value={inputForm.scores[item.id] ?? ''}
+                                                    onChange={e => updateScore(item.id, e.target.value, item.max)}
+                                                />
+                                                <span className="text-[9px] text-center text-slate-300 mt-1 truncate" title={item.tid}>{item.tid}</span>
+                                            </div>
+                                        ))}
                                     </div>
-                                ))}
+                                ) : (
+                                    <div className="text-sm text-yellow-600 bg-yellow-50 p-2 rounded">
+                                        此年份 ({year}) 尚未載入詳細題目地圖，如需輸入請聯絡管理員更新代碼。
+                                    </div>
+                                )}
                             </div>
                         )}
 
@@ -492,9 +480,14 @@
 
                 const subTopicStats = useMemo(() => {
                     if(!dashStudent) return [];
-                    const myRecs = records.filter(r => r.studentId === dashStudent);
-                    const stats = {};
+                    // Filter based on Tab
+                    const myRecs = records.filter(r => {
+                        if (r.studentId !== dashStudent) return false;
+                        const isPaper1 = r.paper === '1A' || r.paper === '1B';
+                        return dashPaperType === 'core' ? isPaper1 : !isPaper1; // !isPaper1 means Paper 2 (E3/E4)
+                    });
 
+                    const stats = {};
                     myRecs.forEach(r => {
                         Object.entries(r.scores).forEach(([q, score]) => {
                             const numericScore = parseFloat(score) || 0;
@@ -504,19 +497,19 @@
                             if(!stats[tid]) stats[tid] = { ...info, earned: 0, max: 0, count: 0 };
                             
                             stats[tid].earned += numericScore;
-                            // Dynamic Max Score Calculation
+                            
+                            // Max Score Logic
                             let qMax = 0;
-                            if (r.paper === '1A') {
-                                qMax = 1;
-                            } else {
-                                // Find max from map if exists, else guess 10
-                                const key = `${r.year}_${r.paper}`;
-                                if(Array.isArray(FULL_QUESTION_MAP[key])) {
-                                    const qItem = FULL_QUESTION_MAP[key].find(i => i.id === q);
+                            if (r.paper === '1A') qMax = 1;
+                            else if (r.paper.includes('2_') && !isNaN(q) && parseInt(q)<=8) qMax = 1; // Paper 2 MC
+                            else {
+                                // Find LQ max
+                                let mapKeyLQ = r.paper === '1B' ? `${r.year}_1B` : `${r.year}_${r.paper}_LQ`;
+                                const lqList = FULL_QUESTION_MAP[mapKeyLQ];
+                                if(Array.isArray(lqList)) {
+                                    const qItem = lqList.find(i => i.id === q);
                                     qMax = qItem ? qItem.max : 10;
-                                } else {
-                                    qMax = 10;
-                                }
+                                } else qMax = 10;
                             }
                             stats[tid].max += qMax;
                             stats[tid].count++;
@@ -528,17 +521,23 @@
                         const pctB = b.max > 0 ? (b.earned/b.max) : 0;
                         return pctA - pctB;
                     });
-                }, [records, dashStudent]);
+                }, [records, dashStudent, dashPaperType]);
 
                 const weakestList = subTopicStats.slice(0, 50); 
                 const strongestList = [...subTopicStats].reverse().slice(0, 50);
 
                 return (
                     <div className="max-w-6xl mx-auto space-y-6">
-                        <div className="bg-white p-4 rounded-xl shadow-sm flex justify-between items-center">
-                            <h2 className="text-xl font-bold">📊 子課題診斷報告 (Sub-topic Diagnosis)</h2>
-                            <div className="flex gap-2">
-                                <span className="text-xs text-slate-400 self-center">已顯示所有嘗試過的課題</span>
+                        <div className="bg-white p-4 rounded-xl shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
+                            <h2 className="text-xl font-bold">📊 子課題診斷報告</h2>
+                            
+                            <div className="flex gap-4 items-center">
+                                {/* Toggle Button */}
+                                <div className="bg-slate-100 p-1 rounded-lg flex font-bold text-sm">
+                                    <button onClick={()=>setDashPaperType('core')} className={`px-4 py-2 rounded-md transition ${dashPaperType==='core'?'bg-white text-blue-600 shadow':'text-slate-400'}`}>Paper 1 (Core)</button>
+                                    <button onClick={()=>setDashPaperType('elective')} className={`px-4 py-2 rounded-md transition ${dashPaperType==='elective'?'bg-white text-purple-600 shadow':'text-slate-400'}`}>Paper 2 (Electives)</button>
+                                </div>
+
                                 <select className="border p-2 rounded" value={dashStudent} onChange={e=>setDashStudent(e.target.value)}>
                                     {students.length === 0 && <option value="">無學生資料</option>}
                                     {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -548,13 +547,13 @@
 
                         {subTopicStats.length === 0 ? (
                             <div className="p-12 text-center text-slate-400 bg-white rounded-xl">
-                                {students.length === 0 ? "請先新增學生" : "暫無數據，請先輸入成績"}
+                                {students.length === 0 ? "請先新增學生" : "暫無此類別的成績數據。"}
                             </div>
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-[70vh]">
                                 <div className="bg-white p-4 rounded-xl shadow-sm border-t-4 border-red-500 flex flex-col h-full">
                                     <h3 className="font-bold text-lg mb-4 text-red-600 flex items-center gap-2 flex-shrink-0">
-                                        <span className="text-2xl">⚠</span> 待改善 (Weakest to Stronger)
+                                        <span className="text-2xl">⚠</span> 待改善 (Weakest)
                                     </h3>
                                     <div className="stats-list space-y-3 flex-1">
                                         {weakestList.map(t => (
@@ -576,7 +575,7 @@
                                 </div>
                                 <div className="bg-white p-4 rounded-xl shadow-sm border-t-4 border-green-500 flex flex-col h-full">
                                     <h3 className="font-bold text-lg mb-4 text-green-600 flex items-center gap-2 flex-shrink-0">
-                                        <span className="text-2xl">★</span> 表現列表 (Strongest to Weaker)
+                                        <span className="text-2xl">★</span> 表現優異 (Strongest)
                                     </h3>
                                     <div className="stats-list space-y-3 flex-1">
                                         {strongestList.map(t => (
@@ -601,7 +600,6 @@
             const GenerateView = () => {
                 const [studentStats, setStudentStats] = useState({});
 
-                // Calculate stats for topic selection colors
                 useEffect(() => {
                     if (!dashStudent) return;
                     const myRecs = records.filter(r => r.studentId === dashStudent);
@@ -616,13 +614,13 @@
                             const info = getTopicInfo(r.year, r.paper, q);
                             const tid = info.id;
                             
-                            // Determine max score for this question
                             let qMax = 0;
-                            if (r.paper === '1A') qMax = 1;
+                            if (r.paper === '1A' || (r.paper.includes('2_') && parseInt(q)<=8)) qMax = 1;
                             else {
-                                const key = `${r.year}_${r.paper}`;
-                                if(Array.isArray(FULL_QUESTION_MAP[key])) {
-                                    const qItem = FULL_QUESTION_MAP[key].find(i => i.id === q);
+                                let mapKeyLQ = r.paper === '1B' ? `${r.year}_1B` : `${r.year}_${r.paper}_LQ`;
+                                const lqList = FULL_QUESTION_MAP[mapKeyLQ];
+                                if(Array.isArray(lqList)) {
+                                    const qItem = lqList.find(i => i.id === q);
                                     qMax = qItem ? qItem.max : 10;
                                 } else qMax = 10;
                             }
