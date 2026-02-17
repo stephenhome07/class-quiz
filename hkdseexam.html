@@ -3,368 +3,571 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HKDSE Physics AI Trainer (v3.0 穩定版)</title>
+    <title>HKDSE Physics Trainer (Full Syllabus 2014-2025)</title>
     
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-    
     <script src="https://cdn.tailwindcss.com"></script>
 
     <style>
-        body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; }
-        /* 載入畫面樣式 */
+        body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f1f5f9; }
+        /* 載入畫面 */
         #loading-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #fff; display: flex; justify-content: center; align-items: center; z-index: 9999; flex-direction: column; }
-        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin-bottom: 20px; }
+        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #3b82f6; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin-bottom: 20px; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        
-        /* MC 按鈕樣式 */
-        .mc-btn { transition: all 0.2s; }
-        .mc-btn:active { transform: scale(0.95); }
+        /* 滾動條美化 */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
 </head>
 <body>
     
     <div id="loading-screen">
         <div class="spinner"></div>
-        <h2 style="color: #475569; font-weight: bold;">系統啟動中...</h2>
-        <p style="color: #94a3b8; font-size: 14px;">首次載入約需 3-5 秒</p>
+        <h2 class="text-slate-600 font-bold">系統載入中...</h2>
+        <p class="text-slate-400 text-sm mt-2">正在初始化全課程資料庫</p>
     </div>
 
     <div id="root"></div>
 
-    <script>
-        window.onerror = function(msg, url, line, col, error) {
-            const screen = document.getElementById('loading-screen');
-            screen.innerHTML = `
-                <div style="color: #ef4444; text-align: center; padding: 20px;">
-                    <h2 style="font-size: 24px; margin-bottom: 10px;">❌ 發生錯誤</h2>
-                    <p style="background: #fee2e2; padding: 10px; border-radius: 8px; font-family: monospace;">${msg}</p>
-                    <p>請檢查您的網絡連線，並嘗試重新整理頁面。</p>
-                </div>
-            `;
-            return false;
-        };
-    </script>
-
     <script type="text/babel">
-        // 移除 loading 畫面
-        setTimeout(() => {
-            const loader = document.getElementById('loading-screen');
-            if(loader) loader.style.display = 'none';
-        }, 1000);
+        // 移除 Loading
+        setTimeout(() => document.getElementById('loading-screen').style.display = 'none', 800);
 
         const { useState, useEffect, useMemo } = React;
 
-        // --- 數據定義 ---
+        // --- 1. 完整課程大綱數據 (SYLLABUS) ---
+        // 根據你提供的文件完整錄入
         const SYLLABUS_DATA = {
-            "1.1.1": { section: "Heat", topic: "温度與温度計", desc: "認識温度為物體冷熱程度的標誌" },
-            "1.2.1": { section: "Heat", topic: "內能與能量轉移", desc: "闡釋温度為系統內分子隨機運動平均動能的定量關係" },
-            "1.2.2": { section: "Heat", topic: "熱傳遞方式", desc: "鑑定能量轉移的方式可分為傳導、對流和輻射" },
-            "1.3.2": { section: "Heat", topic: "熱容量和比熱容量", desc: "應用 E=mcΔT 解決問題" },
-            "1.4.1": { section: "Heat", topic: "潛熱", desc: "應用 E=ml 解決有關物態變化的問題" },
-            "1.5.1": { section: "Heat", topic: "氣體定律", desc: "應用普適氣體定律 pV=nRT" },
-            "2.1.1": { section: "Mechanics", topic: "位置和移動", desc: "分析位移-時間及速度-時間圖像" },
-            "2.2.1": { section: "Mechanics", topic: "牛頓定律", desc: "應用牛頓第二定律 F=ma" },
-            "2.4.1": { section: "Mechanics", topic: "動量", desc: "動量守恆原理" },
-            "2.9.2": { section: "Mechanics", topic: "圓周運動", desc: "應用向心力公式 F=mv²/r" },
-            "E3.1.1": { section: "Energy", topic: "家居用電", desc: "計算電器的能源效益與成本" },
-            "E3.2.1": { section: "Energy", topic: "照明", desc: "比較白熾燈、LED等的效能" },
-            "E3.4.1": { section: "Energy", topic: "可再生能源", desc: "描述核裂變與核聚變及可再生能源特徵" }
+            // Book 1 Heat
+            "1.1.1": { book: "Book 1 Heat", topic: "温度與温度計", desc: "量度温度" },
+            "1.1.2": { book: "Book 1 Heat", topic: "温度與温度計", desc: "攝氏温標" },
+            "1.2.1": { book: "Book 1 Heat", topic: "內能、熱與熱傳遞", desc: "內能與能量轉移" },
+            "1.2.2": { book: "Book 1 Heat", topic: "內能、熱與熱傳遞", desc: "熱傳遞方式 (傳導/對流/輻射)" },
+            "1.3.1": { book: "Book 1 Heat", topic: "温度變化與熱容量", desc: "功率與量度轉移的能量" },
+            "1.3.2": { book: "Book 1 Heat", topic: "温度變化與熱容量", desc: "熱容量和比熱容量" },
+            "1.4.1": { book: "Book 1 Heat", topic: "物態的改變", desc: "潛熱 (熔解/汽化)" },
+            "1.4.2": { book: "Book 1 Heat", topic: "物態的改變", desc: "蒸發與凝結" },
+            "1.5.1": { book: "Book 1 Heat", topic: "氣體 (Ext)", desc: "氣體定律 (Boyle/Pressure/Charles/Ideal Gas)" },
+            "1.5.2": { book: "Book 1 Heat", topic: "氣體 (Ext)", desc: "氣體分子運動論 (Microscopic)" },
+
+            // Book 2 Mechanics
+            "2.1.1": { book: "Book 2 Mech", topic: "運動", desc: "長度和時間" },
+            "2.1.2": { book: "Book 2 Mech", topic: "運動", desc: "距離和位移" },
+            "2.1.3": { book: "Book 2 Mech", topic: "運動", desc: "速率、速度和加速度" },
+            "2.1.4": { book: "Book 2 Mech", topic: "運動", desc: "誤差估算" },
+            "2.2.1": { book: "Book 2 Mech", topic: "直線運動", desc: "描述直線運動" },
+            "2.2.2": { book: "Book 2 Mech", topic: "直線運動", desc: "運動線圖 (s-t, v-t, a-t)" },
+            "2.2.3": { book: "Book 2 Mech", topic: "直線運動", desc: "勻加速運動方程 (Suvat)" },
+            "2.2.4": { book: "Book 2 Mech", topic: "直線運動", desc: "重力下的垂直運動" },
+            "2.3.1": { book: "Book 2 Mech", topic: "力與運動 (I)", desc: "力 (Friction, Free body diagram)" },
+            "2.3.2": { book: "Book 2 Mech", topic: "力與運動 (I)", desc: "牛頓第一定律 (Inertia)" },
+            "2.3.3": { book: "Book 2 Mech", topic: "力與運動 (I)", desc: "牛頓第二定律 (F=ma)" },
+            "2.3.4": { book: "Book 2 Mech", topic: "力與運動 (I)", desc: "重量與質量" },
+            "2.3.5": { book: "Book 2 Mech", topic: "力與運動 (I)", desc: "流體阻力" },
+            "2.3.6": { book: "Book 2 Mech", topic: "力與運動 (I)", desc: "摩擦力" },
+            "2.3.7": { book: "Book 2 Mech", topic: "力與運動 (I)", desc: "牛頓第三定律 (Action/Reaction)" },
+            "2.4.1": { book: "Book 2 Mech", topic: "力與運動 (II)", desc: "物體組成的系統" },
+            "2.4.2": { book: "Book 2 Mech", topic: "力與運動 (II)", desc: "力的合成和分解" },
+            "2.4.3": { book: "Book 2 Mech", topic: "力與運動 (II)", desc: "共面力" },
+            "2.5.1": { book: "Book 2 Mech", topic: "力矩", desc: "力的轉動效應 (Moment)" },
+            "2.5.2": { book: "Book 2 Mech", topic: "力矩", desc: "剛體的平衡 (Equilibrium)" },
+            "2.6.1": { book: "Book 2 Mech", topic: "功、能量和功率", desc: "功 (Work)" },
+            "2.6.2": { book: "Book 2 Mech", topic: "功、能量和功率", desc: "機械能 (KE/PE)" },
+            "2.6.3": { book: "Book 2 Mech", topic: "功、能量和功率", desc: "能量守恆" },
+            "2.6.4": { book: "Book 2 Mech", topic: "功、能量和功率", desc: "功率 (Power)" },
+            "2.7.1": { book: "Book 2 Mech", topic: "動量", desc: "動量守恆 (Collision)" },
+            "2.7.2": { book: "Book 2 Mech", topic: "動量", desc: "動量變化 (Impulse)" },
+            "2.8.1": { book: "Book 2 Mech", topic: "拋體運動 (Ext)", desc: "認識拋體運動" },
+            "2.8.2": { book: "Book 2 Mech", topic: "拋體運動 (Ext)", desc: "分析拋體運動" },
+            "2.9.1": { book: "Book 2 Mech", topic: "勻速圓周運動 (Ext)", desc: "描述圓周運動 (Angular velocity)" },
+            "2.9.2": { book: "Book 2 Mech", topic: "勻速圓周運動 (Ext)", desc: "向心力與向心加速度" },
+            "2.9.3": { book: "Book 2 Mech", topic: "勻速圓周運動 (Ext)", desc: "圓周運動的例子" },
+            "2.10.1": { book: "Book 2 Mech", topic: "引力 (Ext)", desc: "萬有引力定律" },
+            "2.10.2": { book: "Book 2 Mech", topic: "引力 (Ext)", desc: "引力下的圓周運動" },
+
+            // Book 3 Waves
+            "3.1.1": { book: "Book 3 Waves", topic: "光的反射", desc: "光線" },
+            "3.1.2": { book: "Book 3 Waves", topic: "光的反射", desc: "反射與平面鏡" },
+            "3.2.1": { book: "Book 3 Waves", topic: "光的折射", desc: "折射定律 (Snell's Law)" },
+            "3.2.2": { book: "Book 3 Waves", topic: "光的折射", desc: "全內反射" },
+            "3.3.1": { book: "Book 3 Waves", topic: "透鏡", desc: "凸透鏡與凹透鏡" },
+            "3.3.2": { book: "Book 3 Waves", topic: "透鏡", desc: "凸透鏡成像" },
+            "3.3.3": { book: "Book 3 Waves", topic: "透鏡", desc: "凹透鏡成像" },
+            "3.3.4": { book: "Book 3 Waves", topic: "透鏡", desc: "透鏡公式" },
+            "3.4.1": { book: "Book 3 Waves", topic: "波的本質", desc: "波的簡介" },
+            "3.4.2": { book: "Book 3 Waves", topic: "波的本質", desc: "橫波的波動 (v=fλ)" },
+            "3.4.3": { book: "Book 3 Waves", topic: "波的本質", desc: "橫波的粒子振動" },
+            "3.4.4": { book: "Book 3 Waves", topic: "波的本質", desc: "波的線圖" },
+            "3.5.1": { book: "Book 3 Waves", topic: "波的現象", desc: "水波槽" },
+            "3.5.2": { book: "Book 3 Waves", topic: "波的現象", desc: "反射與折射" },
+            "3.5.3": { book: "Book 3 Waves", topic: "波的現象", desc: "衍射與干涉" },
+            "3.5.4": { book: "Book 3 Waves", topic: "波的現象", desc: "駐波 (Stationary Waves)" },
+            "3.6.1": { book: "Book 3 Waves", topic: "光與電磁波", desc: "光的波動本質" },
+            "3.6.2": { book: "Book 3 Waves", topic: "光與電磁波", desc: "楊氏雙縫實驗" },
+            "3.6.3": { book: "Book 3 Waves", topic: "光與電磁波", desc: "平面透射光柵" },
+            "3.6.4": { book: "Book 3 Waves", topic: "光與電磁波", desc: "電磁波譜" },
+            "3.7.1": { book: "Book 3 Waves", topic: "聲音", desc: "縱波" },
+            "3.7.2": { book: "Book 3 Waves", topic: "聲音", desc: "聲音的本質" },
+            "3.7.3": { book: "Book 3 Waves", topic: "聲音", desc: "聲音的特性 (超聲波/分貝)" },
+
+            // Book 4 Electricity
+            "4.1.1": { book: "Book 4 Elec", topic: "靜電學", desc: "電荷" },
+            "4.1.2": { book: "Book 4 Elec", topic: "靜電學", desc: "靜電力 (Coulomb's Law)" },
+            "4.1.3": { book: "Book 4 Elec", topic: "靜電學", desc: "電場 (Electric Field)" },
+            "4.2.1": { book: "Book 4 Elec", topic: "電路", desc: "電流" },
+            "4.2.2": { book: "Book 4 Elec", topic: "電路", desc: "電壓 (EMF/PD)" },
+            "4.2.3": { book: "Book 4 Elec", topic: "電路", desc: "電阻 (Resistivity)" },
+            "4.2.4": { book: "Book 4 Elec", topic: "電路", desc: "電阻器網絡 (Series/Parallel)" },
+            "4.2.5": { book: "Book 4 Elec", topic: "電路", desc: "電功率 (P=VI)" },
+            "4.3.1": { book: "Book 4 Elec", topic: "實際電路", desc: "分析電路 (Circuit Analysis)" },
+            "4.3.2": { book: "Book 4 Elec", topic: "實際電路", desc: "實際儀表與內電阻" },
+            "4.4.1": { book: "Book 4 Elec", topic: "家居電學", desc: "功率和能量消耗 (kW h)" },
+            "4.4.2": { book: "Book 4 Elec", topic: "家居電學", desc: "電線佈置及安全 (Fuse/Earth)" },
+            "4.4.3": { book: "Book 4 Elec", topic: "家居電學", desc: "交流電 (AC/RMS) (Ext)" },
+            "4.5.1": { book: "Book 4 Elec", topic: "磁場", desc: "磁力與磁場" },
+            "4.5.2": { book: "Book 4 Elec", topic: "磁場", desc: "電流的磁效應 (B-field)" },
+            "4.6.1": { book: "Book 4 Elec", topic: "磁力", desc: "載流導體受力 (F=BIL)" },
+            "4.6.2": { book: "Book 4 Elec", topic: "磁力", desc: "直流電動機 (Motor)" },
+            "4.6.3": { book: "Book 4 Elec", topic: "磁力", desc: "洛倫茲力 (F=Bqv)" },
+            "4.7.1": { book: "Book 4 Elec", topic: "電磁感應", desc: "感生電流 (Lenz's Law)" },
+            "4.7.2": { book: "Book 4 Elec", topic: "電磁感應", desc: "發電機與渦電流" },
+            "4.7.3": { book: "Book 4 Elec", topic: "電磁感應", desc: "法拉第定律 (Flux) (Ext)" },
+            "4.8.1": { book: "Book 4 Elec", topic: "變壓器 (Ext)", desc: "變壓器原理" },
+            "4.8.2": { book: "Book 4 Elec", topic: "變壓器 (Ext)", desc: "高壓輸電" },
+
+            // Book 5 Radioactivity
+            "5.1.1": { book: "Book 5 Rad", topic: "輻射", desc: "X射線" },
+            "5.1.2": { book: "Book 5 Rad", topic: "輻射", desc: "核輻射 (Alpha/Beta/Gamma)" },
+            "5.1.3": { book: "Book 5 Rad", topic: "輻射", desc: "輻射安全 (Sievert)" },
+            "5.2.1": { book: "Book 5 Rad", topic: "衰變", desc: "原子模型" },
+            "5.2.2": { book: "Book 5 Rad", topic: "衰變", desc: "放射衰變 (Half-life)" },
+            "5.2.3": { book: "Book 5 Rad", topic: "衰變", desc: "同位素應用" },
+            "5.3.1": { book: "Book 5 Rad", topic: "核能", desc: "裂變與聚變" },
+            "5.3.2": { book: "Book 5 Rad", topic: "核能", desc: "質能關係 (E=mc^2)" },
+            "5.3.3": { book: "Book 5 Rad", topic: "核能", desc: "核能發電" },
         };
 
+        // 年份生成 (2025 - 2014)
+        const YEAR_OPTIONS = Array.from({length: 12}, (_, i) => 2025 - i);
+
         const App = () => {
+            // View: students, marking, input, dashboard
             const [view, setView] = useState('students');
+            
+            // Data State
             const [students, setStudents] = useState([]);
             const [answerKeys, setAnswerKeys] = useState({}); 
             const [records, setRecords] = useState([]);
-            const [currentStudentId, setCurrentStudentId] = useState('');
-            const [editingKey, setEditingKey] = useState({ year: 2023, paper: '1A' });
+
+            // UI State
+            const [editingKey, setEditingKey] = useState({ year: 2025, paper: '1A' });
+            const [inputForm, setInputForm] = useState({ studentId: '', year: '2025', paper: '1A', answers: {}, scores: {} });
+            const [dashTab, setDashTab] = useState('paper'); // 'paper' or 'topic'
+            const [dashStudent, setDashStudent] = useState('');
 
             // Load Data
             useEffect(() => {
-                try {
-                    const saved = localStorage.getItem('dsePhysV3');
-                    if (saved) {
+                const saved = localStorage.getItem('dsePhysV4');
+                if (saved) {
+                    try {
                         const data = JSON.parse(saved);
                         setStudents(data.students || []);
                         setAnswerKeys(data.answerKeys || {});
                         setRecords(data.records || []);
-                    }
-                } catch(e) { console.error("Load failed", e); }
+                        if(data.students && data.students.length > 0) {
+                            setDashStudent(data.students[0].id);
+                            setInputForm(f => ({...f, studentId: data.students[0].id}));
+                        }
+                    } catch(e) { console.error(e); }
+                }
             }, []);
 
             // Save Data
             useEffect(() => {
                 const data = { students, answerKeys, records };
-                localStorage.setItem('dsePhysV3', JSON.stringify(data));
+                localStorage.setItem('dsePhysV4', JSON.stringify(data));
             }, [students, answerKeys, records]);
 
-            // Helper: Get Topic (Fallback Logic)
+            // Helper: Distribute questions to topics blindly (Mock mapping for visualization)
+            // 在真實情況下，需要手動輸入每年每題對應哪個 Topic。這裡為了讓"弱項分析"能跑出來，
+            // 暫時使用算法將題號分配給 Syllabus 中的 Topic。
             const getTopicForQuestion = (qNum) => {
-                const ids = Object.keys(SYLLABUS_DATA);
-                return ids[(qNum * 7) % ids.length]; 
+                const topicIds = Object.keys(SYLLABUS_DATA);
+                // 簡單雜湊分配，確保同一題號總是對應同一課題
+                return topicIds[(qNum * 13) % topicIds.length]; 
             };
 
-            // --- Components ---
-
+            // --- Sidebar Component ---
             const Sidebar = () => (
-                <div className="w-64 bg-slate-800 text-white h-screen fixed left-0 top-0 flex flex-col shadow-2xl z-10 overflow-y-auto">
-                    <div className="p-6 border-b border-slate-700 bg-slate-900">
-                        <h1 className="text-xl font-bold">⚡ DSE Phy V3</h1>
-                        <div className="text-xs text-slate-400 mt-1">穩定版 (無圖標庫)</div>
+                <div className="w-64 bg-slate-900 text-white h-screen fixed left-0 top-0 flex flex-col shadow-2xl">
+                    <div className="p-6 border-b border-slate-700">
+                        <h1 className="text-xl font-bold italic tracking-wider">PHY MASTER</h1>
+                        <span className="text-xs bg-blue-600 px-2 py-0.5 rounded text-white">Full V4.0</span>
                     </div>
-                    <nav className="flex-1 p-4 space-y-2">
-                        <button onClick={() => setView('students')} className={`w-full text-left px-4 py-3 rounded ${view === 'students' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}>👥 學生管理</button>
-                        <button onClick={() => setView('marking')} className={`w-full text-left px-4 py-3 rounded ${view === 'marking' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}>🔑 標準答案 (Ans)</button>
-                        <button onClick={() => setView('input')} className={`w-full text-left px-4 py-3 rounded ${view === 'input' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}>📝 輸入成績</button>
-                        <button onClick={() => setView('dashboard')} className={`w-full text-left px-4 py-3 rounded ${view === 'dashboard' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}>📊 分析報告</button>
-                        <button onClick={() => setView('generate')} className={`w-full text-left px-4 py-3 rounded ${view === 'generate' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}>🤖 生成練習</button>
+                    <nav className="p-4 space-y-2">
+                        {[
+                            {id: 'students', icon: '👥', label: '學生管理'},
+                            {id: 'marking', icon: '🔑', label: '標準答案 (ANS)'},
+                            {id: 'input', icon: '📝', label: '輸入成績'},
+                            {id: 'dashboard', icon: '📊', label: '學生分析'}
+                        ].map(item => (
+                            <button key={item.id} onClick={() => setView(item.id)}
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded transition-all ${view===item.id ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+                                <span>{item.icon}</span> {item.label}
+                            </button>
+                        ))}
                     </nav>
                 </div>
             );
 
-            // 1. 學生管理
+            // --- View 1: Student Management ---
             const StudentsView = () => {
-                const [newName, setNewName] = useState('');
-                const addStudent = () => {
-                    if (!newName) return;
-                    const newStudent = { id: Date.now().toString(), name: newName, date: new Date().toLocaleDateString() };
-                    setStudents([...students, newStudent]);
-                    setNewName('');
+                const [name, setName] = useState('');
+                const add = () => {
+                    if(!name) return;
+                    const newS = { id: Date.now().toString(), name, joinDate: new Date().toLocaleDateString() };
+                    setStudents([...students, newS]);
+                    setName('');
+                    if(!dashStudent) setDashStudent(newS.id);
                 };
-                const removeStudent = (id) => {
-                    if (confirm('確定刪除此學生及其記錄？')) {
-                        setStudents(students.filter(s => s.id !== id));
-                        setRecords(records.filter(r => r.studentId !== id));
-                    }
-                };
-
                 return (
-                    <div className="max-w-4xl mx-auto bg-white p-8 rounded shadow">
-                        <h2 className="text-2xl font-bold mb-6">👥 學生資料庫</h2>
+                    <div className="max-w-4xl mx-auto bg-white p-8 rounded-xl shadow-sm">
+                        <h2 className="text-2xl font-bold mb-6 text-slate-800">👥 學生檔案</h2>
                         <div className="flex gap-4 mb-8">
-                            <input type="text" className="flex-1 border p-3 rounded" placeholder="學生姓名" value={newName} onChange={e => setNewName(e.target.value)} />
-                            <button onClick={addStudent} className="bg-blue-600 text-white px-6 rounded font-bold hover:bg-blue-700">新增</button>
+                            <input className="flex-1 border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" 
+                                placeholder="輸入學生姓名..." value={name} onChange={e=>setName(e.target.value)} />
+                            <button onClick={add} className="bg-blue-600 text-white px-8 rounded-lg font-bold hover:bg-blue-700">新增</button>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {students.map(s => (
-                                <div key={s.id} className="p-4 border rounded bg-slate-50 flex justify-between items-center">
+                                <div key={s.id} className="p-4 border border-slate-200 rounded-lg flex justify-between items-center bg-slate-50">
                                     <div>
-                                        <div className="font-bold">{s.name}</div>
-                                        <div className="text-xs text-slate-500">{s.date}</div>
+                                        <div className="font-bold text-lg">{s.name}</div>
+                                        <div className="text-xs text-slate-400">{s.joinDate}</div>
                                     </div>
-                                    <button onClick={() => removeStudent(s.id)} className="text-red-500 text-sm hover:underline">刪除</button>
+                                    <button onClick={() => {
+                                        if(confirm('刪除學生會一併刪除其所有成績，確定？')) {
+                                            setStudents(students.filter(x=>x.id!==s.id));
+                                            setRecords(records.filter(x=>x.studentId!==s.id));
+                                        }
+                                    }} className="text-slate-400 hover:text-red-500">🗑</button>
                                 </div>
                             ))}
-                            {students.length === 0 && <div className="text-slate-400 p-4">暫無學生，請新增。</div>}
                         </div>
                     </div>
                 );
             };
 
-            // 2. 標準答案
-            const MarkingSchemeView = () => {
+            // --- View 2: Marking Scheme (ANS) ---
+            const MarkingView = () => {
                 const { year, paper } = editingKey;
                 const keyId = `${year}_${paper}`;
-                const currentKeys = answerKeys[keyId] || {};
+                const currentKey = answerKeys[keyId] || {};
 
-                const updateKey = (qNum, val) => {
-                    const newKeys = { ...currentKeys, [qNum]: val };
-                    setAnswerKeys({ ...answerKeys, [keyId]: newKeys });
+                const setKey = (q, val) => {
+                    setAnswerKeys(prev => ({ ...prev, [keyId]: { ...currentKey, [q]: val } }));
                 };
 
                 return (
-                    <div className="max-w-5xl mx-auto bg-white p-8 rounded shadow">
-                        <h2 className="text-2xl font-bold mb-6">🔑 標準答案設定 (Marking Scheme)</h2>
-                        <div className="bg-blue-50 p-4 rounded mb-6 flex gap-4">
+                    <div className="max-w-5xl mx-auto bg-white p-8 rounded-xl shadow-sm">
+                        <div className="flex justify-between items-end mb-6 border-b pb-4">
+                            <h2 className="text-2xl font-bold text-slate-800">🔑 設定標準答案 (ANS)</h2>
+                            <div className="flex gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase">Year</label>
+                                    <select className="border p-2 rounded w-32 font-bold" value={year} onChange={e=>setEditingKey({...editingKey, year: e.target.value})}>
+                                        {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase">Paper</label>
+                                    <select className="border p-2 rounded w-32 font-bold bg-slate-100" disabled value="1A">
+                                        <option value="1A">Paper 1A (MC)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-8 gap-3">
+                            {Array.from({length: 33}).map((_, i) => {
+                                const q = i+1;
+                                const ans = currentKey[q];
+                                return (
+                                    <div key={q} className="p-2 border rounded bg-slate-50 flex flex-col items-center">
+                                        <span className="text-xs font-bold text-slate-400 mb-2">Q{q}</span>
+                                        <div className="flex gap-1">
+                                            {['A','B','C','D'].map(opt => (
+                                                <button key={opt} onClick={()=>setKey(q, opt)}
+                                                    className={`w-6 h-6 text-xs font-bold rounded ${ans===opt ? 'bg-green-600 text-white' : 'bg-white border text-slate-500 hover:bg-slate-200'}`}>
+                                                    {opt}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                );
+            };
+
+            // --- View 3: Input Score ---
+            const InputView = () => {
+                const { studentId, year, paper } = inputForm;
+                const keyId = `${year}_${paper}`;
+                const sysKey = answerKeys[keyId] || {};
+                const hasKey = Object.keys(sysKey).length > 0;
+                
+                // MC Logic
+                const toggleMC = (q, opt) => {
+                    const newAns = { ...inputForm.answers, [q]: opt };
+                    // Auto Grade
+                    const isCorrect = sysKey[q] === opt;
+                    const newScore = { ...inputForm.scores, [q]: isCorrect ? 1 : 0 };
+                    setInputForm({ ...inputForm, answers: newAns, scores: newScore });
+                };
+
+                // Save
+                const save = () => {
+                    if(!studentId) return alert('請選擇學生');
+                    const newRec = {
+                        ...inputForm,
+                        id: Date.now(),
+                        timestamp: new Date().toISOString()
+                    };
+                    // Overwrite existing
+                    const others = records.filter(r => !(r.studentId===studentId && r.year==year && r.paper===paper));
+                    setRecords([...others, newRec]);
+                    alert('✅ 成績已儲存');
+                };
+
+                return (
+                    <div className="max-w-5xl mx-auto bg-white p-8 rounded-xl shadow-sm">
+                        <h2 className="text-2xl font-bold mb-6 text-slate-800">📝 輸入學生成績</h2>
+                        
+                        {/* Selectors */}
+                        <div className="grid grid-cols-3 gap-6 mb-8 bg-blue-50 p-6 rounded-lg border border-blue-100">
                             <div>
-                                <label className="block text-xs font-bold text-slate-500">年份</label>
-                                <select className="p-2 border rounded" value={year} onChange={e => setEditingKey({...editingKey, year: e.target.value})}>
-                                    {[2025,2024,2023,2022,2021,2020].map(y => <option key={y} value={y}>{y}</option>)}
+                                <label className="block text-xs font-bold text-blue-800 mb-1">學生</label>
+                                <select className="w-full p-2 border rounded" value={studentId} onChange={e=>setInputForm({...inputForm, studentId:e.target.value})}>
+                                    <option value="">-- 請選擇 --</option>
+                                    {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-slate-500">試卷</label>
-                                <select className="p-2 border rounded" value={paper} onChange={e => setEditingKey({...editingKey, paper: e.target.value})}>
+                                <label className="block text-xs font-bold text-blue-800 mb-1">年份</label>
+                                <select className="w-full p-2 border rounded" value={year} onChange={e=>setInputForm({...inputForm, year:e.target.value, answers:{}, scores:{}})}>
+                                    {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-blue-800 mb-1">試卷</label>
+                                <select className="w-full p-2 border rounded" value={paper} onChange={e=>setInputForm({...inputForm, paper:e.target.value, answers:{}, scores:{}})}>
                                     <option value="1A">Paper 1A (MC)</option>
+                                    <option value="1B">Paper 1B</option>
                                 </select>
                             </div>
                         </div>
 
                         {paper === '1A' ? (
-                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                                {Array.from({length: 33}).map((_, i) => {
-                                    const q = i + 1;
-                                    const val = currentKeys[q] || '';
-                                    return (
-                                        <div key={q} className="bg-slate-50 p-2 border rounded text-center">
-                                            <div className="text-xs font-bold text-slate-400 mb-1">Q{q}</div>
-                                            <div className="flex justify-center gap-1">
-                                                {['A','B','C','D'].map(opt => (
-                                                    <button key={opt} onClick={() => updateKey(q, opt)} 
-                                                        className={`w-6 h-6 rounded text-xs font-bold ${val === opt ? 'bg-green-600 text-white' : 'bg-white border hover:bg-gray-100'}`}>
-                                                        {opt}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        ) : <div className="text-slate-500">僅支援 MC 試卷設定答案。</div>}
-                    </div>
-                );
-            };
-
-            // 3. 輸入成績
-            const InputView = () => {
-                const [form, setForm] = useState({ studentId: '', year: '2023', paper: '1A', answers: {}, scores: {} });
-                
-                // Init student ID
-                useEffect(() => {
-                    if (students.length > 0 && !form.studentId) setForm(f => ({...f, studentId: students[0].id}));
-                }, [students]);
-
-                const currentKey = answerKeys[`${form.year}_${form.paper}`] || {};
-                const qCount = form.paper === '1A' ? 33 : 15;
-                const isMC = form.paper === '1A';
-
-                const handleMCOption = (q, opt) => {
-                    const correctAns = currentKey[q];
-                    const isCorrect = correctAns && (opt === correctAns);
-                    const newAnswers = { ...form.answers, [q]: opt };
-                    const newScores = { ...form.scores, [q]: isCorrect ? 1 : 0 };
-                    setForm({ ...form, answers: newAnswers, scores: newScores });
-                };
-
-                const saveRecord = () => {
-                    if (!form.studentId) return alert("請先建立學生！");
-                    const newRec = { ...form, id: Date.now(), timestamp: new Date() };
-                    // Remove old record for same student/year/paper if exists
-                    const cleanRecords = records.filter(r => !(r.studentId === form.studentId && r.year == form.year && r.paper === form.paper));
-                    setRecords([...cleanRecords, newRec]);
-                    alert("✅ 成績已儲存！");
-                };
-
-                return (
-                    <div className="max-w-5xl mx-auto bg-white p-8 rounded shadow">
-                        <h2 className="text-2xl font-bold mb-6">📝 輸入成績</h2>
-                        <div className="grid grid-cols-3 gap-4 mb-6 bg-slate-50 p-4 rounded">
-                            <select className="p-2 border rounded" value={form.studentId} onChange={e => setForm({...form, studentId: e.target.value})}>
-                                {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                            </select>
-                            <select className="p-2 border rounded" value={form.year} onChange={e => setForm({...form, year: e.target.value, answers:{}, scores:{}})}>
-                                {[2025,2024,2023,2022,2021].map(y => <option key={y} value={y}>{y}</option>)}
-                            </select>
-                            <select className="p-2 border rounded" value={form.paper} onChange={e => setForm({...form, paper: e.target.value, answers:{}, scores:{}})}>
-                                <option value="1A">Paper 1A (MC)</option>
-                                <option value="1B">Paper 1B (Long Q)</option>
-                            </select>
-                        </div>
-
-                        {isMC ? (
-                            <div>
-                                <div className="mb-2 text-sm text-slate-500">
-                                    {Object.keys(currentKey).length === 0 ? "⚠ 注意：尚未設定此年份標準答案，將無法自動評分。" : "✅ 已載入標準答案，系統將自動評分。"}
+                            <div className="animate-fade-in">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="font-bold text-slate-600">MC 答題卡</h3>
+                                    {hasKey ? 
+                                        <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">● 已載入答案，自動評分中</span> : 
+                                        <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded">⚠ 缺少年份答案，無法自動評分</span>
+                                    }
                                 </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                    {Array.from({length: qCount}).map((_, i) => {
-                                        const q = i + 1;
-                                        const myAns = form.answers[q];
-                                        const correct = currentKey[q];
+                                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                    {Array.from({length: 33}).map((_,i) => {
+                                        const q = i+1;
+                                        const myAns = inputForm.answers[q];
+                                        const realAns = sysKey[q];
                                         // Color logic
-                                        let borderClass = "border-slate-200";
-                                        if (myAns && correct) borderClass = myAns === correct ? "border-green-500 bg-green-50" : "border-red-500 bg-red-50";
+                                        let boxClass = "border-slate-200 bg-white";
+                                        if(myAns && realAns) {
+                                            boxClass = myAns === realAns ? "border-green-500 bg-green-50" : "border-red-500 bg-red-50";
+                                        }
 
                                         return (
-                                            <div key={q} className={`flex items-center justify-between p-2 border rounded ${borderClass}`}>
-                                                <span className="font-bold text-slate-500 w-8">Q{q}</span>
+                                            <div key={q} className={`p-2 border rounded flex justify-between items-center ${boxClass}`}>
+                                                <span className="font-mono font-bold text-slate-400 w-6">Q{q}</span>
                                                 <div className="flex gap-1">
                                                     {['A','B','C','D'].map(opt => (
-                                                        <button key={opt} onClick={() => handleMCOption(q, opt)}
-                                                            className={`w-8 h-8 rounded-full text-sm font-bold border 
-                                                                ${myAns === opt 
-                                                                    ? 'bg-slate-800 text-white' 
-                                                                    : 'bg-white text-slate-600 hover:bg-slate-100'}`}>
+                                                        <button key={opt} onClick={()=>toggleMC(q, opt)}
+                                                            className={`w-7 h-7 rounded text-xs font-bold transition-all
+                                                                ${myAns===opt ? 'bg-slate-800 text-white scale-110' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}
+                                                            `}>
                                                             {opt}
                                                         </button>
                                                     ))}
                                                 </div>
-                                                <span className="w-6 text-center">
-                                                    {myAns && correct ? (myAns === correct ? "✔" : "✘") : ""}
-                                                </span>
                                             </div>
-                                        );
+                                        )
                                     })}
                                 </div>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-4 gap-4">
-                                {Array.from({length: 15}).map((_, i) => (
-                                    <div key={i} className="flex flex-col">
-                                        <label className="text-xs mb-1">Q{i+1}</label>
-                                        <input type="number" className="border p-2 rounded text-center" 
-                                            value={form.scores[i+1]||''} onChange={e=>setForm({...form, scores: {...form.scores, [i+1]: e.target.value}})} />
-                                    </div>
-                                ))}
+                            <div>
+                                <h3 className="font-bold text-slate-600 mb-4">長題目分數 (Paper 1B/2)</h3>
+                                <div className="grid grid-cols-4 md:grid-cols-6 gap-4">
+                                    {Array.from({length: 15}).map((_,i) => (
+                                        <div key={i} className="flex flex-col">
+                                            <span className="text-xs text-slate-500 mb-1">Q{i+1}</span>
+                                            <input type="number" className="border p-2 rounded text-center"
+                                                value={inputForm.scores[i+1]||''}
+                                                onChange={e=>setInputForm({...inputForm, scores:{...inputForm.scores, [i+1]:e.target.value}})}
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         )}
-                        <button onClick={saveRecord} className="w-full mt-6 bg-green-600 text-white py-3 rounded font-bold hover:bg-green-700 shadow">儲存成績</button>
+
+                        <div className="mt-8 pt-6 border-t">
+                            <button onClick={save} className="w-full bg-slate-800 text-white py-4 rounded-lg font-bold text-lg hover:bg-slate-700 shadow-lg">
+                                💾 儲存成績記錄
+                            </button>
+                        </div>
                     </div>
                 );
             };
 
-            // 4. 分析
+            // --- View 4: Dashboard ---
             const DashboardView = () => {
-                const [targetId, setTargetId] = useState(students[0]?.id || '');
-                
-                const stats = useMemo(() => {
-                    if (!targetId) return [];
-                    const myRecs = records.filter(r => r.studentId === targetId);
-                    let topicMap = {};
-                    
+                // Analysis A: Paper Performance
+                const paperStats = useMemo(() => {
+                    if(!dashStudent) return [];
+                    const myRecs = records.filter(r => r.studentId === dashStudent);
+                    // Group by Year+Paper
+                    const grouped = {};
+                    myRecs.forEach(r => {
+                        const id = `${r.year} ${r.paper}`;
+                        const total = Object.values(r.scores).reduce((a,b) => Number(a)+Number(b), 0);
+                        const max = r.paper === '1A' ? 33 : 80; // MC max 33, LQ approx
+                        grouped[id] = { year: r.year, paper: r.paper, score: total, max };
+                    });
+                    return Object.values(grouped).sort((a,b) => b.year - a.year);
+                }, [records, dashStudent]);
+
+                // Analysis B: Topic Weakness
+                const topicStats = useMemo(() => {
+                    if(!dashStudent) return [];
+                    const myRecs = records.filter(r => r.studentId === dashStudent);
+                    const tMap = {}; // { topicId: { correct, total } }
+
                     myRecs.forEach(r => {
                         Object.entries(r.scores).forEach(([q, score]) => {
-                            const topicId = getTopicForQuestion(q);
-                            if (!topicMap[topicId]) topicMap[topicId] = { score: 0, total: 0 };
-                            topicMap[topicId].score += Number(score);
-                            topicMap[topicId].total += (r.paper === '1A' ? 1 : 10);
+                            const tid = getTopicForQuestion(q); // Mapping Question to Topic
+                            if(!SYLLABUS_DATA[tid]) return;
+                            
+                            if(!tMap[tid]) tMap[tid] = { score: 0, max: 0 };
+                            tMap[tid].score += Number(score);
+                            tMap[tid].max += (r.paper==='1A' ? 1 : 10); // Weighting
                         });
                     });
 
-                    return Object.entries(topicMap).map(([id, d]) => ({
+                    return Object.entries(tMap).map(([id, stat]) => ({
                         id,
-                        topic: SYLLABUS_DATA[id]?.topic || id,
-                        desc: SYLLABUS_DATA[id]?.desc || '',
-                        pct: (d.score / d.total) * 100
-                    })).sort((a,b) => a.pct - b.pct);
-                }, [records, targetId]);
+                        ...SYLLABUS_DATA[id],
+                        pct: (stat.score/stat.max)*100
+                    })).sort((a,b) => a.pct - b.pct); // Lowest first
+                }, [records, dashStudent]);
 
                 return (
-                    <div className="max-w-4xl mx-auto space-y-6">
-                        <div className="bg-white p-4 rounded flex justify-between items-center shadow">
-                            <h2 className="text-xl font-bold">📊 學生分析</h2>
-                            <select className="border p-2 rounded" value={targetId} onChange={e => setTargetId(e.target.value)}>
-                                {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                            </select>
-                        </div>
-                        
-                        {stats.length > 0 ? (
-                            <div className="bg-white p-6 rounded shadow">
-                                <h3 className="font-bold text-red-600 mb-4">⚠ 弱項課題 (Bottom 5)</h3>
-                                {stats.slice(0, 5).map(s => (
-                                    <div key={s.id} className="flex justify-between items-center p-3 border-b hover:bg-slate-50">
-                                        <div>
-                                            <div className="font-bold">{s.topic}</div>
-                                            <div className="text-xs text-slate-500">{s.desc}</div>
-                                        </div>
-                                        <div className="text-xl font-bold text-red-600">{s.pct.toFixed(0)}%</div>
-                                    </div>
-                                ))}
+                    <div className="max-w-6xl mx-auto space-y-6">
+                        {/* Header Controls */}
+                        <div className="bg-white p-4 rounded-xl shadow-sm flex justify-between items-center">
+                            <h2 className="text-xl font-bold flex items-center gap-2">📊 學習診斷報告</h2>
+                            <div className="flex gap-4">
+                                <select className="border p-2 rounded" value={dashStudent} onChange={e=>setDashStudent(e.target.value)}>
+                                    {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                </select>
+                                <div className="bg-slate-100 p-1 rounded flex">
+                                    <button onClick={()=>setDashTab('paper')} className={`px-4 py-1 rounded text-sm font-bold ${dashTab==='paper'?'bg-white shadow text-blue-600':''}`}>按試卷 (Paper)</button>
+                                    <button onClick={()=>setDashTab('topic')} className={`px-4 py-1 rounded text-sm font-bold ${dashTab==='topic'?'bg-white shadow text-blue-600':''}`}>按課題 (Weakness)</button>
+                                </div>
                             </div>
-                        ) : <div className="text-center p-10 bg-white rounded shadow text-slate-400">尚無數據，請先輸入成績。</div>}
+                        </div>
+
+                        {/* Content */}
+                        {dashTab === 'paper' ? (
+                            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                                <table className="w-full text-left">
+                                    <thead className="bg-slate-50 border-b">
+                                        <tr>
+                                            <th className="p-4 text-slate-500 font-bold text-sm">年份</th>
+                                            <th className="p-4 text-slate-500 font-bold text-sm">試卷</th>
+                                            <th className="p-4 text-slate-500 font-bold text-sm">得分</th>
+                                            <th className="p-4 text-slate-500 font-bold text-sm">百分比</th>
+                                            <th className="p-4 text-slate-500 font-bold text-sm">表現</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {paperStats.length === 0 && <tr><td colSpan="5" className="p-8 text-center text-slate-400">無數據</td></tr>}
+                                        {paperStats.map((item, idx) => {
+                                            const pct = (item.score/item.max)*100;
+                                            const color = pct >= 80 ? 'text-green-600' : (pct >= 50 ? 'text-yellow-600' : 'text-red-600');
+                                            return (
+                                                <tr key={idx} className="border-b last:border-0 hover:bg-slate-50">
+                                                    <td className="p-4 font-bold">{item.year}</td>
+                                                    <td className="p-4">{item.paper}</td>
+                                                    <td className="p-4">{item.score} / {item.max}</td>
+                                                    <td className={`p-4 font-bold ${color}`}>{pct.toFixed(1)}%</td>
+                                                    <td className="p-4">
+                                                        <div className="w-24 h-2 bg-slate-200 rounded-full overflow-hidden">
+                                                            <div className={`h-full rounded-full ${pct>=80?'bg-green-500':(pct>=50?'bg-yellow-400':'bg-red-500')}`} style={{width: `${pct}%`}}></div>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="bg-white p-6 rounded-xl shadow-sm border-t-4 border-red-500">
+                                    <h3 className="font-bold text-lg mb-4 text-red-600">⚠ 急需改善 (Bottom 10)</h3>
+                                    <div className="space-y-4">
+                                        {topicStats.slice(0, 10).map((t, i) => (
+                                            <div key={t.id} className="flex justify-between items-start p-3 bg-red-50 rounded-lg border border-red-100">
+                                                <div>
+                                                    <div className="font-bold text-slate-800">{t.topic}</div>
+                                                    <div className="text-xs text-slate-500">{t.desc} ({t.book})</div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className="text-2xl font-bold text-red-600">{t.pct.toFixed(0)}%</div>
+                                                    <div className="text-xs text-slate-400">正確率</div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                        {topicStats.length === 0 && <div className="text-slate-400">無數據</div>}
+                                    </div>
+                                </div>
+
+                                <div className="bg-white p-6 rounded-xl shadow-sm border-t-4 border-green-500">
+                                    <h3 className="font-bold text-lg mb-4 text-green-600">★ 表現優異 (Top 10)</h3>
+                                    <div className="space-y-4">
+                                        {[...topicStats].reverse().slice(0, 10).map((t, i) => (
+                                            <div key={t.id} className="flex justify-between items-start p-3 bg-green-50 rounded-lg border border-green-100">
+                                                <div>
+                                                    <div className="font-bold text-slate-800">{t.topic}</div>
+                                                    <div className="text-xs text-slate-500">{t.desc}</div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className="text-2xl font-bold text-green-600">{t.pct.toFixed(0)}%</div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 );
             };
@@ -374,10 +577,9 @@
                     <Sidebar />
                     <div className="flex-1 ml-64 p-8 overflow-y-auto h-screen">
                         {view === 'students' && <StudentsView />}
-                        {view === 'marking' && <MarkingSchemeView />}
+                        {view === 'marking' && <MarkingView />}
                         {view === 'input' && <InputView />}
                         {view === 'dashboard' && <DashboardView />}
-                        {view === 'generate' && <div className="p-10 text-center text-slate-400">AI Prompt 生成器 (功能同上)</div>}
                     </div>
                 </div>
             );
