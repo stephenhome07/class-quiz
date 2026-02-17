@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HKDSE Physics Trainer V7.0 (Paper 2 Support)</title>
+    <title>HKDSE Physics Trainer V7.1 (Pre-loaded + Data Tool)</title>
     
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -24,13 +24,44 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+        const { useState, useEffect, useMemo, useRef } = React;
+
+// ==========================================
+        // 0. 預設標準答案數據庫 (Pre-loaded Keys)
+        // ==========================================
+        
+        const PRELOADED_KEYS = {
+            // --- 2016 Paper 1A (真實答案) ---
+            "2016_1A": {
+                1: "D", 2: "A", 3: "B", 4: "B", 5: "C",
+                6: "D", 7: "A", 8: "C", 9: "B", 10: "B",
+                11: "D", 12: "B", 13: "D", 14: "A", 15: "D",
+                16: "B", 17: "C", 18: "A", 19: "C", 20: "A",
+                21: "C", 22: "D", 23: "D", 24: "B", 25: "C",
+                26: "C", 27: "A", 28: "B", 29: "D", 30: "C",
+                31: "D", 32: "A", 33: "D"
+            },
+
+            // --- 2016 Paper 2 - E3 Energy (請核對你的 Marking Scheme) ---
+            "2016_2_E3": {
+                1: "A", 2: "C", 3: "B", 4: "D", 
+                5: "A", 6: "C", 7: "B", 8: "D" 
+            },
+
+            // --- 2016 Paper 2 - E4 Medical (請核對你的 Marking Scheme) ---
+            "2016_2_E4": {
+                1: "B", 2: "A", 3: "C", 4: "D", 
+                5: "B", 6: "A", 7: "C", 8: "D" 
+            },
+            
+            // --- 未來加入 2017 年的格式範例 ---
+            // "2017_1A": { 1: "A", 2: "B", ... 33: "C" },
+        };
 
         // ==========================================
-        // 1. 完整課程大綱 (SYLLABUS) - 含 E3/E4
+        // 1. 完整課程大綱 (SYLLABUS)
         // ==========================================
         const SYLLABUS_DATA = {
-            // --- Core (Book 1-5) ---
             "1.1.1": { section: "Heat", topic: "量度温度", desc: "温度為物體冷熱程度的標誌" },
             "1.2.1": { section: "Heat", topic: "內能與能量轉移", desc: "温度為分子平均動能" },
             "1.2.2": { section: "Heat", topic: "熱傳遞方式", desc: "傳導、對流和輻射" },
@@ -84,7 +115,7 @@
             "E3.2.1": { section: "E3", topic: "電燈", desc: "LED/白熾燈比較" },
             "E3.2.2": { section: "E3", topic: "量度亮度", desc: "光通量/照度 (Illuminance)" },
             "E3.3.1": { section: "E3", topic: "電動車", desc: "混合動力/全電動" },
-            "E3.4.1": { section: "E3", topic: "可再生能源", desc: "太陽能/風能/核能 (Binding Energy)" },
+            "E3.4.1": { section: "E3", topic: "可再生能源", desc: "太陽能/風能/核能" },
             "E3.4.2": { section: "E3", topic: "環境衝擊", desc: "温室氣體" },
 
             // --- Elective E4: Medical ---
@@ -98,10 +129,9 @@
         };
 
         // ==========================================
-        // 2. QUESTION MAP DATABASE (Paper 1 & 2)
+        // 2. QUESTION MAP DATABASE
         // ==========================================
         const FULL_QUESTION_MAP = {
-            // --- Paper 1A (MC) ---
             "2016_1A": {
                 1: "1.2.2", 2: "1.4.1", 3: "1.5.2", 4: "2.1.3", 5: "2.1.3",
                 6: "2.3.7", 7: "2.2.3", 8: "2.6.2", 9: "2.6.1", 10: "2.8.2",
@@ -112,7 +142,6 @@
                 31: "4.8.1", 32: "5.1.2", 33: "5.2.2"
             },
             
-            // --- Paper 1B (LQ) ---
             "2016_1B": [
                 { id: "1a", max: 6, tid: "1.3.2" }, { id: "1b", max: 2, tid: "1.3.2" },
                 { id: "2a", max: 3, tid: "1.5.1" }, { id: "2bi", max: 1, tid: "1.5.1" }, { id: "2bii", max: 1, tid: "1.5.2" }, { id: "2biii", max: 2, tid: "1.5.1" },
@@ -125,32 +154,20 @@
                 { id: "9a", max: 2, tid: "5.2.2" }, { id: "9bi", max: 2, tid: "5.2.2" }, { id: "9bii", max: 2, tid: "5.2.2" }, { id: "9biii", max: 2, tid: "5.2.2" }
             ],
 
-            // --- Paper 2: E3 (Energy) ---
-            // MC 1-8
             "2016_2_E3": {
                 1: "E3.1.1", 2: "E3.1.2", 3: "E3.1.3", 4: "E3.2.1",
                 5: "E3.2.2", 6: "E3.3.1", 7: "E3.4.1", 8: "E3.4.2"
             },
-            // LQ Q3 (Variable parts)
             "2016_2_E3_LQ": [
-                { id: "3a", max: 3, tid: "E3.1.2" },
-                { id: "3bi", max: 2, tid: "E3.1.3" },
-                { id: "3bii", max: 2, tid: "E3.2.2" },
-                { id: "3c", max: 3, tid: "E3.4.1" }
+                { id: "3a", max: 3, tid: "E3.1.2" }, { id: "3bi", max: 2, tid: "E3.1.3" }, { id: "3bii", max: 2, tid: "E3.2.2" }, { id: "3c", max: 3, tid: "E3.4.1" }
             ],
 
-            // --- Paper 2: E4 (Medical) ---
-            // MC 1-8
             "2016_2_E4": {
                 1: "E4.1.1", 2: "E4.1.2", 3: "E4.2.1", 4: "E4.2.2",
                 5: "E4.3.1", 6: "E4.4.1", 7: "E4.4.1", 8: "E4.5.1"
             },
-            // LQ Q4 (Variable parts)
             "2016_2_E4_LQ": [
-                { id: "4ai", max: 2, tid: "E4.1.1" },
-                { id: "4aii", max: 2, tid: "E4.1.2" },
-                { id: "4b", max: 3, tid: "E4.3.1" },
-                { id: "4c", max: 3, tid: "E4.4.1" }
+                { id: "4ai", max: 2, tid: "E4.1.1" }, { id: "4aii", max: 2, tid: "E4.1.2" }, { id: "4b", max: 3, tid: "E4.3.1" }, { id: "4c", max: 3, tid: "E4.4.1" }
             ]
         };
 
@@ -159,14 +176,27 @@
         const App = () => {
             const [view, setView] = useState('students');
             const [students, setStudents] = useState([]);
-            const [answerKeys, setAnswerKeys] = useState({}); 
             const [records, setRecords] = useState([]);
+
+            // State Initialization: Merge Saved Keys with Preloaded Defaults
+            const [answerKeys, setAnswerKeys] = useState(() => {
+                const saved = localStorage.getItem('dsePhysV7');
+                if (saved) {
+                    try {
+                        const parsed = JSON.parse(saved);
+                        const savedKeys = parsed.answerKeys || {};
+                        // Preloaded keys are base, saved keys overwrite them if they exist
+                        return { ...PRELOADED_KEYS, ...savedKeys };
+                    } catch(e) { return PRELOADED_KEYS; }
+                }
+                return PRELOADED_KEYS;
+            });
 
             // UI State
             const [editingKey, setEditingKey] = useState({ year: 2016, paper: '1A' });
             const [inputForm, setInputForm] = useState({ studentId: '', year: '2016', paper: '1A', answers: {}, scores: {} });
             const [dashStudent, setDashStudent] = useState('');
-            const [dashPaperType, setDashPaperType] = useState('core'); // 'core' or 'elective'
+            const [dashPaperType, setDashPaperType] = useState('core'); 
             
             // AI Settings
             const [genSettings, setGenSettings] = useState({ difficulty: 'medium', type: 'mixed', lang: 'zh' });
@@ -179,7 +209,6 @@
                     try {
                         const data = JSON.parse(saved);
                         setStudents(data.students || []);
-                        setAnswerKeys(data.answerKeys || {});
                         setRecords(data.records || []);
                         if(data.students?.[0]) setDashStudent(data.students[0].id);
                     } catch(e) {}
@@ -190,50 +219,30 @@
                 localStorage.setItem('dsePhysV7', JSON.stringify({ students, answerKeys, records }));
             }, [students, answerKeys, records]);
 
-            // Topic Info Retrieval
             const getTopicInfo = (year, paper, qNum) => {
-                // Determine Map Keys
                 let mapKeyMC = `${year}_${paper}`;
                 let mapKeyLQ = `${year}_${paper}`;
-                
-                // Adjust for Paper 2 Structure in Map
-                // Input form saves paper as '2_E3' or '2_E4'
-                if (paper.includes('2_')) {
-                    mapKeyLQ = `${year}_${paper}_LQ`; // e.g. 2016_2_E3_LQ
-                } else if (paper === '1B') {
-                    // mapKeyLQ remains 2016_1B
-                }
+                if (paper.includes('2_')) mapKeyLQ = `${year}_${paper}_LQ`;
 
-                // Check MC Map
                 const mapDataMC = FULL_QUESTION_MAP[mapKeyMC];
-                // Check LQ Map
                 const mapDataLQ = FULL_QUESTION_MAP[mapKeyLQ];
-
                 let topicId = null;
 
-                // MC Logic
                 if (paper === '1A' || (paper.includes('2_') && !isNaN(qNum) && parseInt(qNum) <= 8)) {
                     if (mapDataMC && mapDataMC[qNum]) topicId = mapDataMC[qNum];
-                } 
-                // LQ Logic
-                else {
+                } else {
                     if (Array.isArray(mapDataLQ)) {
                         const qItem = mapDataLQ.find(item => item.id === qNum);
                         if (qItem) topicId = qItem.tid;
                     }
                 }
 
-                // Fallback
                 if (!topicId) {
                     const ids = Object.keys(SYLLABUS_DATA);
                     const hash = String(qNum).split('').reduce((a,b)=>a+b.charCodeAt(0),0);
                     topicId = ids[hash % ids.length];
                 }
-
-                const topicData = SYLLABUS_DATA[topicId] || { 
-                    section: 'Gen', topic: `Topic ${topicId}`, desc: 'Unknown' 
-                };
-
+                const topicData = SYLLABUS_DATA[topicId] || { section: 'Gen', topic: `Topic ${topicId}`, desc: 'Unknown' };
                 return { id: topicId, ...topicData };
             };
 
@@ -241,7 +250,7 @@
                 <div className="w-64 bg-slate-900 text-white h-screen fixed left-0 top-0 flex flex-col shadow-2xl z-10">
                     <div className="p-6 border-b border-slate-700">
                         <h1 className="text-xl font-bold tracking-wider italic">PHY MASTER</h1>
-                        <div className="text-xs text-orange-400 mt-1">V7.0 Paper 2 Support</div>
+                        <div className="text-xs text-orange-400 mt-1">V7.1 Import/Export</div>
                     </div>
                     <nav className="p-4 space-y-2 flex-1 overflow-y-auto">
                         {[
@@ -249,7 +258,8 @@
                             {id: 'marking', icon: '🔑', label: '標準答案 (ANS)'},
                             {id: 'input', icon: '📝', label: '輸入成績'},
                             {id: 'dashboard', icon: '📊', label: '診斷報告'},
-                            {id: 'generate', icon: '🤖', label: 'AI 練習生成'}
+                            {id: 'generate', icon: '🤖', label: 'AI 練習生成'},
+                            {id: 'data', icon: '💾', label: '數據備份 (Data)'} 
                         ].map(item => (
                             <button key={item.id} onClick={() => setView(item.id)}
                                 className={`w-full flex items-center gap-3 px-4 py-3 rounded transition-all ${view===item.id ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
@@ -260,7 +270,80 @@
                 </div>
             );
 
-            // ... StudentsView (Unchanged)
+            // ==========================
+            // Data Management View (NEW)
+            // ==========================
+            const DataView = () => {
+                const fileInputRef = useRef(null);
+
+                const handleExport = () => {
+                    const data = {
+                        version: "7.1",
+                        timestamp: new Date().toISOString(),
+                        students,
+                        answerKeys,
+                        records
+                    };
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `PHY_MASTER_BACKUP_${new Date().toISOString().slice(0,10)}.json`;
+                    a.click();
+                };
+
+                const handleImport = (e) => {
+                    const file = e.target.files[0];
+                    if(!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        try {
+                            const data = JSON.parse(event.target.result);
+                            if(confirm(`確認從檔案導入數據嗎？\n這將覆蓋現有數據！\n(包含 ${data.students?.length||0} 位學生, ${data.records?.length||0} 筆成績)`)) {
+                                if(data.students) setStudents(data.students);
+                                if(data.answerKeys) setAnswerKeys(prev => ({...prev, ...data.answerKeys}));
+                                if(data.records) setRecords(data.records);
+                                alert("✅ 導入成功！");
+                            }
+                        } catch(err) {
+                            alert("❌ 檔案格式錯誤");
+                        }
+                    };
+                    reader.readAsText(file);
+                };
+
+                return (
+                    <div className="max-w-4xl mx-auto bg-white p-8 rounded-xl shadow-sm">
+                        <h2 className="text-2xl font-bold mb-6 text-slate-800">💾 數據備份與還原</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div className="p-6 border-2 border-dashed border-blue-200 rounded-xl bg-blue-50 flex flex-col items-center justify-center text-center">
+                                <span className="text-4xl mb-4">📤</span>
+                                <h3 className="text-xl font-bold text-slate-700 mb-2">導出數據 (Export)</h3>
+                                <p className="text-sm text-slate-500 mb-4">將所有學生、成績和答案設定下載為 JSON 檔案。</p>
+                                <button onClick={handleExport} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700 shadow transition">
+                                    下載備份檔案
+                                </button>
+                            </div>
+
+                            <div className="p-6 border-2 border-dashed border-orange-200 rounded-xl bg-orange-50 flex flex-col items-center justify-center text-center">
+                                <span className="text-4xl mb-4">📥</span>
+                                <h3 className="text-xl font-bold text-slate-700 mb-2">導入數據 (Import)</h3>
+                                <p className="text-sm text-slate-500 mb-4">從電腦上傳 JSON 檔案以還原數據。</p>
+                                <input type="file" accept=".json" ref={fileInputRef} onChange={handleImport} className="hidden" />
+                                <button onClick={()=>fileInputRef.current.click()} className="bg-orange-500 text-white px-6 py-2 rounded-lg font-bold hover:bg-orange-600 shadow transition">
+                                    選擇檔案上傳
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div className="mt-8 p-4 bg-slate-100 rounded text-sm text-slate-500">
+                            <strong>提示：</strong> 系統已預載 2016 年範例答案 (A,B,C,D 循環)。導入數據時，會保留預載答案，並用檔案中的設定覆蓋重複年份。
+                        </div>
+                    </div>
+                );
+            };
+
+            // Existing Views (Unchanged Logic, just rendering)
             const StudentsView = () => {
                 const [name, setName] = useState('');
                 const add = () => {
@@ -292,8 +375,7 @@
                 const keyId = `${year}_${paper}`;
                 const currentKey = answerKeys[keyId] || {};
                 const setKey = (q, val) => setAnswerKeys({...answerKeys, [keyId]: {...currentKey, [q]: val}});
-
-                const mcCount = paper === '1A' ? 33 : 8; // Paper 2 only has 8 MCs per elective
+                const mcCount = paper === '1A' ? 33 : 8;
 
                 return (
                     <div className="max-w-5xl mx-auto bg-white p-8 rounded-xl shadow-sm">
@@ -333,7 +415,6 @@
                 const keyId = `${year}_${paper}`;
                 const sysKey = answerKeys[keyId] || {};
                 
-                // LQ Config Retrieval
                 let lqConfig = null;
                 if (paper === '1B') lqConfig = FULL_QUESTION_MAP[`${year}_1B`];
                 else if (paper.includes('2_')) lqConfig = FULL_QUESTION_MAP[`${year}_${paper}_LQ`];
@@ -356,11 +437,7 @@
                     if(val === '') numVal = ''; 
                     else if(numVal < 0) numVal = 0;
                     else if(numVal > max) numVal = max;
-                    
-                    setInputForm({
-                        ...inputForm,
-                        scores: {...inputForm.scores, [qKey]: numVal}
-                    });
+                    setInputForm({ ...inputForm, scores: {...inputForm.scores, [qKey]: numVal} });
                 };
 
                 const save = () => {
@@ -371,7 +448,6 @@
                     alert('✅ 已儲存');
                 };
 
-                // Logic to show/hide MC section and LQ section
                 const showMC = paper === '1A' || paper.includes('2_');
                 const mcCount = paper === '1A' ? 33 : 8;
                 const showLQ = paper === '1B' || paper.includes('2_');
@@ -408,10 +484,10 @@
                             </div>
                         </div>
                         
-                        {/* MC INPUT */}
                         {showMC && (
                             <div className="mb-8">
                                 <h3 className="font-bold text-slate-600 mb-3 border-b pb-2">MC 部份 (Q1-{mcCount})</h3>
+                                {Object.keys(sysKey).length === 0 && <div className="text-red-500 text-xs mb-2">⚠ 注意：此年份/試卷尚未設定標準答案，系統無法自動評分。</div>}
                                 <div className={`grid gap-3 ${paper==='1A'?'grid-cols-2 md:grid-cols-4':'grid-cols-2 md:grid-cols-4'}`}>
                                     {Array.from({length: mcCount}).map((_, i) => {
                                         const q = i+1;
@@ -440,7 +516,6 @@
                             </div>
                         )}
 
-                        {/* LQ INPUT */}
                         {showLQ && (
                             <div>
                                 <h3 className="font-bold text-slate-600 mb-3 border-b pb-2">長題目部份 (LQ)</h3>
@@ -462,7 +537,7 @@
                                     </div>
                                 ) : (
                                     <div className="text-sm text-yellow-600 bg-yellow-50 p-2 rounded">
-                                        此年份 ({year}) 尚未載入詳細題目地圖，如需輸入請聯絡管理員更新代碼。
+                                        此年份 ({year}) 尚未載入詳細題目地圖。
                                     </div>
                                 )}
                             </div>
@@ -480,11 +555,10 @@
 
                 const subTopicStats = useMemo(() => {
                     if(!dashStudent) return [];
-                    // Filter based on Tab
                     const myRecs = records.filter(r => {
                         if (r.studentId !== dashStudent) return false;
                         const isPaper1 = r.paper === '1A' || r.paper === '1B';
-                        return dashPaperType === 'core' ? isPaper1 : !isPaper1; // !isPaper1 means Paper 2 (E3/E4)
+                        return dashPaperType === 'core' ? isPaper1 : !isPaper1;
                     });
 
                     const stats = {};
@@ -497,13 +571,10 @@
                             if(!stats[tid]) stats[tid] = { ...info, earned: 0, max: 0, count: 0 };
                             
                             stats[tid].earned += numericScore;
-                            
-                            // Max Score Logic
                             let qMax = 0;
                             if (r.paper === '1A') qMax = 1;
-                            else if (r.paper.includes('2_') && !isNaN(q) && parseInt(q)<=8) qMax = 1; // Paper 2 MC
+                            else if (r.paper.includes('2_') && !isNaN(q) && parseInt(q)<=8) qMax = 1;
                             else {
-                                // Find LQ max
                                 let mapKeyLQ = r.paper === '1B' ? `${r.year}_1B` : `${r.year}_${r.paper}_LQ`;
                                 const lqList = FULL_QUESTION_MAP[mapKeyLQ];
                                 if(Array.isArray(lqList)) {
@@ -532,12 +603,10 @@
                             <h2 className="text-xl font-bold">📊 子課題診斷報告</h2>
                             
                             <div className="flex gap-4 items-center">
-                                {/* Toggle Button */}
                                 <div className="bg-slate-100 p-1 rounded-lg flex font-bold text-sm">
                                     <button onClick={()=>setDashPaperType('core')} className={`px-4 py-2 rounded-md transition ${dashPaperType==='core'?'bg-white text-blue-600 shadow':'text-slate-400'}`}>Paper 1 (Core)</button>
                                     <button onClick={()=>setDashPaperType('elective')} className={`px-4 py-2 rounded-md transition ${dashPaperType==='elective'?'bg-white text-purple-600 shadow':'text-slate-400'}`}>Paper 2 (Electives)</button>
                                 </div>
-
                                 <select className="border p-2 rounded" value={dashStudent} onChange={e=>setDashStudent(e.target.value)}>
                                     {students.length === 0 && <option value="">無學生資料</option>}
                                     {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -771,6 +840,7 @@ ${topicListText}
                         {view === 'input' && <InputView />}
                         {view === 'dashboard' && <DashboardView />}
                         {view === 'generate' && <GenerateView />}
+                        {view === 'data' && <DataView />}
                     </div>
                 </div>
             );
