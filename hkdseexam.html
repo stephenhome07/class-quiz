@@ -1095,6 +1095,15 @@
 
             const InputView = () => {
                 const { studentId, year, paper } = inputForm;
+                const InputView = () => {
+                const { studentId, year, paper } = inputForm;
+                
+                // --- [新增這段代碼] ---
+                // 找出這位學生已經輸入過的所有紀錄 (年份 + 試卷)
+                const existingRecords = records
+                    .filter(r => r.studentId === studentId)
+                    .sort((a, b) => b.year - a.year || a.paper.localeCompare(b.paper)); // 按年份倒序排列
+                // ---------------------
                 const keyId = `${year}_${paper}`;
                 const sysKey = answerKeys[keyId] || {};
                 
@@ -1145,6 +1154,25 @@
                                     <option value="">-- 請選擇 --</option>
                                     {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                                 </select>
+
+                                {studentId && (
+                                    <div className="mt-2 p-2 bg-slate-100 rounded text-[10px] text-slate-500 max-h-32 overflow-y-auto">
+                                        <div className="font-bold mb-1">已輸入紀錄 ({existingRecords.length}):</div>
+                                        <div className="flex flex-wrap gap-1">
+                                            {existingRecords.length === 0 ? (
+                                                <span>尚無紀錄</span>
+                                            ) : (
+                                                existingRecords.map(r => (
+                                                    <span key={r.id} className="bg-white border px-1 rounded shadow-sm text-slate-700">
+                                                        {r.year} {r.paper}
+                                                    </span>
+                                                ))
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                                {/* --------------------------------------- */}
+            
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-slate-500 mb-1">年份</label>
@@ -1718,6 +1746,7 @@ ${weakConcepts.length > 0 ? weakConcepts.join('\n') : "(General practice on topi
     </script>
 </body>
 </html>
+
 
 
 
