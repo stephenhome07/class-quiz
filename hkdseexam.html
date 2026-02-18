@@ -71,131 +71,184 @@
         // 1. 完整課程大綱 (SYLLABUS)
         // ==========================================
         const SYLLABUS_DATA = {
-            "1.1.1": { section: "Heat", topic: "量度温度", desc: "温度為物體冷熱程度的標誌" },
-            "1.1.2": { section: "Heat", topic: "攝氏温標", desc: "攝氏度為温度的單位" },
-            "1.2.1": { section: "Heat", topic: "內能與能量轉移", desc: "温度為分子平均動能" },
-            "1.2.2": { section: "Heat", topic: "熱傳遞方式", desc: "傳導、對流和輻射" },
-            "1.3.1": { section: "Heat", topic: "功率與能量", desc: "功率 = E/t" },
-            "1.3.2": { section: "Heat", topic: "熱容量和比熱容量", desc: "E=mcΔT" },
-            "1.4.1": { section: "Heat", topic: "潛熱", desc: "E=ml (熔解/汽化)" },
-            "1.4.2": { section: "Heat", topic: "蒸發與凝結", desc: "蒸發的冷卻效應" },
-            "1.5.1": { section: "Heat", topic: "氣體定律", desc: "pV=nRT" },
-            "1.5.2": { section: "Heat", topic: "氣體分子運動論", desc: "微觀詮釋" },
-            "2.1.1": { section: "Mech", topic: "長度和時間", desc: "基本物理量" },
-            "2.1.2": { section: "Mech", topic: "距離和位移", desc: "標量與矢量" },
-            "2.1.3": { section: "Mech", topic: "速率、速度和加速度", desc: "瞬時速率與平均速度" },
-            "2.1.4": { section: "Mech", topic: "誤差估算", desc: "反應時間與誤差" },
-            "2.2.1": { section: "Mech", topic: "描述直線運動", desc: "矢量描述" },
-            "2.2.2": { section: "Mech", topic: "運動線圖", desc: "s-t, v-t, a-t 圖像" },
-            "2.2.3": { section: "Mech", topic: "勻加速運動方程", desc: "SUVAT 方程" },
-            "2.2.4": { section: "Mech", topic: "重力下的垂直運動", desc: "自由落體" },
-            "2.3.1": { section: "Mech", topic: "力", desc: "隔離體圖 (FBD)" },
-            "2.3.2": { section: "Mech", topic: "牛頓第一定律", desc: "慣性" },
-            "2.3.3": { section: "Mech", topic: "牛頓第二定律", desc: "F=ma" },
-            "2.3.4": { section: "Mech", topic: "重量與質量", desc: "W=mg" },
-            "2.3.5": { section: "Mech", topic: "流體阻力", desc: "終端速度" },
-            "2.3.6": { section: "Mech", topic: "摩擦力", desc: "靜摩擦與動摩擦" },
-            "2.3.7": { section: "Mech", topic: "牛頓第三定律", desc: "作用力與反作用力" },
-            "2.4.1": { section: "Mech", topic: "物體組成的系統", desc: "連接體運動" },
-            "2.4.2": { section: "Mech", topic: "力的合成和分解", desc: "矢量加法" },
-            "2.4.3": { section: "Mech", topic: "共面力", desc: "力的平衡" },
-            "2.5.1": { section: "Mech", topic: "力的轉動效應", desc: "力矩 (Moment)" },
-            "2.5.2": { section: "Mech", topic: "剛體的平衡", desc: "力矩平衡" },
-            "2.6.1": { section: "Mech", topic: "功", desc: "W = Fs cos θ" },
-            "2.6.2": { section: "Mech", topic: "機械能", desc: "動能與勢能" },
-            "2.6.3": { section: "Mech", topic: "能量守恆", desc: "能量轉換與損耗" },
-            "2.6.4": { section: "Mech", topic: "功率", desc: "P = Fv" },
-            "2.7.1": { section: "Mech", topic: "動量守恆", desc: "碰撞" },
-            "2.7.2": { section: "Mech", topic: "動量變化", desc: "衝量 (Impulse)" },
-            "2.8.1": { section: "Mech", topic: "拋體運動 (Ext)", desc: "獨立性原理" },
-            "2.8.2": { section: "Mech", topic: "分析拋體運動", desc: "水平與垂直分量" },
-            "2.9.1": { section: "Mech", topic: "描述圓周運動 (Ext)", desc: "角速度" },
-            "2.9.2": { section: "Mech", topic: "向心力與向心加速度", desc: "a = v²/r" },
-            "2.9.3": { section: "Mech", topic: "圓周運動的例子", desc: "傾斜路面/單擺" },
-            "2.10.1": { section: "Mech", topic: "萬有引力 (Ext)", desc: "GMm/r²" },
-            "2.10.2": { section: "Mech", topic: "引力下的圓周運動", desc: "衛星運動" },
-            "3.1.1": { section: "Waves", topic: "光線", desc: "光束性質" },
-            "3.1.2": { section: "Waves", topic: "反射與平面鏡", desc: "反射定律" },
-            "3.2.1": { section: "Waves", topic: "折射", desc: "Snell's Law" },
-            "3.2.2": { section: "Waves", topic: "全內反射", desc: "臨界角" },
-            "3.3.1": { section: "Waves", topic: "透鏡種類", desc: "凸透鏡與凹透鏡" },
-            "3.3.2": { section: "Waves", topic: "凸透鏡成像", desc: "作圖法" },
-            "3.3.3": { section: "Waves", topic: "凹透鏡成像", desc: "作圖法" },
-            "3.3.4": { section: "Waves", topic: "物、像以及透鏡的關係", desc: "透鏡公式" },
-            "3.4.1": { section: "Waves", topic: "波的簡介", desc: "縱波與橫波" },
-            "3.4.2": { section: "Waves", topic: "橫波的波動", desc: "v = fλ" },
-            "3.4.3": { section: "Waves", topic: "橫波的粒子振動", desc: "相位" },
-            "3.4.4": { section: "Waves", topic: "以線圖描述橫波", desc: "位移-距離/時間圖" },
-            "3.5.1": { section: "Waves", topic: "水波", desc: "水波槽實驗" },
-            "3.5.2": { section: "Waves", topic: "反射與折射(波)", desc: "深淺水域" },
-            "3.5.3": { section: "Waves", topic: "衍射與干涉", desc: "路程差" },
-            "3.5.4": { section: "Waves", topic: "駐波", desc: "波腹與波節" },
-            "3.6.1": { section: "Waves", topic: "光的波動本質", desc: "光是橫波" },
-            "3.6.2": { section: "Waves", topic: "楊氏雙縫實驗", desc: "Δy = λD/a" },
-            "3.6.3": { section: "Waves", topic: "平面透射光柵", desc: "d sin θ = nλ" },
-            "3.6.4": { section: "Waves", topic: "電磁波", desc: "電磁波譜" },
-            "3.7.1": { section: "Waves", topic: "縱波", desc: "聲波特性" },
-            "3.7.2": { section: "Waves", topic: "聲音的本質", desc: "介質傳播" },
-            "3.7.3": { section: "Waves", topic: "聲音的其他特性", desc: "超聲波與分貝" },
-            "4.1.1": { section: "Elec", topic: "電荷", desc: "摩擦起電" },
-            "4.1.2": { section: "Elec", topic: "靜電力", desc: "庫倫定律" },
-            "4.1.3": { section: "Elec", topic: "電場", desc: "電場強度 E" },
-            "4.2.1": { section: "Elec", topic: "電流", desc: "I = Q/t" },
-            "4.2.2": { section: "Elec", topic: "電壓", desc: "電動勢與電勢差" },
-            "4.2.3": { section: "Elec", topic: "電阻", desc: "R = ρl/A" },
-            "4.2.4": { section: "Elec", topic: "電阻器網絡", desc: "串聯與並聯" },
-            "4.2.5": { section: "Elec", topic: "電功率", desc: "P = VI" },
-            "4.3.1": { section: "Elec", topic: "分析電路", desc: "電位降與分壓器" },
-            "4.3.2": { section: "Elec", topic: "實際儀表", desc: "內阻影響" },
-            "4.4.1": { section: "Elec", topic: "家用電器", desc: "功率與能量 (kWh)" },
-            "4.4.2": { section: "Elec", topic: "家居安全", desc: "保險絲與接地" },
-            "4.4.3": { section: "Elec", topic: "交流電 (Ext)", desc: "RMS 值" },
-            "4.5.1": { section: "Elec", topic: "磁力與磁場", desc: "磁場線" },
-            "4.5.2": { section: "Elec", topic: "電流的磁效應", desc: "右手握拳定則" },
-            "4.6.1": { section: "Elec", topic: "作用於導體的磁力", desc: "F = BIL sinθ" },
-            "4.6.2": { section: "Elec", topic: "直流電動機", desc: "換向器原理" },
-            "4.6.3": { section: "Elec", topic: "洛倫茲力", desc: "F = Bqv" },
-            "4.7.1": { section: "Elec", topic: "磁場產生的電流", desc: "楞次定律" },
-            "4.7.2": { section: "Elec", topic: "電磁感應應用", desc: "發電機" },
-            "4.7.3": { section: "Elec", topic: "法拉第定律 (Ext)", desc: "磁通量變化率" },
-            "4.8.1": { section: "Elec", topic: "變壓器 (Ext)", desc: "Vp/Vs = Np/Ns" },
-            "4.8.2": { section: "Elec", topic: "輸電 (Ext)", desc: "高壓傳輸優勢" },
-            "5.1.1": { section: "Rad", topic: "致電離輻射", desc: "X射線" },
-            "5.1.2": { section: "Rad", topic: "核輻射", desc: "α, β, γ 性質" },
-            "5.1.3": { section: "Rad", topic: "輻射安全", desc: "劑量 (Sv)" },
-            "5.2.1": { section: "Rad", topic: "原子模型", desc: "同位素" },
-            "5.2.2": { section: "Rad", topic: "放射衰變", desc: "半衰期" },
-            "5.2.3": { section: "Rad", topic: "同位素應用", desc: "追蹤劑與定年法" },
-            "5.3.1": { section: "Rad", topic: "裂變與聚變", desc: "能量來源" },
-            "5.3.2": { section: "Rad", topic: "質能關係", desc: "E = mc²" },
-            "5.3.3": { section: "Rad", topic: "核能", desc: "反應堆原理" },
+            // --- 第1冊：熱和氣體 (Heat and Gases) ---
+            "1.1.1": { section: "Heat", topic: "量度温度", desc: "認識温度為冷熱程度標誌；利用與温度相關的物理性質量度温度 [1]" },
+            "1.1.2": { section: "Heat", topic: "攝氏温標", desc: "定義及使用攝氏度作為温度單位 [1]" },
+            "1.2.1": { section: "Heat", topic: "內能與能量轉移", desc: "連繫內能與分子隨機運動動能；描述質量和温度對內能的影響；熱為因温差引致的能量轉移 [1]" },
+            "1.2.2": { section: "Heat", topic: "熱傳遞方式", desc: "以分子運動闡釋傳導；認識紅外輻射及影響輻射吸收的因素；鑑定傳導、對流和輻射 [1]" },
+            "1.3.1": { section: "Heat", topic: "功率", desc: "定義功率 P = E/t 為能量轉移率 [1]" },
+            "1.3.2": { section: "Heat", topic: "熱容量和比熱容量", desc: "定義熱容量及比熱容量；解決 E=mcΔT 相關問題；討論水的高比熱容量 [1]" },
+            "1.4.1": { section: "Heat", topic: "潛熱", desc: "定義熔解與汽化比潛熱；解決物態改變中的能量問題；闡釋潛熱為分子勢能的改變 [1]" },
+            "1.4.2": { section: "Heat", topic: "蒸發與凝結", desc: "認識蒸發冷卻效應；以分子運動解釋蒸發；討論影響蒸發率的因素 [1]" },
+            "1.5.1": { section: "Heat", topic: "氣體定律", desc: "查證波義耳定律；應用普適氣體定律 pV=nRT；認識絕對零度與開氏温標 [1]" },
+            "1.5.2": { section: "Heat", topic: "氣體分子運動論", desc: "認識氣體壓強源於分子碰撞；理想氣體模型假定；以微觀動能闡釋理想氣體温度 [1]" },
+                   // --- 第1課：運 動 (Motion) ---
+            "2.1.1": { section: "Mech", topic: "長度和時間", desc: "認識國際單位制中的米(m)和秒(s)；測量基本物理量 [1]" },
+            "2.1.2": { section: "Mech", topic: "距離和位移", desc: "以距離和位移描述位置改變；區別標量 (Scalar) 和矢量 (Vector) [1]" },
+            "2.1.3": { section: "Mech", topic: "速率、速度和加速度", desc: "定義平均/瞬時速度；定義加速度；以速率和速度描述物體運動 [1]" },
+            "2.1.4": { section: "Mech", topic: "誤差估算", desc: "認識反應時間；解決實驗中的百分誤差問題 [1]" },
+        
+            // --- 第2課：直線運動 (Rectilinear Motion) ---
+            "2.2.1": { section: "Mech", topic: "描述直線運動", desc: "使用矢量號與符號系統描述直線運動的物理量 [1]" },
+            "2.2.2": { section: "Mech", topic: "運動線圖", desc: "詮釋 s-t, v-t, a-t 圖；利用斜率求速度/加速度；利用面積求位移 [1]" },
+            "2.2.3": { section: "Mech", topic: "勻加速運動方程", desc: "推導及應用 SUVAT 方程解決勻加速直線運動問題 [1]" },
+            "2.2.4": { section: "Mech", topic: "重力下的垂直運動", desc: "檢測自由落體運動；估算重力加速度 g；討論空氣阻力的影響 [1]" },
+        
+            // --- 第3課：力與運動 I (Force and Motion I) ---
+            "2.3.1": { section: "Mech", topic: "力的概念", desc: "使用牛頓(N)作為單位；明白摩擦力為阻礙運動的力；繪製隔離體圖 (FBD) [1]" },
+            "2.3.2": { section: "Mech", topic: "牛頓第一定律", desc: "描述慣性 (Inertia) 與質量的關係；解釋物體靜止或勻速運動的狀況 [1]" },
+            "2.3.3": { section: "Mech", topic: "牛頓第二定律", desc: "描述淨力對速度改變的影響；實驗查證並應用 F=ma 解決一維問題 [1]" },
+            "2.3.4": { section: "Mech", topic: "重量與質量", desc: "區別質量和重量；應用 W=mg 計算重力 [1]" },
+            "2.3.5": { section: "Mech", topic: "流體阻力", desc: "認識流體阻力及其對物體達至終端速度 (Terminal Velocity) 的影響 [1]" },
+            "2.3.6": { section: "Mech", topic: "摩擦力", desc: "認識靜摩擦力與滑動摩擦力的特性與計算 [1]" },
+            "2.3.7": { section: "Mech", topic: "牛頓第三定律", desc: "認識力成對作用；鑑定並描述作用力與反作用力對 (Action-reaction pair) [1]" },
+        
+            // --- 第4課：力與運動 II (Force and Motion II) ---
+            "2.4.1": { section: "Mech", topic: "物體組成的系統", desc: "應用牛頓第二定律處理多個連接體間的運動問題 [1]" },
+            "2.4.2": { section: "Mech", topic: "力的合成和分解", desc: "以圖解法或代數法合成共面力；將力分解為兩個垂直分量 [1]" },
+            "2.4.3": { section: "Mech", topic: "共面力平衡", desc: "應用力的平衡條件解決受多個共面力作用的問題 [1]" },
+        
+            // --- 第5課：力 矩 (Moment) ---
+            "2.5.1": { section: "Mech", topic: "力的轉動效應", desc: "定義力矩 (Moment)；討論轉矩及力偶 (Couple) 在日常生活中的應用 [1]" },
+            "2.5.2": { section: "Mech", topic: "剛體的平衡", desc: "應用受力平衡及力矩平衡條件解決固定支點問題；測定重心位置 [1]" },
+        
+            // --- 第6課：功、能量和功率 (Work, Energy and Power) ---
+            "2.6.1": { section: "Mech", topic: "功 (Work)", desc: "定義機械功 W = Fs cos θ；闡釋功為能量轉移的一種方式 [1]" },
+            "2.6.2": { section: "Mech", topic: "機械能", desc: "推導並應用動能 (1/2 mv²) 及重力勢能 (mgh) 公式 [1]" },
+            "2.6.3": { section: "Mech", topic: "能量變化和守恆", desc: "描述勢能與動能的相互轉換；考慮能量損耗 (如摩擦產熱) 的情況 [1]" },
+            "2.6.4": { section: "Mech", topic: "功率 (Power)", desc: "定義功率 P=E/t；應用 P=Fv 解決相關機械功率問題 [1]" },
+        
+            // --- 第7課：動 量 (Momentum) ---
+            "2.7.1": { section: "Mech", topic: "動量守恆", desc: "定義動量 p=mv；應用動量守恆定律解決一維碰撞及爆炸問題；區別彈性/非彈性碰撞 [1]" },
+            "2.7.2": { section: "Mech", topic: "動量變化與衝量", desc: "闡釋淨力為動量變化率；認識衝量 (Impulse) 為動量的改變 [1]" },
+        
+            // --- 第8課：拋體運動 (Projectile Motion - Ext) ---
+            "2.8.1": { section: "Mech", topic: "認識拋體運動", desc: "描述拋體運動路徑；理解水平及垂直運動的各自獨立性 [1]" },
+            "2.8.2": { section: "Mech", topic: "分析拋體運動", desc: "應用 SUVAT 分解並解決各種初速、投射角的拋體運動問題 [1]" },
+        
+            // --- 第9課：勻速圓周運動 (Circular Motion - Ext) ---
+            "2.9.1": { section: "Mech", topic: "描述圓周運動", desc: "定義角速度 (ω)；連繫角速度與線速度 (v=rω) [1]" },
+            "2.9.2": { section: "Mech", topic: "向心力與加速度", desc: "認識向心力指向圓心；應用 a = v²/r 或 a = rω² 公式 [1]" },
+            "2.9.3": { section: "Mech", topic: "圓周運動應用", desc: "分析傾斜路面上的汽車、圓錐擺等日常圓周運動例子 [1]" },
+        
+            // --- 第10課：引 力 (Gravitation - Ext) ---
+            "2.10.1": { section: "Mech", topic: "萬有引力", desc: "應用萬有引力定律 F = GMm/r²；定義及計算引力場強度 g = GM/r² [2]" },
+            "2.10.2": { section: "Mech", topic: "引力下的圓周運動", desc: "分析衛星或行星軌道運動；計算軌道速度與週期 [2]" },
+        // --- 第1課：光的反射 (Reflection of Light) ---
+            "3.1.1": { section: "Waves", topic: "光線", desc: "認識光線和光束的基本性質 [1]" },
+            "3.1.2": { section: "Waves", topic: "反射與平面鏡", desc: "應用反射定律；利用作圖法繪畫平面鏡的成像 [1]" },
+        
+            // --- 第2課：光的折射 (Refraction of Light) ---
+            "3.2.1": { section: "Waves", topic: "折射", desc: "檢測折射定律；定義折射率 n = sin i / sin r；利用波速定義折射率 [1]" },
+            "3.2.2": { section: "Waves", topic: "全內反射", desc: "檢測全內反射條件（密介質進入疏介質、入射角大於臨界角）；解決相關應用問題 [1]" },
+        
+            // --- 第3課：透鏡 (Lenses) ---
+            "3.3.1": { section: "Waves", topic: "透鏡種類", desc: "區別凸透鏡（會聚）與凹透鏡（發散） [1]" },
+            "3.3.2": { section: "Waves", topic: "凸透鏡成像", desc: "區別實像與虛像；以作圖法（三條特徵光線）繪畫凸透鏡成像 [1]" },
+            "3.3.3": { section: "Waves", topic: "凹透鏡成像", desc: "以作圖法繪畫凹透鏡成像（始終為正立縮小虛像） [1]" },
+            "3.3.4": { section: "Waves", topic: "物、像與透鏡關係", desc: "應用透鏡公式 1/u + 1/v = 1/f 解決單一薄鏡成像問題 [1]" },
+        
+            // --- 第4課：波的本質 (Nature of Waves) ---
+            "3.4.1": { section: "Waves", topic: "波的簡介", desc: "以振盪闡釋波動；認識波動傳播能量不帶物質；區別橫波與縱波 [1]" },
+            "3.4.2": { section: "Waves", topic: "橫波的波動", desc: "使用術語描述波動（波峯、波谷等）；應用 f = 1/T 及 v = fλ；測定影響絃線波速的因素 [1]" },
+            "3.4.3": { section: "Waves", topic: "相位", desc: "使用相位描述波動中不同粒子的振動關係 [1]" },
+            "3.4.4": { section: "Waves", topic: "波動線圖分析", desc: "詮釋及區別位移—距離關係線圖與位移—時間關係線圖 [1]" },
+        
+            // --- 第5課：波的現象和駐波 (Wave Phenomena and Stationary Waves) ---
+            "3.5.1": { section: "Waves", topic: "水波", desc: "使用水波槽實驗認識波陣面、波速等水波特徵 [1]" },
+            "3.5.2": { section: "Waves", topic: "反射與折射(波)", desc: "繪畫波陣面圖展現反射與折射；認識深淺水域交界處波速與波長的改變 [1]" },
+            "3.5.3": { section: "Waves", topic: "衍射與干涉", desc: "描述衍射現象；理解相干源；以程差判定相長干涉（ΔL=nλ）與相消干涉條件 [1]" },
+            "3.5.4": { section: "Waves", topic: "駐波", desc: "解釋駐波的形成（兩列相反方向行波疊加）；描述波腹與波節特性 [1]" },
+        
+            // --- 第6課：光的波動本質與電磁波 (Wave Nature of Light and EM Waves) ---
+            "3.6.1": { section: "Waves", topic: "光的波動證據", desc: "指出光為橫波；認識衍射和干涉為光具備波動本質的證據 [2]" },
+            "3.6.2": { section: "Waves", topic: "楊氏雙縫實驗", desc: "檢測干涉圖形；應用 Δy = λD/a 解決條紋間距問題 [2]" },
+            "3.6.3": { section: "Waves", topic: "平面透射光柵", desc: "檢測光柵衍射圖案；應用 d sin θ = nλ 解決多級亮點問題 [2]" },
+            "3.6.4": { section: "Waves", topic: "電磁波譜", desc: "認識電磁波譜成分（無線電至伽瑪射線）及真空波速 3.0 x 10^8 m/s [2]" },
+        
+            // --- 第7課：聲音 (Sound) ---
+            "3.7.1": { section: "Waves", topic: "縱波與聲音", desc: "使用密部和疏部描述聲波；應用波動公式解決聲音問題 [2]" },
+            "3.7.2": { section: "Waves", topic: "聲音的本質", desc: "認識聲音為縱波且需介質傳播；描述聲音的反射、折射、衍射和干涉 [2]" },
+            "3.7.3": { section: "Waves", topic: "聲音的其他特性", desc: "測定聽頻範圍（20-20kHz）；音調（頻率）、響度（振幅）與音品；聲強級（分貝 dB）與噪音影響 [2]" },
+                        // --- 第1課：靜電學 (Electrostatics) ---
+            "4.1.1": { section: "Elec", topic: "電荷", desc: "檢測兩種電荷及吸力/斥力；以電子轉移闡釋起電過程 [383, 4.1.1]" },
+            "4.1.2": { section: "Elec", topic: "靜電力", desc: "應用庫倫定律解決點電荷間的受力問題 [383, 4.1.2]" },
+            "4.1.3": { section: "Elec", topic: "電場", desc: "定義電場強度 E；描述點電荷與平行板間的電場；以場力線表達電場 [383, 4.1.3]" },
+        
+            // --- 第2課：電流、電壓與電阻 (Current, Voltage and Resistance) ---
+            "4.2.1": { section: "Elec", topic: "電流", desc: "定義電流為電荷流動率 I=Q/t；認識電流方向協定 [383, 4.2.1]" },
+            "4.2.2": { section: "Elec", topic: "電壓", desc: "定義電動勢 (e.m.f.) 與電勢差 (p.d.)；描述電路中的能量變換 [383, 4.2.2]" },
+            "4.2.3": { section: "Elec", topic: "電阻", desc: "定義電阻 R=V/I；量度燈泡及二極管的 V-I 特性；定義電阻率；描述温度對電阻的影響 [383, 4.2.3]" },
+            "4.2.4": { section: "Elec", topic: "電阻器網絡", desc: "推導並應用串聯與並聯電路的合成電阻規律；比較網絡中各元件的電壓及電流 [383, 4.2.4]" },
+            "4.2.5": { section: "Elec", topic: "電功率", desc: "應用 P=VI 解決電路問題；檢測電流通過導體時的熱效應 [383, 4.2.5]" },
+        
+            // --- 第3課：實際電路 (Practical Circuits) ---
+            "4.3.1": { section: "Elec", topic: "分析電路", desc: "應用分壓器 (Potential Divider) 概念解決簡單電路問題 [383, 4.3.1]" },
+            "4.3.2": { section: "Elec", topic: "實際儀表與電池", desc: "認識安培計及伏特計的負載效應；連繫電源電動勢、端電壓與內電阻 [383, 4.3.2]" },
+        
+            // --- 第4課：家居電學 (Domestic Electricity) ---
+            "4.4.1": { section: "Elec", topic: "能量消耗", desc: "以千瓦特小時 (kWh) 計算電能消耗及其費用 [383, 4.4.1]" },
+            "4.4.2": { section: "Elec", topic: "安全措施", desc: "理解室內佈線、保險絲、接地與三腳插頭的作用及選擇原則 [383, 4.4.2]" },
+            "4.4.3": { section: "Elec", topic: "交流電 (Ext)", desc: "定義交流電方均根值 (r.m.s.)；連繫方均根值與峯值 (Peak Value) [383, 4.4.3]" },
+        
+            // --- 第5課：磁 場 (Magnetic Field) ---
+            "4.5.1": { section: "Elec", topic: "磁力和磁場", desc: "檢測磁鐵磁場圖樣；以場力線表達磁場 [383, 4.5.1]" },
+            "4.5.2": { section: "Elec", topic: "電流磁效應", desc: "檢測長直導線及螺線管磁場圖樣；應用 B=μ₀I/2πr 及 B=μ₀NI/l 公式解決問題 [383, 4.5.2]" },
+        
+            // --- 第6課：磁場產生的力 (Magnetic Force) ---
+            "4.6.1": { section: "Elec", topic: "作用於載流導體的磁力", desc: "測定磁力方向；應用 F = BIl sin θ 公式計算受力 [383, 4.6.1]" },
+            "4.6.2": { section: "Elec", topic: "直流電動機", desc: "描述直流電動機結構及換向器 (Commutator) 的運作原理 [383, 4.6.2]" },
+            "4.6.3": { section: "Elec", topic: "洛倫茲力 (Ext)", desc: "處理載流平行導線間的作用力；應用 F=Bqv sin θ 解決電荷在磁場中運動問題 [383, 4.6.3]" },
+        
+            // --- 第7課：電磁感應 (Electromagnetic Induction) ---
+            "4.7.1": { section: "Elec", topic: "感生電動勢", desc: "檢測感生電流；應用楞次定律 (Lenz's Law) 判定感生電流方向 [383, 4.7.1]" },
+            "4.7.2": { section: "Elec", topic: "電磁感應應用", desc: "描述發電機運作；討論渦電流 (Eddy Current) 的產生及其應用 [383, 4.7.2]" },
+            "4.7.3": { section: "Elec", topic: "法拉第定律 (Ext)", desc: "定義磁通量 Φ=BA cos θ；應用法拉第定律 ε = -N(ΔΦ/Δt) 計算感生電動勢 [383, 4.7.3]" },
+        
+            // --- 第8課：變壓器及輸電 (Transformers and Power Transmission - Ext) ---
+            "4.8.1": { section: "Elec", topic: "變壓器", desc: "描述變壓器結構；應用 Vp/Vs = Np/Ns 公式；討論提高效率的方法 [383, 4.8.1]" },
+            "4.8.2": { section: "Elec", topic: "輸 電", desc: "討論以高壓交流電傳輸電能的好處；描述網電系統的升壓及降壓過程 [383, 4.8.2]" },
+                        // --- 第1課：輻射與放射現象 (Radiation and Radioactivity) ---
+            "5.1.1": { section: "Rad", topic: "致電離輻射與X射線", desc: "認識X射線性質及產生原理（高速電子撞擊重金屬靶）；討論X射線用途 [383, 5.1.1]" },
+            "5.1.2": { section: "Rad", topic: "核輻射", desc: "比較 α、β 和 γ 輻射的本質、穿透力、致電離能力及在電磁場中的偏轉；使用蓋革-彌勒計數器探測輻射 [383, 5.1.2]" },
+            "5.1.3": { section: "Rad", topic: "輻射安全", desc: "定義有效劑量單位希沃特 (Sv)；討論致電離輻射的健康風險及減少吸收劑量的安全措施 [383, 5.1.3]" },
+        
+            // --- 第2課：原子結構與放射衰變 (Atomic Structure and Radioactive Decay) ---
+            "5.2.1": { section: "Rad", topic: "原子模型", desc: "描述原子結構；定義原子序、質量數及同位素；以符號表示核素 [383, 5.2.1]" },
+            "5.2.2": { section: "Rad", topic: "放射衰變", desc: "寫出 α、β、γ 衰變方程；應用 N = N₀e⁻ᵏᵗ 解決衰變問題；定義半衰期並連繫衰變常數 [383, 5.2.2]" },
+            "5.2.3": { section: "Rad", topic: "放射性同位素的應用", desc: "討論同位素作為示蹤物 (Tracer) 及在碳-14定年法等領域的實際應用 [383, 5.2.3]" },
+        
+            // --- 第3課：核 能 (Nuclear Energy) ---
+            "5.3.1": { section: "Rad", topic: "核裂變與核聚變", desc: "認識裂變中的連鎖反應及聚變（太陽能量來源）；了解核反應中的能量釋放原理 [383, 5.3.1]" },
+            "5.3.2": { section: "Rad", topic: "質能關係", desc: "應用 ΔE = Δmc² 計算核反應能量；使用原子質量單位 (u) 進行能量計算 [383, 5.3.2]" },
+            "5.3.3": { section: "Rad", topic: "核能發電", desc: "認識受控核裂變反應堆運作；討論核能作為能源的優點和缺點 [383, 5.3.3]" },
             
-// ==========================================
-// Elective Section Syllabus Details
-// ==========================================
-
-// --- Elective E3: Energy and Use of Energy (能量和能源的使用) ---
-"E3.1.1": { section: "E3", topic: "家用耗能電器", desc: "電能作為主要能源；家用電器能量轉換；定義最終能源效益；香港能源效益標籤計劃 (EELS) 的使用及計算 [1]" },
-"E3.1.2": { section: "E3", topic: "無火烹調", desc: "電熱平板爐、電磁爐和微波爐運作原理；炊具最終能源效益比較；優缺點討論及運作成本測定 [1]" },
-"E3.1.3": { section: "E3", topic: "抽熱", desc: "空調機與熱泵原理；定義製冷能力 (kW)；定義性能係數 COP；中央空調系統排放熱量的用途 [1]" },
-"E3.2.1": { section: "E3", topic: "電燈", desc: "描述白熾燈、氣體放電燈和 LED 運作原理；以原子能量改變闡釋光的放射；討論成本效益 [1]" },
-"E3.2.2": { section: "E3", topic: "量度亮度", desc: "定義光通量 (lm) 與照明度 (lux)；應用平方反比定律和朗伯餘弦定律；定義電燈效能 (lm/W) [1]" },
-"E3.3.1": { section: "E3", topic: "樓宇的能源效益", desc: "熱傳遞率方程應用；定義建築材料 U 值；定義及討論影響 OTTV 的因素；太陽隔熱膜的用途 [1]" },
-"E3.3.2": { section: "E3", topic: "交通工具的能源效益", desc: "電動車與混合動力車動力系統主要部件；比較電動車與化石燃料車的最終能源效益 [1]" },
-"E3.4.1": { section: "E3", topic: "能源與結合能", desc: "不可再生能源與可再生能源特徵；定義結合能 (eV)；核裂變反應堆原理；風力發電功率方程 P=1/2ηρAv³；太陽常數與太陽能電池 [2]" },
-"E3.4.2": { section: "E3", topic: "環境衝擊", desc: "能源提取與使用的社會衝擊；温室氣體對全球暖化的影響；分析香港不同燃料消耗量 [2]" },
-
-// --- Elective E4: Medical Physics (醫學物理學) ---
-"E4.1.1": { section: "E4", topic: "人類視覺", desc: "眼睛的視覺調節過程；視桿及視錐細胞的功能；光感細胞對光譜的反應及吸收曲線 [2]" },
-"E4.1.2": { section: "E4", topic: "視覺缺陷", desc: "定義透鏡焦強 (Dioptre)；眼睛近點與遠點；近視、遠視、散光及其糾正方法 [2]" },
-"E4.1.3": { section: "E4", topic: "光纖內窺鏡", desc: "內窺鏡運作原理與光纖特性；相干與非相干光纖管束造像；內窺鏡診斷的優點與限制 [2]" },
-"E4.2.1": { section: "E4", topic: "人類聽覺", desc: "中耳壓強增益功能；內耳對聲音反應；相對聲強級對數標度 (L = 10 log I/I₀)；等響曲線與噪音影響 [2]" },
-"E4.2.2": { section: "E4", topic: "超聲波醫學影像", desc: "壓電換能器運作原理；定義聲阻抗 (Z)；比較人體組織聲阻抗；應用反射聲強係數解決問題 [2]" },
-"E4.2.3": { section: "E4", topic: "超聲波掃描", desc: "A-掃描與 B-掃描運作及圖像闡釋；超聲波衰減與頻率關係；診斷的優點和限制 [2]" },
-"E4.3.1": { section: "E4", topic: "X射線成像", desc: "應用 I = I₀e⁻ᵐˣ 測定強度；線衰減係數與半值厚度；人工顯影劑（如鋇餐）的用途及風險 [2]" },
-"E4.3.2": { section: "E4", topic: "CT 掃描", desc: "電腦斷層造影掃描儀運作原理；圖像重建過程；比較 CT 與常規 X 射線圖像 [2]" },
-"E4.3.3": { section: "E4", topic: "放射性核素造影", desc: "放射性同位素作為示蹤物 (Tracer)；伽瑪攝影儀原理；定義生物半衰期；鑑定鍀-99m特性 [2]" },
-"E4.3.4": { section: "E4", topic: "輻射風險", desc: "致電離輻射成像的健康風險與安全措施；比較醫學診斷中不同輻射的有效劑量 [2]" }
+            // ==========================================
+            // Elective Section Syllabus Details
+            // ==========================================
+            
+            // --- Elective E3: Energy and Use of Energy (能量和能源的使用) ---
+            "E3.1.1": { section: "E3", topic: "家用耗能電器", desc: "電能作為主要能源；家用電器能量轉換；定義最終能源效益；香港能源效益標籤計劃 (EELS) 的使用及計算 [1]" },
+            "E3.1.2": { section: "E3", topic: "無火烹調", desc: "電熱平板爐、電磁爐和微波爐運作原理；炊具最終能源效益比較；優缺點討論及運作成本測定 [1]" },
+            "E3.1.3": { section: "E3", topic: "抽熱", desc: "空調機與熱泵原理；定義製冷能力 (kW)；定義性能係數 COP；中央空調系統排放熱量的用途 [1]" },
+            "E3.2.1": { section: "E3", topic: "電燈", desc: "描述白熾燈、氣體放電燈和 LED 運作原理；以原子能量改變闡釋光的放射；討論成本效益 [1]" },
+            "E3.2.2": { section: "E3", topic: "量度亮度", desc: "定義光通量 (lm) 與照明度 (lux)；應用平方反比定律和朗伯餘弦定律；定義電燈效能 (lm/W) [1]" },
+            "E3.3.1": { section: "E3", topic: "樓宇的能源效益", desc: "熱傳遞率方程應用；定義建築材料 U 值；定義及討論影響 OTTV 的因素；太陽隔熱膜的用途 [1]" },
+            "E3.3.2": { section: "E3", topic: "交通工具的能源效益", desc: "電動車與混合動力車動力系統主要部件；比較電動車與化石燃料車的最終能源效益 [1]" },
+            "E3.4.1": { section: "E3", topic: "能源與結合能", desc: "不可再生能源與可再生能源特徵；定義結合能 (eV)；核裂變反應堆原理；風力發電功率方程 P=1/2ηρAv³；太陽常數與太陽能電池 [2]" },
+            "E3.4.2": { section: "E3", topic: "環境衝擊", desc: "能源提取與使用的社會衝擊；温室氣體對全球暖化的影響；分析香港不同燃料消耗量 [2]" },
+            
+            // --- Elective E4: Medical Physics (醫學物理學) ---
+            "E4.1.1": { section: "E4", topic: "人類視覺", desc: "眼睛的視覺調節過程；視桿及視錐細胞的功能；光感細胞對光譜的反應及吸收曲線 [2]" },
+            "E4.1.2": { section: "E4", topic: "視覺缺陷", desc: "定義透鏡焦強 (Dioptre)；眼睛近點與遠點；近視、遠視、散光及其糾正方法 [2]" },
+            "E4.1.3": { section: "E4", topic: "光纖內窺鏡", desc: "內窺鏡運作原理與光纖特性；相干與非相干光纖管束造像；內窺鏡診斷的優點與限制 [2]" },
+            "E4.2.1": { section: "E4", topic: "人類聽覺", desc: "中耳壓強增益功能；內耳對聲音反應；相對聲強級對數標度 (L = 10 log I/I₀)；等響曲線與噪音影響 [2]" },
+            "E4.2.2": { section: "E4", topic: "超聲波醫學影像", desc: "壓電換能器運作原理；定義聲阻抗 (Z)；比較人體組織聲阻抗；應用反射聲強係數解決問題 [2]" },
+            "E4.2.3": { section: "E4", topic: "超聲波掃描", desc: "A-掃描與 B-掃描運作及圖像闡釋；超聲波衰減與頻率關係；診斷的優點和限制 [2]" },
+            "E4.3.1": { section: "E4", topic: "X射線成像", desc: "應用 I = I₀e⁻ᵐˣ 測定強度；線衰減係數與半值厚度；人工顯影劑（如鋇餐）的用途及風險 [2]" },
+            "E4.3.2": { section: "E4", topic: "CT 掃描", desc: "電腦斷層造影掃描儀運作原理；圖像重建過程；比較 CT 與常規 X 射線圖像 [2]" },
+            "E4.3.3": { section: "E4", topic: "放射性核素造影", desc: "放射性同位素作為示蹤物 (Tracer)；伽瑪攝影儀原理；定義生物半衰期；鑑定鍀-99m特性 [2]" },
+            "E4.3.4": { section: "E4", topic: "輻射風險", desc: "致電離輻射成像的健康風險與安全措施；比較醫學診斷中不同輻射的有效劑量 [2]" }
         };
 
         // ==========================================
@@ -980,4 +1033,5 @@ ${topicListText}
     </script>
 </body>
 </html>
+
 
