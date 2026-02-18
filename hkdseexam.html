@@ -364,7 +364,7 @@
                 }));
             }, [students, answerKeys, records, genHistory]);
 
-// [MODIFIED] 读取 Topic Info，同時抓取 detail
+// [MODIFIED V2] 讀取 Topic Info (支援 MC 和 LQ 的 Detail)
             const getTopicInfo = (year, paper, qNum) => {
                 let mapKeyMC = `${year}_${paper}`;
                 let mapKeyLQ = `${year}_${paper}`;
@@ -372,21 +372,36 @@
 
                 const mapDataMC = FULL_QUESTION_MAP[mapKeyMC];
                 const mapDataLQ = FULL_QUESTION_MAP[mapKeyLQ];
+                
                 let topicId = null;
-                let specificDetail = null; // 新增：用來存儲具體概念
+                let specificDetail = null; // 儲存具體弱點描述
 
+                // --- 處理 MC (Paper 1A 或 Paper 2 前8題) ---
                 if (paper === '1A' || (paper.includes('2_') && !isNaN(qNum) && parseInt(qNum) <= 8)) {
-                    if (mapDataMC && mapDataMC[qNum]) topicId = mapDataMC[qNum];
-                } else {
+                    if (mapDataMC && mapDataMC[qNum]) {
+                        const rawData = mapDataMC[qNum];
+                        
+                        // 判斷格式：是物件 {tid, detail} 還是純字串 "1.2.3"
+                        if (typeof rawData === 'object') {
+                            topicId = rawData.tid;
+                            specificDetail = rawData.detail;
+                        } else {
+                            topicId = rawData; // 舊格式，只有 ID
+                        }
+                    }
+                } 
+                // --- 處理 LQ (Paper 1B 或 Paper 2 LQ) ---
+                else {
                     if (Array.isArray(mapDataLQ)) {
                         const qItem = mapDataLQ.find(item => item.id === qNum);
                         if (qItem) {
                             topicId = qItem.tid;
-                            specificDetail = qItem.detail; // 新增：抓取 detail
+                            specificDetail = qItem.detail; // 讀取 LQ 的 detail
                         }
                     }
                 }
 
+                // 如果找不到 Topic ID，使用 Hash 算法隨機分配一個 (防止報錯)
                 if (!topicId) {
                     const ids = Object.keys(SYLLABUS_DATA);
                     const hash = String(qNum).split('').reduce((a,b)=>a+b.charCodeAt(0),0);
@@ -395,7 +410,7 @@
                 
                 const topicData = SYLLABUS_DATA[topicId] || { section: 'Gen', topic: `Topic ${topicId}`, desc: 'Unknown' };
                 
-                // 返回資料中包含 detail
+                // 返回完整的資訊
                 return { id: topicId, ...topicData, detail: specificDetail };
             };
 
@@ -1094,6 +1109,7 @@ ${weakConcepts.length > 0 ? weakConcepts.join('\n') : "(General practice on topi
     </script>
 </body>
 </html>
+
 
 
 
