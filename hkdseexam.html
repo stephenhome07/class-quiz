@@ -1834,9 +1834,11 @@
                 );
             };
 
-            const DashboardView = () => {
-                            // --- [新增] 年份篩選狀態 ---
+                        const DashboardView = () => {
                             const [yearFilter, setYearFilter] = useState('All');
+                            // --- [新增] 試卷部分篩選 ---
+                            const [partFilter, setPartFilter] = useState('MC'); // 預設為只看 MC
+
             
                             useEffect(() => {
                                 if (!dashStudent && students.length > 0) setDashStudent(students[0].id);
@@ -1925,10 +1927,29 @@
                         <div className="flex justify-between items-center mb-8">
                             <h2 className="text-3xl font-bold text-slate-800">📊 學生表現分析</h2>
                             <div className="flex gap-4">
-                                <select className="border p-2 rounded bg-white shadow-sm font-bold text-slate-600" 
-                                    value={dashStudent} onChange={e=>setDashStudent(e.target.value)}>
-                                    {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                                </select>
+                            <div className="flex gap-4">
+                                <div className="flex-1">
+                                    <select className="w-full border p-2 rounded bg-white shadow-sm font-bold text-slate-600" 
+                                        value={dashStudent} onChange={e=>setDashStudent(e.target.value)}>
+                                        {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                    </select>
+                                    
+                                    {/* --- [新增] 顯示該學生已完成的試卷 --- */}
+                                    {dashStudent && (
+                                        <div className="mt-1 text-[11px] text-slate-500 bg-slate-100 p-1.5 rounded flex flex-wrap gap-1">
+                                            <span className="font-bold">已完成:</span>
+                                            {records.filter(r => r.studentId === dashStudent).length > 0 
+                                                ? records.filter(r => r.studentId === dashStudent)
+                                                    .sort((a,b) => b.year - a.year)
+                                                    .map(r => <span key={r.id} className="bg-white px-1 rounded border">{r.year} {r.paper}</span>)
+                                                : <span>尚無紀錄</span>
+                                            }
+                                        </div>
+                                    )}
+                                    {/* -------------------------------------- */}
+                                </div>
+
+                                {/* 原本的年份選擇器 yearFilter... */}
                                 
           
                                 <select className="border p-2 rounded bg-white shadow-sm font-bold text-slate-600"
@@ -1936,6 +1957,15 @@
                                     <option value="All">全部年份</option>
                                     {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
                                 </select>
+                                
+                                {/* --- [新增] 試卷部分選擇器 --- */}
+                                <select className="border p-2 rounded bg-white shadow-sm font-bold text-blue-600"
+                                    value={partFilter} onChange={e=>setPartFilter(e.target.value)}>
+                                    <option value="MC">🔥 只計算 MC</option>
+                                    <option value="ALL">全部 (MC + LQ)</option>
+                                </select>
+                                {/* --------------------------- */}
+
                 
                           
                                 <div className="bg-slate-200 p-1 rounded flex">
@@ -2029,8 +2059,14 @@
                     const myRecs = records.filter(r => {
                         if (r.studentId !== dashStudent) return false;
                         if (yearFilter !== 'All' && r.year.toString() !== yearFilter.toString()) return false;
-                        return true;
+                        
+                        // --- [新增] 如果只要看 MC，就直接把 1B 卷踢掉 ---
+                        if (partFilter === 'MC' && r.paper === '1B') return false; 
+                        
+                        const isPaper1 = r.paper === '1A' || r.paper === '1B';
+                        return dashPaperType === 'core' ? isPaper1 : !isPaper1;
                     });
+                        
                     
                     const stats = {};
                     Object.keys(SYLLABUS_DATA).forEach(tid => {
@@ -2039,13 +2075,22 @@
 
                     myRecs.forEach(r => {
                         Object.entries(r.scores).forEach(([q, score]) => {
+                            
+                            // --- [新增] 1. 判斷這題是不是 MC ---
+                            const isMC = r.paper === '1A' || (r.paper.includes('2_') && !isNaN(q) && parseInt(q) <= 8);
+                            
+                            // --- [新增] 2. 如果設定為「只看MC」，且這題是 LQ (不是MC)，就跳過不計算 ---
+                            if (partFilter === 'MC' && !isMC) return; 
+                            // --------------------------------------------------------
+
                             const numericScore = parseFloat(score) || 0;
                             const info = getTopicInfo(r.year, r.paper, q);
                             const tid = info.id;
                             
                             let qMax = 0;
-                            if (r.paper === '1A' || (r.paper.includes('2_') && parseInt(q)<=8)) qMax = 1;
-                            else {
+                            if (isMC) { // 這裡可以順便簡化，直接用剛剛算好的 isMC
+                                qMax = 1;
+                            } else {
                                 let mapKeyLQ = r.paper === '1B' ? `${r.year}_1B` : `${r.year}_${r.paper}_LQ`;
                                 const lqList = FULL_QUESTION_MAP[mapKeyLQ];
                                 if(Array.isArray(lqList)) {
@@ -2061,7 +2106,9 @@
                         });
                     });
                     setStudentStats(stats);
-                }, [dashStudent, records, yearFilter]);
+                    
+                // --- [修改] 記得要在這裡把 partFilter 加入依賴陣列 ---
+                }, [dashStudent, records, yearFilter, partFilter]);
 
                 const toggleTopic = (tid) => {
                     if (selectedTopics.includes(tid)) setSelectedTopics(selectedTopics.filter(t => t !== tid));
@@ -2175,6 +2222,19 @@ ${weakConcepts.length > 0 ? weakConcepts.join('\n') : "(General practice on topi
                                     <select className="w-full border p-2 rounded text-sm bg-slate-50" value={dashStudent} onChange={e=>setDashStudent(e.target.value)}>
                                         {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                                     </select>
+                                    
+                                    {/* --- [新增] 顯示該學生已完成的試卷 --- */}
+                                    {dashStudent && (
+                                        <div className="mt-1 text-[10px] text-slate-500 bg-slate-100 p-1 rounded flex flex-wrap gap-1 max-h-16 overflow-y-auto">
+                                            {records.filter(r => r.studentId === dashStudent).length > 0 
+                                                ? records.filter(r => r.studentId === dashStudent)
+                                                    .sort((a,b) => b.year - a.year)
+                                                    .map(r => <span key={r.id} className="bg-white px-1 border">{r.year} {r.paper}</span>)
+                                                : <span>尚無紀錄</span>
+                                            }
+                                        </div>
+                                    )}
+                                    {/* -------------------------------------- */}
                                 </div>
                                 
                 
@@ -2357,6 +2417,7 @@ ${weakConcepts.length > 0 ? weakConcepts.join('\n') : "(General practice on topi
     </script>
 </body>
 </html>
+
 
 
 
