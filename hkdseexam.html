@@ -1839,8 +1839,11 @@
 
                 }, [records, dashStudent, dashPaperType, yearFilter, partFilter]);
 
-                const weakestList = subTopicStats.slice(0, 50); 
-                const strongestList = [...subTopicStats].reverse().slice(0, 50);
+                // 只有得分率低於 70% 的課題，才會進入紅色的「待改善」列表
+                const weakestList = subTopicStats.filter(t => (t.max > 0 && t.earned / t.max < 0.7)).slice(0, 50); 
+                
+                // 得分率達到 70% 或以上 (包含全對 100%) 的課題，進入綠色的「表現優異」列表
+                const strongestList = [...subTopicStats].reverse().filter(t => (t.max > 0 && t.earned / t.max >= 0.7)).slice(0, 50);
 
                 return (
                     <div className="max-w-6xl mx-auto space-y-6">
@@ -2183,6 +2186,7 @@ ${weakConcepts.length > 0 ? weakConcepts.join('\n') : "(General practice on topi
     </script>
 </body>
 </html>
+
 
 
 
