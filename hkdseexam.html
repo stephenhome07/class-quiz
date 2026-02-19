@@ -1476,7 +1476,9 @@
             const [genSettings, setGenSettings] = useState({ difficulty: 'medium', type: 'mixed', lang: 'zh' });
             const [selectedTopics, setSelectedTopics] = useState([]);
             const [generatedPrompt, setGeneratedPrompt] = useState('');
-
+            
+            // 👇 [新增這行] 預設弱點篩選標準為 60%
+            const [weakThreshold, setWeakThreshold] = useState(60);
             // Load & Save Data
             useEffect(() => {
                 const saved = localStorage.getItem('dsePhysV7');
@@ -2108,8 +2110,32 @@ ${weakConcepts.length > 0 ? weakConcepts.join('\n') : "(General practice on topi
                                 <div><label className="block text-xs font-bold text-slate-500 mb-1">難度 (Diff)</label><select className="w-full border p-2 rounded text-sm" value={genSettings.difficulty} onChange={e=>setGenSettings({...genSettings, difficulty:e.target.value})}><option value="low">低</option><option value="medium">中</option><option value="high">高</option></select></div>
                                 <div className="col-span-2"><label className="block text-xs font-bold text-slate-500 mb-1">題型 (Type)</label><select className="w-full border p-2 rounded text-sm" value={genSettings.type} onChange={e=>setGenSettings({...genSettings, type:e.target.value})}><option value="mixed">MC + LQ (混合)</option><option value="mc">MC Only</option><option value="lq">LQ Only</option></select></div>
                             </div>
+                            
                             <div className="flex-1 flex flex-col min-h-0 border rounded-lg bg-slate-50">
-                                <div className="p-2 border-b bg-slate-100 flex justify-between items-center"><span className="text-xs font-bold text-slate-600">選擇課題 ({selectedTopics.length})</span><button onClick={toggleAll} className="text-xs text-blue-600 hover:underline">{selectedTopics.length === sortedTopicKeys.length ? '全不選' : '全選'}</button></div>
+                                <div className="p-2 border-b bg-slate-100 flex justify-between items-center flex-wrap gap-2">
+                                    <span className="text-xs font-bold text-slate-600">選擇課題 ({selectedTopics.length})</span>
+                                    
+                                    <div className="flex items-center gap-1">
+                                        <div className="flex items-center bg-white border border-slate-300 rounded px-1 h-6">
+                                            <span className="text-[10px] text-slate-500 mr-1">低於</span>
+                                            <input type="number" className="w-7 text-center text-xs outline-none text-red-600 font-bold bg-transparent" value={weakThreshold} onChange={e=>setWeakThreshold(e.target.value)} />
+                                            <span className="text-[10px] text-slate-500">%</span>
+                                        </div>
+                                        <button onClick={() => {
+                                            const threshold = parseFloat(weakThreshold) / 100;
+                                            const weakTopics = sortedTopicKeys.filter(tid => {
+                                                const s = studentStats[tid];
+                                                return s && s.max > 0 && (s.earned / s.max) < threshold;
+                                            });
+                                            setSelectedTopics(weakTopics);
+                                        }} className="text-[10px] bg-red-100 text-red-600 px-2 h-6 rounded hover:bg-red-200 font-bold transition">
+                                            自動選弱點
+                                        </button>
+                                        <button onClick={toggleAll} className="text-[10px] text-blue-600 hover:underline border-l pl-2 ml-1 h-6">
+                                            {selectedTopics.length === sortedTopicKeys.length ? '全不選' : '全選全部'}
+                                        </button>
+                                    </div>
+                                </div>
                                 <div className="overflow-y-auto p-2 space-y-1 flex-1">
                                     {sortedTopicKeys.map(tid => {
                                         const s = studentStats[tid] || {earned:0, max:0};
@@ -2171,12 +2197,12 @@ ${weakConcepts.length > 0 ? weakConcepts.join('\n') : "(General practice on topi
                 <div className="flex min-h-screen">
                     <Sidebar />
                     <div className="flex-1 ml-64 p-8 overflow-y-auto h-screen">
-                        {view === 'students' && <StudentsView />}
-                        {view === 'input' && <InputView />}
-                        {view === 'dashboard' && <DashboardView />}
-                        {view === 'generate' && <GenerateView />}
-                        {view === 'history' && <HistoryView />}
-                        {view === 'data' && <DataView />}
+                        {view === 'students' && StudentsView()}
+                        {view === 'input' && InputView()}
+                        {view === 'dashboard' && DashboardView()}
+                        {view === 'generate' && GenerateView()}
+                        {view === 'history' && HistoryView()}
+                        {view === 'data' && DataView()}
                     </div>
                 </div>
             );
@@ -2188,6 +2214,7 @@ ${weakConcepts.length > 0 ? weakConcepts.join('\n') : "(General practice on topi
     </script>
 </body>
 </html>
+
 
 
 
