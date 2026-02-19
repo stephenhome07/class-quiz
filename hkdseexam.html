@@ -1453,6 +1453,7 @@
             const [view, setView] = useState('students');
             const [students, setStudents] = useState([]);
             const [records, setRecords] = useState([]);
+            // New State for Generation History
             const [genHistory, setGenHistory] = useState([]);
 
             const [answerKeys, setAnswerKeys] = useState(() => {
@@ -1477,7 +1478,7 @@
             const [selectedTopics, setSelectedTopics] = useState([]);
             const [generatedPrompt, setGeneratedPrompt] = useState('');
 
-            // Load & Save Data
+            // Load Data
             useEffect(() => {
                 const saved = localStorage.getItem('dsePhysV7');
                 if (saved) {
@@ -1485,16 +1486,23 @@
                         const data = JSON.parse(saved);
                         setStudents(data.students || []);
                         setRecords(data.records || []);
-                        setGenHistory(data.genHistory || []);
+                        setGenHistory(data.genHistory || []); // Load History
                         if(data.students?.[0]) setDashStudent(data.students[0].id);
                     } catch(e) {}
                 }
             }, []);
 
+            // Save Data
             useEffect(() => {
-                localStorage.setItem('dsePhysV7', JSON.stringify({ students, answerKeys, records, genHistory }));
+                localStorage.setItem('dsePhysV7', JSON.stringify({ 
+                    students, 
+                    answerKeys, 
+                    records,
+                    genHistory // Save History
+                }));
             }, [students, answerKeys, records, genHistory]);
 
+            // [MODIFIED V2] 讀取 Topic Info (支援 MC 和 LQ 的 Detail)
             const getTopicInfo = (year, paper, qNum) => {
                 let mapKeyMC = `${year}_${paper}`;
                 let mapKeyLQ = `${year}_${paper}`;
@@ -1504,31 +1512,34 @@
                 const mapDataLQ = FULL_QUESTION_MAP[mapKeyLQ];
                 
                 let topicId = null;
-                let specificDetail = null;
+                let specificDetail = null; // 儲存具體弱點描述
 
-                // 處理 MC
+                // --- 處理 MC (Paper 1A 或 Paper 2 前8題) ---
                 if (paper === '1A' || (paper.includes('2_') && !isNaN(qNum) && parseInt(qNum) <= 8)) {
                     if (mapDataMC && mapDataMC[qNum]) {
                         const rawData = mapDataMC[qNum];
+                        
+                        // 判斷格式：是物件 {tid, detail} 還是純字串 "1.2.3"
                         if (typeof rawData === 'object') {
                             topicId = rawData.tid;
                             specificDetail = rawData.detail;
                         } else {
-                            topicId = rawData;
+                            topicId = rawData; // 舊格式，只有 ID
                         }
                     }
                 } 
-                // 處理 LQ
+                // --- 處理 LQ (Paper 1B 或 Paper 2 LQ) ---
                 else {
                     if (Array.isArray(mapDataLQ)) {
                         const qItem = mapDataLQ.find(item => item.id === qNum);
                         if (qItem) {
                             topicId = qItem.tid;
-                            specificDetail = qItem.detail;
+                            specificDetail = qItem.detail; // 讀取 LQ 的 detail
                         }
                     }
                 }
 
+                // 如果找不到 Topic ID，使用 Hash 算法隨機分配一個 (防止報錯)
                 if (!topicId) {
                     const ids = Object.keys(SYLLABUS_DATA);
                     const hash = String(qNum).split('').reduce((a,b)=>a+b.charCodeAt(0),0);
@@ -1536,6 +1547,8 @@
                 }
                 
                 const topicData = SYLLABUS_DATA[topicId] || { section: 'Gen', topic: `Topic ${topicId}`, desc: 'Unknown' };
+                
+                // 返回完整的資訊
                 return { id: topicId, ...topicData, detail: specificDetail };
             };
 
@@ -1543,7 +1556,7 @@
                 <div className="w-64 bg-slate-900 text-white h-screen fixed left-0 top-0 flex flex-col shadow-2xl z-10">
                     <div className="p-6 border-b border-slate-700">
                         <h1 className="text-xl font-bold tracking-wider italic">PHY MASTER</h1>
-                        <div className="text-xs text-orange-400 mt-1">V7.4 Pro Edition</div>
+                        <div className="text-xs text-orange-400 mt-1">V7.3.0 History Added</div>
                     </div>
                     <nav className="p-4 space-y-2 flex-1 overflow-y-auto">
                         {[
@@ -1551,7 +1564,7 @@
                             {id: 'input', icon: '📝', label: '輸入成績'},
                             {id: 'dashboard', icon: '📊', label: '診斷報告'},
                             {id: 'generate', icon: '🤖', label: 'AI 練習生成'},
-                            {id: 'history', icon: '📜', label: '生成紀錄'},
+                            {id: 'history', icon: '📜', label: '生成紀錄'}, // New Item
                             {id: 'data', icon: '💾', label: '數據備份 (Data)'} 
                         ].map(item => (
                             <button key={item.id} onClick={() => setView(item.id)}
@@ -1564,12 +1577,20 @@
             );
 
             // ==========================
-            // Views
+            // Data Management View
             // ==========================
             const DataView = () => {
                 const fileInputRef = useRef(null);
+
                 const handleExport = () => {
-                    const data = { version: "7.4", timestamp: new Date().toISOString(), students, answerKeys, records, genHistory };
+                    const data = {
+                        version: "7.3.0",
+                        timestamp: new Date().toISOString(),
+                        students,
+                        answerKeys,
+                        records,
+                        genHistory // Included in backup
+                    };
                     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement("a");
@@ -1577,6 +1598,7 @@
                     a.download = `PHY_MASTER_BACKUP_${new Date().toISOString().slice(0,10)}.json`;
                     a.click();
                 };
+
                 const handleImport = (e) => {
                     const file = e.target.files[0];
                     if(!file) return;
@@ -1584,17 +1606,20 @@
                     reader.onload = (event) => {
                         try {
                             const data = JSON.parse(event.target.result);
-                            if(confirm(`確認從檔案導入數據嗎？\n這將覆蓋現有數據！`)) {
+                            if(confirm(`確認從檔案導入數據嗎？\n這將覆蓋現有數據！\n(包含 ${data.students?.length||0} 位學生, ${data.records?.length||0} 筆成績)`)) {
                                 if(data.students) setStudents(data.students);
                                 if(data.answerKeys) setAnswerKeys(prev => ({...prev, ...data.answerKeys}));
                                 if(data.records) setRecords(data.records);
-                                if(data.genHistory) setGenHistory(data.genHistory);
+                                if(data.genHistory) setGenHistory(data.genHistory); // Import History
                                 alert("✅ 導入成功！");
                             }
-                        } catch(err) { alert("❌ 檔案格式錯誤"); }
+                        } catch(err) {
+                            alert("❌ 檔案格式錯誤");
+                        }
                     };
                     reader.readAsText(file);
                 };
+
                 return (
                     <div className="max-w-4xl mx-auto bg-white p-8 rounded-xl shadow-sm">
                         <h2 className="text-2xl font-bold mb-6 text-slate-800">💾 數據備份與還原</h2>
@@ -1602,13 +1627,20 @@
                             <div className="p-6 border-2 border-dashed border-blue-200 rounded-xl bg-blue-50 flex flex-col items-center justify-center text-center">
                                 <span className="text-4xl mb-4">📤</span>
                                 <h3 className="text-xl font-bold text-slate-700 mb-2">導出數據 (Export)</h3>
-                                <button onClick={handleExport} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700 shadow transition">下載備份檔案</button>
+                                <p className="text-sm text-slate-500 mb-4">將所有學生、成績、答案設定及<b>生成紀錄</b>下載為 JSON 檔案。</p>
+                                <button onClick={handleExport} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700 shadow transition">
+                                    下載備份檔案
+                                </button>
                             </div>
+
                             <div className="p-6 border-2 border-dashed border-orange-200 rounded-xl bg-orange-50 flex flex-col items-center justify-center text-center">
                                 <span className="text-4xl mb-4">📥</span>
                                 <h3 className="text-xl font-bold text-slate-700 mb-2">導入數據 (Import)</h3>
+                                <p className="text-sm text-slate-500 mb-4">從電腦上傳 JSON 檔案以還原數據。</p>
                                 <input type="file" accept=".json" ref={fileInputRef} onChange={handleImport} className="hidden" />
-                                <button onClick={()=>fileInputRef.current.click()} className="bg-orange-500 text-white px-6 py-2 rounded-lg font-bold hover:bg-orange-600 shadow transition">選擇檔案上傳</button>
+                                <button onClick={()=>fileInputRef.current.click()} className="bg-orange-500 text-white px-6 py-2 rounded-lg font-bold hover:bg-orange-600 shadow transition">
+                                    選擇檔案上傳
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -1643,13 +1675,10 @@
 
             const InputView = () => {
                 const { studentId, year, paper } = inputForm;
-                
-                const safeRecords = Array.isArray(records) ? records : [];
-                const existingRecords = useMemo(() => {
-                     return safeRecords.filter(r => r.studentId === studentId)
-                        .sort((a, b) => (parseInt(b.year)||0) - (parseInt(a.year)||0) || (a.paper||"").localeCompare(b.paper||""));
-                }, [safeRecords, studentId]);
-
+            
+                const existingRecords = records
+                    .filter(r => r.studentId === studentId)
+                    .sort((a, b) => b.year - a.year || a.paper.localeCompare(b.paper)); 
                 const keyId = `${year}_${paper}`;
                 const sysKey = answerKeys[keyId] || {};
                 
@@ -1681,7 +1710,7 @@
                 const save = () => {
                     if(!studentId) return alert('請選擇學生');
                     const newRec = { ...inputForm, id: Date.now(), timestamp: new Date().toISOString() };
-                    const others = records.filter(r => !(r.studentId===studentId && r.year===year && r.paper===paper));
+                    const others = records.filter(r => !(r.studentId===studentId && r.year==year && r.paper===paper));
                     setRecords([...others, newRec]);
                     alert('✅ 已儲存');
                 };
@@ -1700,16 +1729,25 @@
                                     <option value="">-- 請選擇 --</option>
                                     {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                                 </select>
+
                                 {studentId && (
                                     <div className="mt-2 p-2 bg-slate-100 rounded text-[10px] text-slate-500 max-h-32 overflow-y-auto">
                                         <div className="font-bold mb-1">已輸入紀錄 ({existingRecords.length}):</div>
                                         <div className="flex flex-wrap gap-1">
-                                            {existingRecords.length === 0 ? <span>尚無紀錄</span> : 
-                                                existingRecords.map(r => <span key={r.id} className="bg-white border px-1 rounded shadow-sm text-slate-700">{r.year} {r.paper}</span>)
-                                            }
+                                            {existingRecords.length === 0 ? (
+                                                <span>尚無紀錄</span>
+                                            ) : (
+                                                existingRecords.map(r => (
+                                                    <span key={r.id} className="bg-white border px-1 rounded shadow-sm text-slate-700">
+                                                        {r.year} {r.paper}
+                                                    </span>
+                                                ))
+                                            )}
                                         </div>
                                     </div>
                                 )}
+                                {/* --------------------------------------- */}
+            
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-slate-500 mb-1">年份</label>
@@ -1720,8 +1758,14 @@
                             <div>
                                 <label className="block text-xs font-bold text-slate-500 mb-1">試卷</label>
                                 <select className="w-full border p-2 rounded font-bold" value={paper} onChange={e=>setInputForm({...inputForm, paper:e.target.value, answers:{}, scores:{}})}>
-                                    <optgroup label="Core (必修)"><option value="1A">Paper 1A (MC)</option><option value="1B">Paper 1B (LQ)</option></optgroup>
-                                    <optgroup label="Electives (選修)"><option value="2_E3">E3 - Energy (MC+LQ)</option><option value="2_E4">E4 - Medical (MC+LQ)</option></optgroup>
+                                    <optgroup label="Core (必修)">
+                                        <option value="1A">Paper 1A (MC)</option>
+                                        <option value="1B">Paper 1B (LQ)</option>
+                                    </optgroup>
+                                    <optgroup label="Electives (選修 Paper 2)">
+                                        <option value="2_E3">E3 - Energy (MC+LQ)</option>
+                                        <option value="2_E4">E4 - Medical (MC+LQ)</option>
+                                    </optgroup>
                                 </select>
                             </div>
                         </div>
@@ -1730,19 +1774,25 @@
                             <div className="mb-8">
                                 <h3 className="font-bold text-slate-600 mb-3 border-b pb-2">MC 部份 (Q1-{mcCount})</h3>
                                 {Object.keys(sysKey).length === 0 && <div className="text-red-500 text-xs mb-2">⚠ 注意：此年份/試卷尚未設定標準答案，系統無法自動評分。</div>}
-                                <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+                                <div className={`grid gap-3 ${paper==='1A'?'grid-cols-2 md:grid-cols-4':'grid-cols-2 md:grid-cols-4'}`}>
                                     {Array.from({length: mcCount}).map((_, i) => {
                                         const q = i+1;
                                         const myAns = inputForm.answers[q];
                                         const realAns = sysKey[q];
-                                        let statusClass = myAns && realAns ? (myAns===realAns ? "bg-green-50 border-green-300" : "bg-red-50 border-red-300") : "border-slate-200";
+                                        let statusClass = "border-slate-200";
+                                        if(myAns && realAns) statusClass = myAns===realAns ? "bg-green-50 border-green-300" : "bg-red-50 border-red-300";
 
                                         return (
                                             <div key={q} className={`p-2 border rounded flex flex-col ${statusClass}`}>
-                                                <div className="flex justify-between items-center mb-1"><span className="font-bold text-slate-500">Q{q}</span></div>
+                                                <div className="flex justify-between items-center mb-1">
+                                                    <span className="font-bold text-slate-500">Q{q}</span>
+                                                </div>
                                                 <div className="flex justify-between">
                                                     {['A','B','C','D'].map(opt => (
-                                                        <button key={opt} onClick={()=>toggleMC(q, opt)} className={`w-6 h-6 text-xs rounded font-bold ${myAns===opt?'bg-slate-800 text-white':'bg-white text-slate-400 border'}`}>{opt}</button>
+                                                        <button key={opt} onClick={()=>toggleMC(q, opt)} 
+                                                            className={`w-6 h-6 text-xs rounded font-bold ${myAns===opt?'bg-slate-800 text-white':'bg-white text-slate-400 border'}`}>
+                                                            {opt}
+                                                        </button>
                                                     ))}
                                                 </div>
                                             </div>
@@ -1763,164 +1813,233 @@
                                                     <span className="text-sm font-bold text-slate-700">Q{item.id}</span>
                                                     <span className="text-[10px] text-slate-400 bg-slate-100 px-1 rounded">/{item.max}</span>
                                                 </div>
-                                                <input type="number" className="border p-2 rounded text-center focus:ring-2 focus:ring-blue-500 outline-none" value={inputForm.scores[item.id] ?? ''} onChange={e => updateScore(item.id, e.target.value, item.max)} />
+                                                <input type="number" className="border p-2 rounded text-center focus:ring-2 focus:ring-blue-500 outline-none"
+                                                    value={inputForm.scores[item.id] ?? ''}
+                                                    onChange={e => updateScore(item.id, e.target.value, item.max)}
+                                                />
                                                 <span className="text-[9px] text-center text-slate-300 mt-1 truncate" title={item.tid}>{item.tid}</span>
                                             </div>
                                         ))}
                                     </div>
-                                ) : (<div className="text-sm text-yellow-600 bg-yellow-50 p-2 rounded">此年份 ({year}) 尚未載入詳細題目地圖。</div>)}
+                                ) : (
+                                    <div className="text-sm text-yellow-600 bg-yellow-50 p-2 rounded">
+                                        此年份 ({year}) 尚未載入詳細題目地圖。
+                                    </div>
+                                )}
                             </div>
                         )}
+
                         <button onClick={save} className="w-full mt-6 bg-slate-800 text-white py-3 rounded font-bold hover:bg-slate-700 shadow-lg">儲存成績</button>
                     </div>
                 );
             };
 
-            const DashboardView = () => {
-                const [yearFilter, setYearFilter] = useState('All');
-                const [partFilter, setPartFilter] = useState('MC');
+                        const DashboardView = () => {
+                            const [yearFilter, setYearFilter] = useState('All');
+                            // --- [新增] 試卷部分篩選 ---
+                            const [partFilter, setPartFilter] = useState('MC'); // 預設為只看 MC
 
-                useEffect(() => {
-                    if (!dashStudent && students.length > 0) setDashStudent(students[0].id);
-                }, [students, dashStudent]);
+            
+                            useEffect(() => {
+                                if (!dashStudent && students.length > 0) setDashStudent(students[0].id);
+                            }, [students, dashStudent]);
+            
+                            const subTopicStats = useMemo(() => {
+                                if(!dashStudent) return [];
+                                
+                                const myRecs = records.filter(r => {
+                                    if (r.studentId !== dashStudent) return false;
+                                    
+                                    if (yearFilter !== 'All' && r.year.toString() !== yearFilter.toString()) return false;
+                                    
+                                    const isPaper1 = r.paper === '1A' || r.paper === '1B';
+                                    return dashPaperType === 'core' ? isPaper1 : !isPaper1;
+                                });
+            
+                                const stats = {};
 
-                const subTopicStats = useMemo(() => {
-                    if(!dashStudent) return [];
-                    
-                    const myRecs = records.filter(r => {
-                        if (r.studentId !== dashStudent) return false;
-                        if (yearFilter !== 'All' && r.year.toString() !== yearFilter.toString()) return false;
-                        if (partFilter === 'MC' && r.paper === '1B') return false; 
-                        
-                        const isPaper1 = r.paper === '1A' || r.paper === '1B';
-                        return dashPaperType === 'core' ? isPaper1 : !isPaper1;
-                    });
 
-                    const stats = {};
+                    // 2. [補回缺失的邏輯] 計算分數
                     myRecs.forEach(r => {
                         const scoreData = r.scores || {};
-                        Object.entries(scoreData).forEach(([q, score]) => {
-                            const isMC = r.paper === '1A' || (r.paper.includes('2_') && !isNaN(q) && parseInt(q) <= 8);
-                            if (partFilter === 'MC' && !isMC) return; 
-
-                            const info = getTopicInfo(r.year, r.paper, q);
+                        Object.keys(scoreData).forEach(qNum => {
+                            const info = getTopicInfo(r.year, r.paper, qNum);
                             const tId = info.id;
                             
-                            if(!stats[tId]) stats[tId] = { id: tId, topic: info.topic, section: info.section, earned: 0, max: 0, count: 0 };
+                            // 初始化
+                            if(!stats[tId]) {
+                                stats[tId] = { 
+                                    id: tId, 
+                                    topic: info.topic, 
+                                    section: info.section, // 確保有 section
+                                    earned: 0, 
+                                    max: 0 
+                                };
+                            }
                             
-                            const earned = parseFloat(score) || 0;
+                            // 累加分數
+                            const earned = parseFloat(scoreData[qNum]) || 0;
+                            // 取得該題滿分 (MC 預設 1, LQ 查表)
                             let max = 1;
-                            if (!isMC) {
-                                let mapKeyLQ = r.paper === '1B' ? `${r.year}_1B` : `${r.year}_${r.paper}_LQ`;
-                                const qMap = FULL_QUESTION_MAP[mapKeyLQ];
+                            if(r.paper === '1B' || (r.paper.includes('2_') && isNaN(qNum))) {
+                                // LQ: 嘗試從 FULL_QUESTION_MAP 查找
+                                let mapKey = `${r.year}_${r.paper}`;
+                                if(r.paper.includes('2_')) mapKey += '_LQ';
+                                const qMap = FULL_QUESTION_MAP[mapKey];
                                 if(Array.isArray(qMap)) {
-                                    const qItem = qMap.find(i => i.id === q);
+                                    const qItem = qMap.find(i => i.id === qNum);
                                     if(qItem) max = qItem.max;
-                                    else max = 10;
-                                } else max = 10;
+                                }
                             }
                             
                             stats[tId].earned += earned;
                             stats[tId].max += max;
-                            stats[tId].count += 1;
                         });
                     });
 
+                    // 3. 過濾課題 ID 並排序
                     return Object.values(stats)
                         .filter(item => {
+                            // 判斷該課題是否為選修 (以 'E' 開頭，例如 E3.1.1)
                             const isElectiveTopic = item.id.toString().startsWith('E');
-                            return dashPaperType === 'elective' ? isElectiveTopic : !isElectiveTopic;
+                            
+                            if (dashPaperType === 'elective') {
+                                // 如果選了 Paper 2，只顯示 'E' 開頭的課題
+                                return isElectiveTopic;
+                            } else {
+                                // 如果選了 Core，只顯示非 'E' 開頭的課題
+                                return !isElectiveTopic;
+                            }
                         })
                         .sort((a,b) => {
                             const pctA = a.max > 0 ? (a.earned/a.max) : 0;
                             const pctB = b.max > 0 ? (b.earned/b.max) : 0;
-                            return pctA - pctB;
+                            return pctA - pctB; // 由低到高 (弱項在前)
                         });
 
-                }, [records, dashStudent, dashPaperType, yearFilter, partFilter]);
+                },[records, dashStudent, dashPaperType, yearFilter]);
 
                 const weakestList = subTopicStats.slice(0, 50); 
                 const strongestList = [...subTopicStats].reverse().slice(0, 50);
 
                 return (
-                    <div className="max-w-6xl mx-auto space-y-6">
-                        <div className="bg-white p-4 rounded-xl shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
-                            <h2 className="text-xl font-bold">📊 子課題診斷報告</h2>
-                            
-                            <div className="flex flex-wrap gap-4 items-center">
-                                <div className="flex flex-col gap-1">
-                                    <select className="border p-2 rounded bg-white shadow-sm font-bold text-slate-600" value={dashStudent} onChange={e=>setDashStudent(e.target.value)}>
-                                        {students.length === 0 && <option value="">無學生資料</option>}
+                    <div className="max-w-6xl mx-auto">
+                        <div className="flex justify-between items-center mb-8">
+                            <h2 className="text-3xl font-bold text-slate-800">📊 學生表現分析</h2>
+                            <div className="flex gap-4">
+                            <div className="flex gap-4">
+                                <div className="flex-1">
+                                    <select className="w-full border p-2 rounded bg-white shadow-sm font-bold text-slate-600" 
+                                        value={dashStudent} onChange={e=>setDashStudent(e.target.value)}>
                                         {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                                     </select>
+                                    
+                                    {/* --- [新增] 顯示該學生已完成的試卷 --- */}
                                     {dashStudent && (
-                                        <div className="text-[10px] text-slate-500 bg-slate-100 p-1 rounded flex flex-wrap gap-1 max-w-[200px]">
+                                        <div className="mt-1 text-[11px] text-slate-500 bg-slate-100 p-1.5 rounded flex flex-wrap gap-1">
                                             <span className="font-bold">已完成:</span>
-                                            {Array.from(new Set(records.filter(r => r.studentId === dashStudent).map(r => `${r.year} ${r.paper}`)))
-                                                .sort((a,b) => b.localeCompare(a))
-                                                .map(rp => <span key={rp} className="bg-white px-1 border">{rp}</span>)
+                                            {records.filter(r => r.studentId === dashStudent).length > 0 
+                                                ? records.filter(r => r.studentId === dashStudent)
+                                                    .sort((a,b) => b.year - a.year)
+                                                    .map(r => <span key={r.id} className="bg-white px-1 rounded border">{r.year} {r.paper}</span>)
+                                                : <span>尚無紀錄</span>
                                             }
                                         </div>
                                     )}
+                                    {/* -------------------------------------- */}
                                 </div>
+
+                                {/* 原本的年份選擇器 yearFilter... */}
                                 
-                                <select className="border p-2 rounded bg-white shadow-sm font-bold text-slate-600" value={yearFilter} onChange={e=>setYearFilter(e.target.value)}>
+          
+                                <select className="border p-2 rounded bg-white shadow-sm font-bold text-slate-600"
+                                    value={yearFilter} onChange={e=>setYearFilter(e.target.value)}>
                                     <option value="All">全部年份</option>
                                     {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
                                 </select>
                                 
-                                <select className="border p-2 rounded bg-white shadow-sm font-bold text-blue-600" value={partFilter} onChange={e=>setPartFilter(e.target.value)}>
-                                    <option value="MC">🔥 只計 MC</option>
+                                {/* --- [新增] 試卷部分選擇器 --- */}
+                                <select className="border p-2 rounded bg-white shadow-sm font-bold text-blue-600"
+                                    value={partFilter} onChange={e=>setPartFilter(e.target.value)}>
+                                    <option value="MC">🔥 只計算 MC</option>
                                     <option value="ALL">全部 (MC + LQ)</option>
                                 </select>
+                                {/* --------------------------- */}
 
-                                <div className="bg-slate-100 p-1 rounded-lg flex font-bold text-sm">
-                                    <button onClick={()=>setDashPaperType('core')} className={`px-4 py-2 rounded-md transition ${dashPaperType==='core'?'bg-white text-blue-600 shadow':'text-slate-400'}`}>Paper 1</button>
-                                    <button onClick={()=>setDashPaperType('elective')} className={`px-4 py-2 rounded-md transition ${dashPaperType==='elective'?'bg-white text-purple-600 shadow':'text-slate-400'}`}>Paper 2</button>
+                
+                          
+                                <div className="bg-slate-200 p-1 rounded flex">
+                                    <button onClick={()=>setDashPaperType('core')} 
+                                        className={`px-4 py-1 rounded font-bold text-sm ${dashPaperType==='core'?'bg-white shadow text-slate-800':'text-slate-500'}`}>
+                                        Core (Paper 1)
+                                    </button>
+                                    <button onClick={()=>setDashPaperType('elective')} 
+                                        className={`px-4 py-1 rounded font-bold text-sm ${dashPaperType==='elective'?'bg-white shadow text-slate-800':'text-slate-500'}`}>
+                                        Elective (Paper 2)
+                                    </button>
                                 </div>
                             </div>
                         </div>
 
                         {subTopicStats.length === 0 ? (
-                            <div className="p-12 text-center text-slate-400 bg-white rounded-xl">尚無符合此條件的數據。</div>
+                            <div className="text-center py-20 bg-white rounded-xl shadow-sm">
+                                <div className="text-6xl mb-4">📉</div>
+                                <h3 className="text-xl font-bold text-slate-400">尚無相關數據</h3>
+                                <p className="text-slate-400 mt-2">請先輸入 {dashPaperType === 'core' ? 'Paper 1' : 'Paper 2'} 的成績</p>
+                            </div>
                         ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-[70vh]">
-                                <div className="bg-white p-4 rounded-xl shadow-sm border-t-4 border-red-500 flex flex-col h-full">
-                                    <h3 className="font-bold text-lg mb-4 text-red-600 flex items-center gap-2 flex-shrink-0"><span className="text-2xl">⚠</span> 待改善 (Weakest)</h3>
-                                    <div className="stats-list space-y-3 flex-1">
-                                        {weakestList.map(t => (
-                                            <div key={t.id} className="p-3 bg-red-50 border border-red-100 rounded-lg flex justify-between items-center">
-                                                <div className="overflow-hidden">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="sub-topic-tag bg-white text-red-600 px-1 border border-red-200 rounded text-sm">{t.id}</span>
-                                                        <span className="font-bold text-slate-800 truncate">{t.topic}</span>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                {/* Weakest Topics */}
+                                <div className="bg-white p-6 rounded-xl shadow-sm border-t-4 border-red-400">
+                                    <h3 className="font-bold text-lg mb-4 flex items-center text-red-600">
+                                        <span className="mr-2">⚠</span> 急需改善課題 (Weakest)
+                                    </h3>
+                                    <div className="stats-list space-y-3">
+                                        {weakestList.map(item => {
+                                            const pct = Math.round((item.earned / item.max) * 100);
+                                            return (
+                                                <div key={item.id} className="relative pt-1">
+                                                    <div className="flex justify-between mb-1">
+                                                        <span className="text-xs font-bold text-slate-700">
+                                                            <span className="sub-topic-tag text-slate-400 mr-2">[{item.id}]</span>
+                                                            {item.topic}
+                                                        </span>
+                                                        <span className="text-xs font-bold text-red-500">{pct}%</span>
                                                     </div>
+                                                    <div className="overflow-hidden h-2 mb-1 text-xs flex rounded bg-red-100">
+                                                        <div style={{ width: `${pct}%` }} className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-red-500"></div>
+                                                    </div>
+                                                    <div className="text-[10px] text-slate-400 text-right">Score: {item.earned}/{item.max}</div>
                                                 </div>
-                                                <div className="text-right flex-shrink-0 ml-2">
-                                                    <div className="text-xl font-bold text-red-600">{((t.earned/t.max)*100).toFixed(0)}%</div>
-                                                    <div className="text-[10px] text-slate-400">{t.earned}/{t.max} 分</div>
-                                                </div>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 </div>
-                                <div className="bg-white p-4 rounded-xl shadow-sm border-t-4 border-green-500 flex flex-col h-full">
-                                    <h3 className="font-bold text-lg mb-4 text-green-600 flex items-center gap-2 flex-shrink-0"><span className="text-2xl">★</span> 表現優異 (Strongest)</h3>
-                                    <div className="stats-list space-y-3 flex-1">
-                                        {strongestList.map(t => (
-                                            <div key={t.id} className="p-3 bg-green-50 border border-green-100 rounded-lg flex justify-between items-center">
-                                                <div className="overflow-hidden">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="sub-topic-tag bg-white text-green-600 px-1 border border-green-200 rounded text-sm">{t.id}</span>
-                                                        <span className="font-bold text-slate-800 truncate">{t.topic}</span>
+
+                                {/* Strongest Topics */}
+                                <div className="bg-white p-6 rounded-xl shadow-sm border-t-4 border-green-400">
+                                    <h3 className="font-bold text-lg mb-4 flex items-center text-green-600">
+                                        <span className="mr-2">🏆</span> 表現優異課題 (Strongest)
+                                    </h3>
+                                    <div className="stats-list space-y-3">
+                                        {strongestList.map(item => {
+                                            const pct = Math.round((item.earned / item.max) * 100);
+                                            return (
+                                                <div key={item.id} className="relative pt-1">
+                                                    <div className="flex justify-between mb-1">
+                                                        <span className="text-xs font-bold text-slate-700">
+                                                            <span className="sub-topic-tag text-slate-400 mr-2">[{item.id}]</span>
+                                                            {item.topic}
+                                                        </span>
+                                                        <span className="text-xs font-bold text-green-600">{pct}%</span>
                                                     </div>
+                                                    <div className="overflow-hidden h-2 mb-1 text-xs flex rounded bg-green-100">
+                                                        <div style={{ width: `${pct}%` }} className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-green-500"></div>
+                                                    </div>
+                                                    <div className="text-[10px] text-slate-400 text-right">Score: {item.earned}/{item.max}</div>
                                                 </div>
-                                                <div className="text-right flex-shrink-0 ml-2">
-                                                    <div className="text-xl font-bold text-green-600">{((t.earned/t.max)*100).toFixed(0)}%</div>
-                                                    <div className="text-[10px] text-slate-400">{t.earned}/{t.max} 分</div>
-                                                </div>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             </div>
@@ -1931,8 +2050,8 @@
 
             const GenerateView = () => {
                 const [studentStats, setStudentStats] = useState({});
+                // --- [新增] 年份篩選狀態 ---
                 const [yearFilter, setYearFilter] = useState('All');
-                const [partFilter, setPartFilter] = useState('MC');
 
                 useEffect(() => {
                     if (!dashStudent) return;
@@ -1940,25 +2059,36 @@
                     const myRecs = records.filter(r => {
                         if (r.studentId !== dashStudent) return false;
                         if (yearFilter !== 'All' && r.year.toString() !== yearFilter.toString()) return false;
+                        
+                        // --- [新增] 如果只要看 MC，就直接把 1B 卷踢掉 ---
                         if (partFilter === 'MC' && r.paper === '1B') return false; 
-                        return true;
+                        
+                        const isPaper1 = r.paper === '1A' || r.paper === '1B';
+                        return dashPaperType === 'core' ? isPaper1 : !isPaper1;
                     });
+                        
                     
                     const stats = {};
-                    Object.keys(SYLLABUS_DATA).forEach(tid => { stats[tid] = { earned: 0, max: 0 }; });
+                    Object.keys(SYLLABUS_DATA).forEach(tid => {
+                        stats[tid] = { earned: 0, max: 0 };
+                    });
 
                     myRecs.forEach(r => {
-                        const scoreData = r.scores || {};
-                        Object.entries(scoreData).forEach(([q, score]) => {
+                        Object.entries(r.scores).forEach(([q, score]) => {
+                            
+                            // --- [新增] 1. 判斷這題是不是 MC ---
                             const isMC = r.paper === '1A' || (r.paper.includes('2_') && !isNaN(q) && parseInt(q) <= 8);
-                            if (partFilter === 'MC' && !isMC) return;
+                            
+                            // --- [新增] 2. 如果設定為「只看MC」，且這題是 LQ (不是MC)，就跳過不計算 ---
+                            if (partFilter === 'MC' && !isMC) return; 
+                            // --------------------------------------------------------
 
                             const numericScore = parseFloat(score) || 0;
                             const info = getTopicInfo(r.year, r.paper, q);
                             const tid = info.id;
                             
                             let qMax = 0;
-                            if (isMC) {
+                            if (isMC) { // 這裡可以順便簡化，直接用剛剛算好的 isMC
                                 qMax = 1;
                             } else {
                                 let mapKeyLQ = r.paper === '1B' ? `${r.year}_1B` : `${r.year}_${r.paper}_LQ`;
@@ -1976,47 +2106,55 @@
                         });
                     });
                     setStudentStats(stats);
+                    
+                // --- [修改] 記得要在這裡把 partFilter 加入依賴陣列 ---
                 }, [dashStudent, records, yearFilter, partFilter]);
 
-                const toggleTopic = (tid) => selectedTopics.includes(tid) ? setSelectedTopics(selectedTopics.filter(t => t !== tid)) : setSelectedTopics([...selectedTopics, tid]);
-                const toggleAll = () => selectedTopics.length === Object.keys(SYLLABUS_DATA).length ? setSelectedTopics([]) : setSelectedTopics(Object.keys(SYLLABUS_DATA));
+                const toggleTopic = (tid) => {
+                    if (selectedTopics.includes(tid)) setSelectedTopics(selectedTopics.filter(t => t !== tid));
+                    else setSelectedTopics([...selectedTopics, tid]);
+                };
 
+                const toggleAll = () => {
+                    if (selectedTopics.length === Object.keys(SYLLABUS_DATA).length) setSelectedTopics([]);
+                    else setSelectedTopics(Object.keys(SYLLABUS_DATA));
+                };
+
+               // [MODIFIED] 生成函數，加入 detail 處理
                 const generate = () => {
                     if (!dashStudent) return alert("請先選擇學生");
                     if (selectedTopics.length === 0) return alert("請至少選擇一個課題");
 
-                    const myRecs = records.filter(r => {
-                        if (r.studentId !== dashStudent) return false;
-                        if (yearFilter !== 'All' && r.year.toString() !== yearFilter.toString()) return false;
-                        if (partFilter === 'MC' && r.paper === '1B') return false; 
-                        return true;
-                    });
-                    
+                    // 1. 收集學生在選定課題中的「具體弱項 (Details)」
+                    const myRecs = records.filter(r => r.studentId === dashStudent);
                     let weakConcepts = [];
-                    myRecs.forEach(r => {
-                        const scoreData = r.scores || {};
-                        Object.entries(scoreData).forEach(([q, score]) => {
-                            const isMC = r.paper === '1A' || (r.paper.includes('2_') && !isNaN(q) && parseInt(q) <= 8);
-                            if (partFilter === 'MC' && !isMC) return;
 
+                    myRecs.forEach(r => {
+                        Object.entries(r.scores).forEach(([q, score]) => {
                             const info = getTopicInfo(r.year, r.paper, q);
+                            // 如果這題屬於我們選定的課題，且有具體描述 (detail)
                             if (selectedTopics.includes(info.id) && info.detail) {
                                 const earned = parseFloat(score) || 0;
-                                let max = 1;
-                                if (!isMC) {
-                                    let mapKeyLQ = r.paper === '1B' ? `${r.year}_1B` : `${r.year}_${r.paper}_LQ`;
-                                    const lqList = FULL_QUESTION_MAP[mapKeyLQ];
-                                    if(Array.isArray(lqList)) {
-                                        const qItem = lqList.find(i => i.id === q);
-                                        max = qItem ? qItem.max : 10;
-                                    } else max = 10;
+                                // 判斷滿分 (如果是 MC 則為 1，LQ 查表)
+                                let max = 1; 
+                                if (r.paper !== '1A' && !r.paper.includes('2_') || (r.paper.includes('2_') && isNaN(q))) {
+                                     // 簡易邏輯：如果能查到 max 就用，查不到預設 10 (防止除以0)
+                                     // 這裡為了簡化，只要拿不到滿分就算弱項
+                                     // 您可以根據需要調整閾值，例如得分率 < 50%
                                 }
-                                if (earned < max) weakConcepts.push(`- [${info.id}] ${info.detail}`);
+                                
+                                // 邏輯：如果這一題沒拿滿分 (或得分率低)，就將 detail 加入弱項列表
+                                // 這裡假設：只要有扣分，就值得複習
+                                // 若要嚴格一點，可以去查 map 裡的 max score，這裡簡化處理
+                                if (earned === 0 || (earned < 2)) { // 假設 MC錯 或 LQ 低分
+                                    weakConcepts.push(`- [${info.id}] ${info.detail}`);
+                                }
                             }
                         });
                     });
 
-                    weakConcepts = [...new Set(weakConcepts)].slice(0, 8);
+                    // 去除重複的 Weak Concepts
+                    weakConcepts = [...new Set(weakConcepts)].slice(0, 8); // 最多取 8 個具體弱點以免 Prompt 太長
 
                     const topicListText = selectedTopics.sort().map(tid => {
                         const s = studentStats[tid] || {earned:0, max:0};
@@ -2028,7 +2166,9 @@
                     const typeMap = { mc: 'Multiple Choice (MC) ONLY', lq: 'Long Questions (LQ) ONLY', mixed: 'Mixed (MC & LQ)' };
                     const langMap = { zh: 'Traditional Chinese (繁體中文)', en: 'English' };
 
-                    const prompt = `Role: Professional HKDSE Physics Tutor.
+                    // [MODIFIED] Prompt Template
+                    const prompt = `
+Role: Professional HKDSE Physics Tutor.
 Task: Create a practice exercise.
 
 **Configuration:**
@@ -2049,73 +2189,114 @@ ${weakConcepts.length > 0 ? weakConcepts.join('\n') : "(General practice on topi
 1. Generate distinctive questions for the selected topics.
 2. Integrate the "Specific Weakness Concepts" into the questions where natural.
 3. Provide a Marking Scheme with detailed explanations.
-4. If MC, provide 4 options (A,B,C,D).`.trim();
+4. If MC, provide 4 options (A,B,C,D).
+`.trim();
 
                     setGeneratedPrompt(prompt);
 
+                    // Save History
                     const sName = students.find(s=>s.id === dashStudent)?.name || "Unknown";
                     const newHistoryItem = {
-                        id: Date.now(), timestamp: new Date().toISOString(), studentId: dashStudent,
-                        studentName: sName, topics: selectedTopics, settings: genSettings,
+                        id: Date.now(),
+                        timestamp: new Date().toISOString(),
+                        studentId: dashStudent,
+                        studentName: sName,
+                        topics: selectedTopics,
+                        settings: genSettings,
                         note: `Weaknesses: ${weakConcepts.length} items targeted.`
                     };
                     setGenHistory(prev => [newHistoryItem, ...prev]);
-                    alert("Prompt 生成成功！\n已同時建立一條練習紀錄。");
+                    alert("Prompt 生成成功 (包含針對性弱點)！");
                 };
-
+                
                 const sortedTopicKeys = Object.keys(SYLLABUS_DATA).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
 
                 return (
                     <div className="max-w-6xl mx-auto flex gap-6 h-[85vh]">
                         <div className="w-5/12 bg-white p-5 rounded-xl shadow-sm flex flex-col h-full border border-slate-200">
-                            <h2 className="text-lg font-bold mb-4 flex items-center gap-2 text-slate-700">🛠️ 生成設定</h2>
+                            <h2 className="text-lg font-bold mb-4 flex items-center gap-2 text-slate-700">🛠️ 生成設定 (Settings)</h2>
+                            {/* --- 將原本的 grid-cols-2 改成 grid-cols-2 即可，它會自動換行 --- */}
                             <div className="grid grid-cols-2 gap-3 mb-4">
-                                <div className="col-span-2 flex gap-2">
-                                    <div className="flex-1">
-                                        <label className="block text-xs font-bold text-slate-500 mb-1">目標學生</label>
-                                        <select className="w-full border p-2 rounded text-sm bg-slate-50" value={dashStudent} onChange={e=>setDashStudent(e.target.value)}>
-                                            {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                                        </select>
-                                    </div>
-                                    <div className="flex-1">
-                                        <label className="block text-xs font-bold text-slate-500 mb-1">過濾年份</label>
-                                        <select className="w-full border p-2 rounded text-sm bg-slate-50" value={yearFilter} onChange={e=>setYearFilter(e.target.value)}>
-                                            <option value="All">全部</option>
-                                            {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
-                                        </select>
-                                    </div>
-                                    <div className="flex-1">
-                                        <label className="block text-xs font-bold text-slate-500 mb-1">過濾部分</label>
-                                        <select className="w-full border p-2 rounded text-sm text-blue-600 font-bold bg-slate-50" value={partFilter} onChange={e=>setPartFilter(e.target.value)}>
-                                            <option value="MC">🔥 只計MC</option>
-                                            <option value="ALL">MC+LQ</option>
-                                        </select>
-                                    </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">目標學生</label>
+                                    <select className="w-full border p-2 rounded text-sm bg-slate-50" value={dashStudent} onChange={e=>setDashStudent(e.target.value)}>
+                                        {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                    </select>
+                                    
+                                    {/* --- [新增] 顯示該學生已完成的試卷 --- */}
+                                    {dashStudent && (
+                                        <div className="mt-1 text-[10px] text-slate-500 bg-slate-100 p-1 rounded flex flex-wrap gap-1 max-h-16 overflow-y-auto">
+                                            {records.filter(r => r.studentId === dashStudent).length > 0 
+                                                ? records.filter(r => r.studentId === dashStudent)
+                                                    .sort((a,b) => b.year - a.year)
+                                                    .map(r => <span key={r.id} className="bg-white px-1 border">{r.year} {r.paper}</span>)
+                                                : <span>尚無紀錄</span>
+                                            }
+                                        </div>
+                                    )}
+                                    {/* -------------------------------------- */}
                                 </div>
-                                {dashStudent && (
-                                    <div className="col-span-2 text-[10px] text-slate-500 bg-slate-100 p-1.5 rounded flex flex-wrap gap-1">
-                                        <span className="font-bold">已完成:</span>
-                                        {Array.from(new Set(records.filter(r => r.studentId === dashStudent).map(r => `${r.year} ${r.paper}`)))
-                                            .sort((a,b) => b.localeCompare(a)).map(rp => <span key={rp} className="bg-white px-1 border">{rp}</span>)}
-                                    </div>
-                                )}
-                                <div><label className="block text-xs font-bold text-slate-500 mb-1">語言 (Lang)</label><select className="w-full border p-2 rounded text-sm" value={genSettings.lang} onChange={e=>setGenSettings({...genSettings, lang:e.target.value})}><option value="zh">繁體中文</option><option value="en">English</option></select></div>
-                                <div><label className="block text-xs font-bold text-slate-500 mb-1">難度 (Diff)</label><select className="w-full border p-2 rounded text-sm" value={genSettings.difficulty} onChange={e=>setGenSettings({...genSettings, difficulty:e.target.value})}><option value="low">低</option><option value="medium">中</option><option value="high">高</option></select></div>
-                                <div className="col-span-2"><label className="block text-xs font-bold text-slate-500 mb-1">題型 (Type)</label><select className="w-full border p-2 rounded text-sm" value={genSettings.type} onChange={e=>setGenSettings({...genSettings, type:e.target.value})}><option value="mixed">MC + LQ (混合)</option><option value="mc">MC Only</option><option value="lq">LQ Only</option></select></div>
+                                
+                
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">數據依據 (年份)</label>
+                                    <select className="w-full border p-2 rounded text-sm bg-slate-50" value={yearFilter} onChange={e=>setYearFilter(e.target.value)}>
+                                        <option value="All">全部年份綜合</option>
+                                        {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
+                                    </select>
+                                </div>
+                       
+
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">語言 (Lang)</label>
+                  
+                                    <select className="w-full border p-2 rounded text-sm" value={genSettings.lang} onChange={e=>setGenSettings({...genSettings, lang:e.target.value})}>
+                                        <option value="zh">繁體中文</option>
+                                        <option value="en">English</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">難度 (Difficulty)</label>
+                                    <select className="w-full border p-2 rounded text-sm" value={genSettings.difficulty} onChange={e=>setGenSettings({...genSettings, difficulty:e.target.value})}>
+                                        <option value="low">低 (基礎鞏固)</option>
+                                        <option value="medium">中 (DSE 標準)</option>
+                                        <option value="high">高 (5** 挑戰)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">題型 (Type)</label>
+                                    <select className="w-full border p-2 rounded text-sm" value={genSettings.type} onChange={e=>setGenSettings({...genSettings, type:e.target.value})}>
+                                        <option value="mixed">MC + LQ (混合)</option>
+                                        <option value="mc">MC Only</option>
+                                        <option value="lq">LQ Only</option>
+                                    </select>
+                                </div>
                             </div>
                             <div className="flex-1 flex flex-col min-h-0 border rounded-lg bg-slate-50">
-                                <div className="p-2 border-b bg-slate-100 flex justify-between items-center"><span className="text-xs font-bold text-slate-600">選擇課題 ({selectedTopics.length})</span><button onClick={toggleAll} className="text-xs text-blue-600 hover:underline">{selectedTopics.length === sortedTopicKeys.length ? '全不選' : '全選'}</button></div>
+                                <div className="p-2 border-b bg-slate-100 flex justify-between items-center">
+                                    <span className="text-xs font-bold text-slate-600">選擇課題 ({selectedTopics.length})</span>
+                                    <button onClick={toggleAll} className="text-xs text-blue-600 hover:underline">{selectedTopics.length === sortedTopicKeys.length ? '全不選' : '全選'}</button>
+                                </div>
                                 <div className="overflow-y-auto p-2 space-y-1 flex-1">
                                     {sortedTopicKeys.map(tid => {
                                         const s = studentStats[tid] || {earned:0, max:0};
                                         const hasData = s.max > 0;
                                         const pct = hasData ? Math.round((s.earned / s.max) * 100) : 0;
-                                        let scoreColor = hasData ? (pct < 40 ? 'text-red-500 font-bold' : pct < 70 ? 'text-yellow-600 font-bold' : 'text-green-600 font-bold') : 'text-slate-400';
+                                        let scoreColor = 'text-slate-400';
+                                        if (hasData) {
+                                            if (pct < 40) scoreColor = 'text-red-500 font-bold';
+                                            else if (pct < 70) scoreColor = 'text-yellow-600 font-bold';
+                                            else scoreColor = 'text-green-600 font-bold';
+                                        }
+
                                         return (
                                             <label key={tid} className="flex items-center gap-2 p-2 hover:bg-white rounded cursor-pointer border border-transparent hover:border-slate-200">
                                                 <input type="checkbox" checked={selectedTopics.includes(tid)} onChange={() => toggleTopic(tid)} className="w-4 h-4 rounded text-blue-600" />
                                                 <div className="flex-1 min-w-0">
-                                                    <div className="flex justify-between items-center"><span className="text-xs font-mono font-bold text-slate-700">{tid}</span><span className={`text-xs ${scoreColor}`}>{hasData ? `${pct}%` : '--'}</span></div>
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-xs font-mono font-bold text-slate-700">{tid}</span>
+                                                        <span className={`text-xs ${scoreColor}`}>{hasData ? `${pct}%` : '--'}</span>
+                                                    </div>
                                                     <div className="text-xs text-slate-500 truncate">{SYLLABUS_DATA[tid].topic}</div>
                                                 </div>
                                             </label>
@@ -2127,31 +2308,85 @@ ${weakConcepts.length > 0 ? weakConcepts.join('\n') : "(General practice on topi
                         </div>
                         <div className="flex-1 bg-white p-6 rounded-xl shadow-sm h-full flex flex-col border border-slate-200">
                             <h3 className="font-bold text-slate-700 mb-2">📝 生成結果 (Prompt Output)</h3>
-                            <textarea className="flex-1 w-full bg-slate-50 border p-4 rounded-lg font-mono text-sm resize-none outline-none" value={generatedPrompt} readOnly placeholder="請在左側選擇並點擊「生成」..."></textarea>
+                            <textarea className="flex-1 w-full bg-slate-50 border p-4 rounded-lg font-mono text-sm resize-none outline-none" value={generatedPrompt} readOnly placeholder="請在左側選擇課題與設定，然後點擊「生成 Prompt」..."></textarea>
                             <button onClick={()=>{navigator.clipboard.writeText(generatedPrompt); alert("已複製!")}} className="mt-4 py-3 bg-slate-800 text-white rounded-lg hover:bg-slate-700 font-bold flex justify-center gap-2">📋 複製並貼給 AI</button>
                         </div>
                     </div>
                 );
             };
 
+            // ==========================
+            // NEW: History View
+            // ==========================
             const HistoryView = () => {
-                const updateNote = (id, newNote) => setGenHistory(prev => prev.map(item => item.id === id ? { ...item, note: newNote } : item));
-                const deleteHistory = (id) => { if(confirm("確定刪除此紀錄?")) setGenHistory(prev => prev.filter(item => item.id !== id)); };
+                const updateNote = (id, newNote) => {
+                    setGenHistory(prev => prev.map(item => item.id === id ? { ...item, note: newNote } : item));
+                };
+
+                const deleteHistory = (id) => {
+                    if(confirm("確定刪除此紀錄?")) {
+                        setGenHistory(prev => prev.filter(item => item.id !== id));
+                    }
+                };
+
                 return (
                     <div className="max-w-6xl mx-auto bg-white p-8 rounded-xl shadow-sm min-h-[80vh]">
-                        <h2 className="text-2xl font-bold mb-6 text-slate-800 flex items-center gap-2">📜 練習生成紀錄</h2>
-                        {genHistory.length === 0 ? (<div className="text-center py-20 text-slate-400 bg-slate-50 rounded-lg">尚未生成任何練習。</div>) : (
+                        <h2 className="text-2xl font-bold mb-6 text-slate-800 flex items-center gap-2">📜 練習生成紀錄 (History)</h2>
+                        
+                        {genHistory.length === 0 ? (
+                            <div className="text-center py-20 text-slate-400 bg-slate-50 rounded-lg">
+                                尚未生成任何練習。前往「AI 練習生成」開始吧！
+                            </div>
+                        ) : (
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left border-collapse">
-                                    <thead><tr className="bg-slate-100 text-slate-600 text-sm"><th className="p-3">時間 / 學生</th><th className="p-3">設定</th><th className="p-3">課題</th><th className="p-3 w-1/3">備註</th><th className="p-3 text-right">操作</th></tr></thead>
+                                    <thead>
+                                        <tr className="bg-slate-100 text-slate-600 text-sm">
+                                            <th className="p-3 rounded-tl-lg">時間 / 學生</th>
+                                            <th className="p-3">設定</th>
+                                            <th className="p-3">課題 (Topics)</th>
+                                            <th className="p-3 w-1/3">備註 / 分數 (Note & Score)</th>
+                                            <th className="p-3 rounded-tr-lg text-right">操作</th>
+                                        </tr>
+                                    </thead>
                                     <tbody className="text-sm">
                                         {genHistory.map(item => (
                                             <tr key={item.id} className="border-b border-slate-100 hover:bg-slate-50">
-                                                <td className="p-3 align-top"><div className="font-bold text-slate-800">{new Date(item.timestamp).toLocaleDateString()}</div><div className="text-xs text-slate-400">{new Date(item.timestamp).toLocaleTimeString()}</div><div className="mt-1 text-blue-600 font-bold">{item.studentName}</div></td>
-                                                <td className="p-3 align-top"><div className="flex flex-col gap-1"><span className="bg-gray-200 text-gray-700 px-2 py-0.5 rounded text-xs w-fit">{item.settings.difficulty}</span><span className="bg-gray-200 text-gray-700 px-2 py-0.5 rounded text-xs w-fit">{item.settings.type}</span></div></td>
-                                                <td className="p-3 align-top"><div className="flex flex-wrap gap-1">{item.topics.map(t => <span key={t} className="border border-slate-300 px-1 rounded text-xs font-mono">{t}</span>)}</div></td>
-                                                <td className="p-3 align-top"><textarea className="w-full border border-blue-200 bg-blue-50 p-2 rounded text-xs focus:ring-1 focus:ring-blue-500 outline-none resize-none" rows="3" value={item.note || ''} onChange={(e) => updateNote(item.id, e.target.value)}></textarea></td>
-                                                <td className="p-3 align-top text-right"><button onClick={() => deleteHistory(item.id)} className="text-slate-400 hover:text-red-500 p-2">✕</button></td>
+                                                <td className="p-3 align-top">
+                                                    <div className="font-bold text-slate-800">{new Date(item.timestamp).toLocaleDateString()}</div>
+                                                    <div className="text-xs text-slate-400">{new Date(item.timestamp).toLocaleTimeString()}</div>
+                                                    <div className="mt-1 text-blue-600 font-bold">{item.studentName}</div>
+                                                </td>
+                                                <td className="p-3 align-top">
+                                                    <div className="flex flex-col gap-1">
+                                                        <span className="bg-gray-200 text-gray-700 px-2 py-0.5 rounded text-xs w-fit">{item.settings.difficulty}</span>
+                                                        <span className="bg-gray-200 text-gray-700 px-2 py-0.5 rounded text-xs w-fit">{item.settings.type}</span>
+                                                        <span className="bg-gray-200 text-gray-700 px-2 py-0.5 rounded text-xs w-fit">{item.settings.lang}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="p-3 align-top">
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {item.topics.map(t => (
+                                                            <span key={t} className="border border-slate-300 px-1 rounded text-xs font-mono" title={SYLLABUS_DATA[t]?.topic}>
+                                                                {t}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </td>
+                                                <td className="p-3 align-top">
+                                                    <textarea 
+                                                        className="w-full border border-blue-200 bg-blue-50 p-2 rounded text-xs focus:ring-1 focus:ring-blue-500 outline-none resize-none"
+                                                        rows="3"
+                                                        placeholder="在此輸入分數或備註..."
+                                                        value={item.note || ''}
+                                                        onChange={(e) => updateNote(item.id, e.target.value)}
+                                                    ></textarea>
+                                                </td>
+                                                <td className="p-3 align-top text-right">
+                                                    <button onClick={() => deleteHistory(item.id)} className="text-slate-400 hover:text-red-500 p-2">
+                                                        ✕
+                                                    </button>
+                                                </td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -2176,10 +2411,12 @@ ${weakConcepts.length > 0 ? weakConcepts.join('\n') : "(General practice on topi
                 </div>
             );
         };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
     </script>
 </body>
 </html>
-
 
 
 
