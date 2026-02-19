@@ -1675,13 +1675,10 @@
 
             const InputView = () => {
                 const { studentId, year, paper } = inputForm;
-                
-                // --- [新增這段代碼] ---
-                // 找出這位學生已經輸入過的所有紀錄 (年份 + 試卷)
+            
                 const existingRecords = records
                     .filter(r => r.studentId === studentId)
-                    .sort((a, b) => b.year - a.year || a.paper.localeCompare(b.paper)); // 按年份倒序排列
-                // ---------------------
+                    .sort((a, b) => b.year - a.year || a.paper.localeCompare(b.paper)); 
                 const keyId = `${year}_${paper}`;
                 const sysKey = answerKeys[keyId] || {};
                 
@@ -1851,7 +1848,6 @@
                                 const myRecs = records.filter(r => {
                                     if (r.studentId !== dashStudent) return false;
                                     
-                                    // --- [新增] 年份篩選邏輯 ---
                                     if (yearFilter !== 'All' && r.year.toString() !== yearFilter.toString()) return false;
                                     
                                     const isPaper1 = r.paper === '1A' || r.paper === '1B';
@@ -1859,7 +1855,7 @@
                                 });
             
                                 const stats = {};
-// ... (中間計算分數的邏輯保持不變) ...
+
 
                     // 2. [補回缺失的邏輯] 計算分數
                     myRecs.forEach(r => {
@@ -1934,14 +1930,13 @@
                                     {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                                 </select>
                                 
-                                {/* --- [新增] 年份選擇器 --- */}
+          
                                 <select className="border p-2 rounded bg-white shadow-sm font-bold text-slate-600"
                                     value={yearFilter} onChange={e=>setYearFilter(e.target.value)}>
                                     <option value="All">全部年份</option>
                                     {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
                                 </select>
-                                {/* ----------------------- */}
-                                // ...
+                
                           
                                 <div className="bg-slate-200 p-1 rounded flex">
                                     <button onClick={()=>setDashPaperType('core')} 
@@ -2031,7 +2026,6 @@
                 useEffect(() => {
                     if (!dashStudent) return;
                     
-                    // --- [修改] 加入年份篩選邏輯 ---
                     const myRecs = records.filter(r => {
                         if (r.studentId !== dashStudent) return false;
                         if (yearFilter !== 'All' && r.year.toString() !== yearFilter.toString()) return false;
@@ -2040,7 +2034,6 @@
                     
                     const stats = {};
                     Object.keys(SYLLABUS_DATA).forEach(tid => {
-// ... (中間計算邏輯保持不變) ...
                         stats[tid] = { earned: 0, max: 0 };
                     });
 
@@ -2364,6 +2357,7 @@ ${weakConcepts.length > 0 ? weakConcepts.join('\n') : "(General practice on topi
     </script>
 </body>
 </html>
+
 
 
 
