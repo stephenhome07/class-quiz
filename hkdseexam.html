@@ -1448,22 +1448,32 @@
             
         };
 
-        const YEAR_OPTIONS = Array.from({length: 12}, (_, i) => 2025 - i);
+// ==========================================
+        // 👇 從這裡開始往下全部覆蓋 (保留您最上面的題庫設定) 👇
+        // ==========================================
+        const YEAR_OPTIONS = Array.from({length: 15}, (_, i) => 2026 - i); // 擴充年份涵蓋到 2012
 
-const Sidebar = () => {
+        // 建立全局狀態 Context
+        const AppContext = React.createContext();
+
+        // ==========================
+        // 視圖組件 Views
+        // ==========================
+        
+        const Sidebar = () => {
             const { view, setView } = React.useContext(AppContext);
             return (
                 <div className="w-64 bg-slate-900 text-white h-screen fixed left-0 top-0 flex flex-col shadow-2xl z-10">
                     <div className="p-6 border-b border-slate-700">
                         <h1 className="text-xl font-bold tracking-wider italic">PHY MASTER</h1>
-                        <div className="text-xs text-orange-400 mt-1">V8.0 Ultimate Edition</div>
+                        <div className="text-xs text-orange-400 mt-1">V8.1 Pro Edition</div>
                     </div>
                     <nav className="p-4 space-y-2 flex-1 overflow-y-auto">
                         {[
                             {id: 'students', icon: '👥', label: '學生管理'},
                             {id: 'input', icon: '📝', label: '輸入成績'},
                             {id: 'dashboard', icon: '📊', label: '診斷報告'},
-                            {id: 'scoreChart', icon: '📈', label: '分數趨勢與比較'}, // <--- 新增的比較圖表
+                            {id: 'scoreChart', icon: '📈', label: '分數趨勢與比較'}, 
                             {id: 'generate', icon: '🤖', label: 'AI 練習生成'},
                             {id: 'history', icon: '📜', label: '生成紀錄'},
                             {id: 'data', icon: '💾', label: '數據備份 (Data)'} 
@@ -1482,7 +1492,7 @@ const Sidebar = () => {
             const { students, setStudents, answerKeys, setAnswerKeys, records, setRecords, genHistory, setGenHistory } = React.useContext(AppContext);
             const fileInputRef = React.useRef(null);
             const handleExport = () => {
-                const data = { version: "8.0", timestamp: new Date().toISOString(), students, answerKeys, records, genHistory };
+                const data = { version: "8.1", timestamp: new Date().toISOString(), students, answerKeys, records, genHistory };
                 const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement("a");
@@ -1558,13 +1568,13 @@ const Sidebar = () => {
             );
         };
 
-        // --- 全新功能：分數趨勢與比較圖表 ---
+        // --- 修復過的圖表組件 (加入防崩潰機制) ---
         const ScoreChartView = () => {
-            const { students, records, getTopicInfo } = React.useContext(AppContext);
+            const { students, records } = React.useContext(AppContext);
             const [studentA, setStudentA] = React.useState('');
             const [studentB, setStudentB] = React.useState('');
-            const [paperFilter, setPaperFilter] = React.useState('ALL'); // ALL, P1, P2
-            const [partFilter, setPartFilter] = React.useState('MC'); // MC, ALL
+            const [paperFilter, setPaperFilter] = React.useState('ALL');
+            const [partFilter, setPartFilter] = React.useState('MC');
 
             React.useEffect(() => {
                 if (students.length > 0 && !studentA) setStudentA(students[0].id);
@@ -1573,31 +1583,37 @@ const Sidebar = () => {
             const calculateYearlyScores = (targetStudentId) => {
                 if (!targetStudentId) return {};
                 const yearStats = {};
-                YEAR_OPTIONS.forEach(y => yearStats[y] = { earned: 0, max: 0 });
 
                 const myRecs = records.filter(r => r.studentId === targetStudentId);
                 myRecs.forEach(r => {
-                    const isP1 = r.paper === '1A' || r.paper === '1B';
+                    const paperStr = r.paper || '';
+                    const isP1 = paperStr === '1A' || paperStr === '1B';
                     if (paperFilter === 'P1' && !isP1) return;
                     if (paperFilter === 'P2' && isP1) return;
 
                     Object.entries(r.scores || {}).forEach(([q, score]) => {
-                        const isMC = r.paper === '1A' || (r.paper.includes('2_') && !isNaN(q) && parseInt(q) <= 8);
+                        const isMC = paperStr === '1A' || (paperStr.includes('2_') && !isNaN(q) && parseInt(q) <= 8);
                         if (partFilter === 'MC' && !isMC) return;
 
                         const numericScore = parseFloat(score) || 0;
                         let qMax = 1;
                         if (!isMC) {
-                            let mapKeyLQ = r.paper === '1B' ? `${r.year}_1B` : `${r.year}_${r.paper}_LQ`;
-                            const lqList = FULL_QUESTION_MAP[mapKeyLQ];
-                            if(Array.isArray(lqList)) {
-                                const qItem = lqList.find(i => i.id === q);
-                                qMax = qItem ? qItem.max : 10;
+                            let mapKeyLQ = paperStr === '1B' ? `${r.year}_1B` : `${r.year}_${paperStr}_LQ`;
+                            if (typeof FULL_QUESTION_MAP !== 'undefined') {
+                                const lqList = FULL_QUESTION_MAP[mapKeyLQ];
+                                if(Array.isArray(lqList)) {
+                                    const qItem = lqList.find(i => i.id == q);
+                                    if (qItem) qMax = qItem.max;
+                                    else qMax = 10;
+                                } else qMax = 10;
                             } else qMax = 10;
                         }
 
-                        yearStats[r.year].earned += numericScore;
-                        yearStats[r.year].max += qMax;
+                        const y = parseInt(r.year);
+                        if (isNaN(y)) return;
+                        if (!yearStats[y]) yearStats[y] = { earned: 0, max: 0 };
+                        yearStats[y].earned += numericScore;
+                        yearStats[y].max += qMax;
                     });
                 });
                 return yearStats;
@@ -1606,8 +1622,13 @@ const Sidebar = () => {
             const statsA = calculateYearlyScores(studentA);
             const statsB = calculateYearlyScores(studentB);
 
-            // 準備圖表資料
-            const chartData = YEAR_OPTIONS.slice().reverse().map(year => {
+            // 動態整合所有出現過的年份，避免舊紀錄導致崩潰
+            const allYears = Array.from(new Set([
+                ...YEAR_OPTIONS,
+                ...records.map(r => parseInt(r.year))
+            ])).filter(y => !isNaN(y)).sort((a,b) => b - a);
+
+            const chartData = allYears.map(year => {
                 const a = statsA[year];
                 const b = statsB[year];
                 return {
@@ -1654,15 +1675,13 @@ const Sidebar = () => {
                             </div>
                         </div>
 
-                        {/* 圖表渲染區 */}
-                        <div className="mt-8 border-t pt-8">
-                            <div className="flex justify-center gap-6 mb-4">
+                        <div className="mt-8 border-t pt-8 overflow-x-auto">
+                            <div className="flex justify-center gap-6 mb-4 min-w-[600px]">
                                 {studentA && <div className="flex items-center gap-2"><div className="w-4 h-4 bg-blue-500 rounded"></div><span className="text-sm font-bold text-slate-600">{students.find(s=>s.id===studentA)?.name}</span></div>}
                                 {studentB && <div className="flex items-center gap-2"><div className="w-4 h-4 bg-purple-500 rounded"></div><span className="text-sm font-bold text-slate-600">{students.find(s=>s.id===studentB)?.name}</span></div>}
                             </div>
                             
-                            <div className="relative h-72 flex items-end gap-2 sm:gap-4 md:gap-6 lg:gap-8 justify-center pb-8 border-b-2 border-slate-300 mx-4">
-                                {/* Y 軸刻度線 */}
+                            <div className="relative h-72 flex items-end gap-2 sm:gap-4 md:gap-6 lg:gap-8 justify-center pb-8 border-b-2 border-slate-300 mx-4 min-w-[600px]">
                                 <div className="absolute left-0 top-0 w-full h-full flex flex-col justify-between text-[10px] text-slate-400 pointer-events-none pb-8">
                                     <div className="border-b border-dashed border-slate-200 w-full flex items-end"><span className="absolute -left-6">100%</span></div>
                                     <div className="border-b border-dashed border-slate-200 w-full flex items-end"><span className="absolute -left-6">75%</span></div>
@@ -1670,10 +1689,8 @@ const Sidebar = () => {
                                     <div className="border-b border-dashed border-slate-200 w-full flex items-end"><span className="absolute -left-6">25%</span></div>
                                 </div>
 
-                                {/* 長條圖本體 */}
                                 {chartData.map(d => (
                                     <div key={d.year} className="relative flex flex-col items-center group h-full justify-end z-10 w-12">
-                                        {/* Hover 提示框 */}
                                         <div className="absolute -top-12 bg-slate-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap z-20 pointer-events-none">
                                             {d.year}年<br/>
                                             {d.pctA !== null ? `${students.find(s=>s.id===studentA)?.name}: ${d.pctA}%` : '無紀錄'}
@@ -1681,14 +1698,12 @@ const Sidebar = () => {
                                         </div>
 
                                         <div className="flex items-end gap-1 w-full h-[200px]">
-                                            {/* Bar A */}
                                             {d.pctA !== null ? (
                                                 <div style={{height: `${d.pctA}%`}} className="chart-bar flex-1 bg-blue-500 rounded-t hover:bg-blue-400 relative">
                                                     <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[9px] font-bold text-blue-600">{d.pctA}</span>
                                                 </div>
                                             ) : <div className="flex-1 bg-transparent"></div>}
                                             
-                                            {/* Bar B */}
                                             {studentB && (
                                                 d.pctB !== null ? (
                                                     <div style={{height: `${d.pctB}%`}} className="chart-bar flex-1 bg-purple-500 rounded-t hover:bg-purple-400 relative">
@@ -1721,8 +1736,10 @@ const Sidebar = () => {
             const sysKey = answerKeys[keyId] || {};
             
             let lqConfig = null;
-            if (paper === '1B') lqConfig = FULL_QUESTION_MAP[`${year}_1B`];
-            else if (paper.includes('2_')) lqConfig = FULL_QUESTION_MAP[`${year}_${paper}_LQ`];
+            if (typeof FULL_QUESTION_MAP !== 'undefined') {
+                if (paper === '1B') lqConfig = FULL_QUESTION_MAP[`${year}_1B`];
+                else if (paper && paper.includes('2_')) lqConfig = FULL_QUESTION_MAP[`${year}_${paper}_LQ`];
+            }
 
             React.useEffect(() => {
                 if (!studentId && students.length > 0) setInputForm(prev => ({ ...prev, studentId: students[0].id }));
@@ -1744,14 +1761,14 @@ const Sidebar = () => {
             const save = () => {
                 if(!studentId) return alert('請選擇學生');
                 const newRec = { ...inputForm, id: Date.now(), timestamp: new Date().toISOString() };
-                const others = records.filter(r => !(r.studentId===studentId && r.year===year && r.paper===paper));
+                const others = records.filter(r => !(r.studentId===studentId && String(r.year)===String(year) && r.paper===paper));
                 setRecords([...others, newRec]);
                 alert('✅ 已儲存');
             };
 
-            const showMC = paper === '1A' || paper.includes('2_');
+            const showMC = paper === '1A' || (paper && paper.includes('2_'));
             const mcCount = paper === '1A' ? 33 : 8;
-            const showLQ = paper === '1B' || paper.includes('2_');
+            const showLQ = paper === '1B' || (paper && paper.includes('2_'));
 
             return (
                 <div className="max-w-5xl mx-auto bg-white p-8 rounded-xl shadow-sm">
@@ -1853,20 +1870,24 @@ const Sidebar = () => {
                 
                 const myRecs = records.filter(r => {
                     if (r.studentId !== dashStudent) return false;
-                    if (yearFilter !== 'All' && r.year.toString() !== yearFilter.toString()) return false;
-                    if (partFilter === 'MC' && r.paper === '1B') return false; 
-                    const isPaper1 = r.paper === '1A' || r.paper === '1B';
+                    if (yearFilter !== 'All' && String(r.year) !== String(yearFilter)) return false;
+                    
+                    const paperStr = r.paper || '';
+                    if (partFilter === 'MC' && paperStr === '1B') return false; 
+                    
+                    const isPaper1 = paperStr === '1A' || paperStr === '1B';
                     return dashPaperType === 'core' ? isPaper1 : !isPaper1;
                 });
 
                 const stats = {};
                 myRecs.forEach(r => {
+                    const paperStr = r.paper || '';
                     const scoreData = r.scores || {};
                     Object.entries(scoreData).forEach(([q, score]) => {
-                        const isMC = r.paper === '1A' || (r.paper.includes('2_') && !isNaN(q) && parseInt(q) <= 8);
+                        const isMC = paperStr === '1A' || (paperStr.includes('2_') && !isNaN(q) && parseInt(q) <= 8);
                         if (partFilter === 'MC' && !isMC) return; 
 
-                        const info = getTopicInfo(r.year, r.paper, q);
+                        const info = getTopicInfo(r.year, paperStr, q);
                         const tId = info.id;
                         
                         if(!stats[tId]) stats[tId] = { id: tId, topic: info.topic, section: info.section, earned: 0, max: 0, count: 0 };
@@ -1874,12 +1895,14 @@ const Sidebar = () => {
                         const earned = parseFloat(score) || 0;
                         let max = 1;
                         if (!isMC) {
-                            let mapKeyLQ = r.paper === '1B' ? `${r.year}_1B` : `${r.year}_${r.paper}_LQ`;
-                            const qMap = FULL_QUESTION_MAP[mapKeyLQ];
-                            if(Array.isArray(qMap)) {
-                                const qItem = qMap.find(i => i.id === q);
-                                if(qItem) max = qItem.max;
-                                else max = 10;
+                            let mapKeyLQ = paperStr === '1B' ? `${r.year}_1B` : `${r.year}_${paperStr}_LQ`;
+                            if (typeof FULL_QUESTION_MAP !== 'undefined') {
+                                const qMap = FULL_QUESTION_MAP[mapKeyLQ];
+                                if(Array.isArray(qMap)) {
+                                    const qItem = qMap.find(i => i.id == q);
+                                    if(qItem) max = qItem.max;
+                                    else max = 10;
+                                } else max = 10;
                             } else max = 10;
                         }
                         stats[tId].earned += earned;
@@ -1896,7 +1919,6 @@ const Sidebar = () => {
 
             }, [records, dashStudent, dashPaperType, yearFilter, partFilter]);
 
-            // 修改過濾邏輯：只顯示 <80% 的弱項 和 >=80% 的強項
             const weakestList = subTopicStats.filter(t => (t.max > 0 && t.earned / t.max < 0.8)).slice(0, 50); 
             const strongestList = [...subTopicStats].reverse().filter(t => (t.max > 0 && t.earned / t.max >= 0.8)).slice(0, 50);
 
@@ -1975,40 +1997,46 @@ const Sidebar = () => {
             const [studentStats, setStudentStats] = React.useState({});
             const [yearFilter, setYearFilter] = React.useState('All');
             const [partFilter, setPartFilter] = React.useState('MC');
-            const [weakThreshold, setWeakThreshold] = React.useState(60); // 新增自訂弱點門檻
+            const [weakThreshold, setWeakThreshold] = React.useState(60); 
 
             React.useEffect(() => {
                 if (!dashStudent) return;
                 
                 const myRecs = records.filter(r => {
                     if (r.studentId !== dashStudent) return false;
-                    if (yearFilter !== 'All' && r.year.toString() !== yearFilter.toString()) return false;
-                    if (partFilter === 'MC' && r.paper === '1B') return false; 
+                    if (yearFilter !== 'All' && String(r.year) !== String(yearFilter)) return false;
+                    const paperStr = r.paper || '';
+                    if (partFilter === 'MC' && paperStr === '1B') return false; 
                     return true;
                 });
                 
                 const stats = {};
-                Object.keys(SYLLABUS_DATA).forEach(tid => { stats[tid] = { earned: 0, max: 0 }; });
+                if (typeof SYLLABUS_DATA !== 'undefined') {
+                    Object.keys(SYLLABUS_DATA).forEach(tid => { stats[tid] = { earned: 0, max: 0 }; });
+                }
 
                 myRecs.forEach(r => {
+                    const paperStr = r.paper || '';
                     const scoreData = r.scores || {};
                     Object.entries(scoreData).forEach(([q, score]) => {
-                        const isMC = r.paper === '1A' || (r.paper.includes('2_') && !isNaN(q) && parseInt(q) <= 8);
+                        const isMC = paperStr === '1A' || (paperStr.includes('2_') && !isNaN(q) && parseInt(q) <= 8);
                         if (partFilter === 'MC' && !isMC) return;
 
                         const numericScore = parseFloat(score) || 0;
-                        const info = getTopicInfo(r.year, r.paper, q);
+                        const info = getTopicInfo(r.year, paperStr, q);
                         const tid = info.id;
                         
                         let qMax = 0;
                         if (isMC) {
                             qMax = 1;
                         } else {
-                            let mapKeyLQ = r.paper === '1B' ? `${r.year}_1B` : `${r.year}_${r.paper}_LQ`;
-                            const lqList = FULL_QUESTION_MAP[mapKeyLQ];
-                            if(Array.isArray(lqList)) {
-                                const qItem = lqList.find(i => i.id === q);
-                                qMax = qItem ? qItem.max : 10;
+                            let mapKeyLQ = paperStr === '1B' ? `${r.year}_1B` : `${r.year}_${paperStr}_LQ`;
+                            if (typeof FULL_QUESTION_MAP !== 'undefined') {
+                                const lqList = FULL_QUESTION_MAP[mapKeyLQ];
+                                if(Array.isArray(lqList)) {
+                                    const qItem = lqList.find(i => i.id == q);
+                                    qMax = qItem ? qItem.max : 10;
+                                } else qMax = 10;
                             } else qMax = 10;
                         }
                         if(stats[tid]) { stats[tid].earned += numericScore; stats[tid].max += qMax; }
@@ -2018,7 +2046,7 @@ const Sidebar = () => {
             }, [dashStudent, records, yearFilter, partFilter]);
 
             const toggleTopic = (tid) => selectedTopics.includes(tid) ? setSelectedTopics(selectedTopics.filter(t => t !== tid)) : setSelectedTopics([...selectedTopics, tid]);
-            const sortedTopicKeys = Object.keys(SYLLABUS_DATA).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+            const sortedTopicKeys = typeof SYLLABUS_DATA !== 'undefined' ? Object.keys(SYLLABUS_DATA).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })) : [];
             const toggleAll = () => selectedTopics.length === sortedTopicKeys.length ? setSelectedTopics([]) : setSelectedTopics(sortedTopicKeys);
 
             const generate = () => {
@@ -2027,28 +2055,32 @@ const Sidebar = () => {
 
                 const myRecs = records.filter(r => {
                     if (r.studentId !== dashStudent) return false;
-                    if (yearFilter !== 'All' && r.year.toString() !== yearFilter.toString()) return false;
-                    if (partFilter === 'MC' && r.paper === '1B') return false; 
+                    if (yearFilter !== 'All' && String(r.year) !== String(yearFilter)) return false;
+                    const paperStr = r.paper || '';
+                    if (partFilter === 'MC' && paperStr === '1B') return false; 
                     return true;
                 });
                 
                 let weakConcepts = [];
                 myRecs.forEach(r => {
+                    const paperStr = r.paper || '';
                     const scoreData = r.scores || {};
                     Object.entries(scoreData).forEach(([q, score]) => {
-                        const isMC = r.paper === '1A' || (r.paper.includes('2_') && !isNaN(q) && parseInt(q) <= 8);
+                        const isMC = paperStr === '1A' || (paperStr.includes('2_') && !isNaN(q) && parseInt(q) <= 8);
                         if (partFilter === 'MC' && !isMC) return;
 
-                        const info = getTopicInfo(r.year, r.paper, q);
+                        const info = getTopicInfo(r.year, paperStr, q);
                         if (selectedTopics.includes(info.id) && info.detail) {
                             const earned = parseFloat(score) || 0;
                             let max = 1;
                             if (!isMC) {
-                                let mapKeyLQ = r.paper === '1B' ? `${r.year}_1B` : `${r.year}_${r.paper}_LQ`;
-                                const lqList = FULL_QUESTION_MAP[mapKeyLQ];
-                                if(Array.isArray(lqList)) {
-                                    const qItem = lqList.find(i => i.id === q);
-                                    max = qItem ? qItem.max : 10;
+                                let mapKeyLQ = paperStr === '1B' ? `${r.year}_1B` : `${r.year}_${paperStr}_LQ`;
+                                if (typeof FULL_QUESTION_MAP !== 'undefined') {
+                                    const lqList = FULL_QUESTION_MAP[mapKeyLQ];
+                                    if(Array.isArray(lqList)) {
+                                        const qItem = lqList.find(i => i.id == q);
+                                        max = qItem ? qItem.max : 10;
+                                    } else max = 10;
                                 } else max = 10;
                             }
                             if (earned < max) weakConcepts.push(`- [${info.id}] ${info.detail}`);
@@ -2061,7 +2093,8 @@ const Sidebar = () => {
                 const topicListText = selectedTopics.sort().map(tid => {
                     const s = studentStats[tid] || {earned:0, max:0};
                     const pct = s.max > 0 ? Math.round((s.earned / s.max) * 100) + '%' : 'No Data';
-                    return `- [${tid}] ${SYLLABUS_DATA[tid].topic} (Score: ${pct})`;
+                    const topicName = typeof SYLLABUS_DATA !== 'undefined' ? SYLLABUS_DATA[tid].topic : tid;
+                    return `- [${tid}] ${topicName} (Score: ${pct})`;
                 }).join('\n');
 
                 const difficultyMap = { low: 'Foundation/Easy', medium: 'Standard HKDSE', high: 'Challenging/5**' };
@@ -2162,12 +2195,13 @@ ${weakConcepts.length > 0 ? weakConcepts.join('\n') : "(General practice on topi
                                     const hasData = s.max > 0;
                                     const pct = hasData ? Math.round((s.earned / s.max) * 100) : 0;
                                     let scoreColor = hasData ? (pct < 40 ? 'text-red-500 font-bold' : pct < 80 ? 'text-yellow-600 font-bold' : 'text-green-600 font-bold') : 'text-slate-400';
+                                    const topicName = typeof SYLLABUS_DATA !== 'undefined' ? SYLLABUS_DATA[tid].topic : tid;
                                     return (
                                         <label key={tid} className="flex items-center gap-2 p-2 hover:bg-white rounded cursor-pointer border border-transparent hover:border-slate-200">
                                             <input type="checkbox" checked={selectedTopics.includes(tid)} onChange={() => toggleTopic(tid)} className="w-4 h-4 rounded text-blue-600" />
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex justify-between items-center"><span className="text-xs font-mono font-bold text-slate-700">{tid}</span><span className={`text-xs ${scoreColor}`}>{hasData ? `${pct}%` : '--'}</span></div>
-                                                <div className="text-xs text-slate-500 truncate">{SYLLABUS_DATA[tid].topic}</div>
+                                                <div className="text-xs text-slate-500 truncate">{topicName}</div>
                                             </div>
                                         </label>
                                     );
@@ -2218,7 +2252,8 @@ ${weakConcepts.length > 0 ? weakConcepts.join('\n') : "(General practice on topi
         // 主應用程式 App
         // ==========================
         const App = () => {
-            const [view, setView] = React.useState('scoreChart'); // 預設跳到新圖表版面方便您測試
+            // 安全防禦：預設畫面設回 'students' 以防任何舊資料導致圖表立即崩潰
+            const [view, setView] = React.useState('students'); 
             const [students, setStudents] = React.useState([]);
             const [records, setRecords] = React.useState([]);
             const [genHistory, setGenHistory] = React.useState([]);
@@ -2263,7 +2298,8 @@ ${weakConcepts.length > 0 ? weakConcepts.join('\n') : "(General practice on topi
             const getTopicInfo = (year, paper, qNum) => {
                 let mapKeyMC = `${year}_${paper}`;
                 let mapKeyLQ = `${year}_${paper}`;
-                if (paper.includes('2_')) mapKeyLQ = `${year}_${paper}_LQ`;
+                const paperStr = paper || '';
+                if (paperStr.includes('2_')) mapKeyLQ = `${year}_${paperStr}_LQ`;
 
                 const mapDataMC = typeof FULL_QUESTION_MAP !== 'undefined' ? FULL_QUESTION_MAP[mapKeyMC] : null;
                 const mapDataLQ = typeof FULL_QUESTION_MAP !== 'undefined' ? FULL_QUESTION_MAP[mapKeyLQ] : null;
@@ -2271,7 +2307,7 @@ ${weakConcepts.length > 0 ? weakConcepts.join('\n') : "(General practice on topi
                 let topicId = null;
                 let specificDetail = null;
 
-                if (paper === '1A' || (paper.includes('2_') && !isNaN(qNum) && parseInt(qNum) <= 8)) {
+                if (paperStr === '1A' || (paperStr.includes('2_') && !isNaN(qNum) && parseInt(qNum) <= 8)) {
                     if (mapDataMC && mapDataMC[qNum]) {
                         const rawData = mapDataMC[qNum];
                         if (typeof rawData === 'object') { topicId = rawData.tid; specificDetail = rawData.detail; } 
@@ -2279,7 +2315,7 @@ ${weakConcepts.length > 0 ? weakConcepts.join('\n') : "(General practice on topi
                     }
                 } else {
                     if (Array.isArray(mapDataLQ)) {
-                        const qItem = mapDataLQ.find(item => item.id === qNum.toString());
+                        const qItem = mapDataLQ.find(item => item.id == qNum);
                         if (qItem) { topicId = qItem.tid; specificDetail = qItem.detail; }
                     }
                 }
@@ -2317,7 +2353,7 @@ ${weakConcepts.length > 0 ? weakConcepts.join('\n') : "(General practice on topi
                             {view === 'students' && <StudentsView />}
                             {view === 'input' && <InputView />}
                             {view === 'dashboard' && <DashboardView />}
-                            {view === 'scoreChart' && <ScoreChartView />}  {/* <--- 在這裡呼叫新的圖表頁面 */}
+                            {view === 'scoreChart' && <ScoreChartView />} 
                             {view === 'generate' && <GenerateView />}
                             {view === 'history' && <HistoryView />}
                             {view === 'data' && <DataView />}
