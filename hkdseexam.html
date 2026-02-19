@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HKDSE Physics Trainer V7.3.4 </title>
+    <title>HKDSE Physics Trainer V7.4 </title>
     
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -1449,7 +1449,669 @@
 
         const YEAR_OPTIONS = Array.from({length: 12}, (_, i) => 2025 - i);
 
-       const App = () => {
+// 建立全局狀態 Context (解決失去焦點與重新載入的問題)
+        const AppContext = React.createContext();
+
+        // ==========================
+        // Views (獨立出來，防止重新渲染跳位與白屏)
+        // ==========================
+        
+        const Sidebar = () => {
+            const { view, setView } = React.useContext(AppContext);
+            return (
+                <div className="w-64 bg-slate-900 text-white h-screen fixed left-0 top-0 flex flex-col shadow-2xl z-10">
+                    <div className="p-6 border-b border-slate-700">
+                        <h1 className="text-xl font-bold tracking-wider italic">PHY MASTER</h1>
+                        <div className="text-xs text-orange-400 mt-1">V7.4 Pro Edition</div>
+                    </div>
+                    <nav className="p-4 space-y-2 flex-1 overflow-y-auto">
+                        {[
+                            {id: 'students', icon: '👥', label: '學生管理'},
+                            {id: 'input', icon: '📝', label: '輸入成績'},
+                            {id: 'dashboard', icon: '📊', label: '診斷報告'},
+                            {id: 'generate', icon: '🤖', label: 'AI 練習生成'},
+                            {id: 'history', icon: '📜', label: '生成紀錄'},
+                            {id: 'data', icon: '💾', label: '數據備份 (Data)'} 
+                        ].map(item => (
+                            <button key={item.id} onClick={() => setView(item.id)}
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded transition-all ${view===item.id ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+                                <span>{item.icon}</span> {item.label}
+                            </button>
+                        ))}
+                    </nav>
+                </div>
+            );
+        };
+
+        const DataView = () => {
+            const { students, setStudents, answerKeys, setAnswerKeys, records, setRecords, genHistory, setGenHistory } = React.useContext(AppContext);
+            const fileInputRef = useRef(null);
+            const handleExport = () => {
+                const data = { version: "7.4", timestamp: new Date().toISOString(), students, answerKeys, records, genHistory };
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `PHY_MASTER_BACKUP_${new Date().toISOString().slice(0,10)}.json`;
+                a.click();
+            };
+            const handleImport = (e) => {
+                const file = e.target.files[0];
+                if(!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const data = JSON.parse(event.target.result);
+                        if(confirm(`確認從檔案導入數據嗎？\n這將覆蓋現有數據！`)) {
+                            if(data.students) setStudents(data.students);
+                            if(data.answerKeys) setAnswerKeys(prev => ({...prev, ...data.answerKeys}));
+                            if(data.records) setRecords(data.records);
+                            if(data.genHistory) setGenHistory(data.genHistory);
+                            alert("✅ 導入成功！");
+                        }
+                    } catch(err) { alert("❌ 檔案格式錯誤"); }
+                };
+                reader.readAsText(file);
+            };
+            return (
+                <div className="max-w-4xl mx-auto bg-white p-8 rounded-xl shadow-sm">
+                    <h2 className="text-2xl font-bold mb-6 text-slate-800">💾 數據備份與還原</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="p-6 border-2 border-dashed border-blue-200 rounded-xl bg-blue-50 flex flex-col items-center justify-center text-center">
+                            <span className="text-4xl mb-4">📤</span>
+                            <h3 className="text-xl font-bold text-slate-700 mb-2">導出數據 (Export)</h3>
+                            <button onClick={handleExport} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700 shadow transition">下載備份檔案</button>
+                        </div>
+                        <div className="p-6 border-2 border-dashed border-orange-200 rounded-xl bg-orange-50 flex flex-col items-center justify-center text-center">
+                            <span className="text-4xl mb-4">📥</span>
+                            <h3 className="text-xl font-bold text-slate-700 mb-2">導入數據 (Import)</h3>
+                            <input type="file" accept=".json" ref={fileInputRef} onChange={handleImport} className="hidden" />
+                            <button onClick={()=>fileInputRef.current.click()} className="bg-orange-500 text-white px-6 py-2 rounded-lg font-bold hover:bg-orange-600 shadow transition">選擇檔案上傳</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const StudentsView = () => {
+            const { students, setStudents, records, setRecords } = React.useContext(AppContext);
+            const [name, setName] = useState('');
+            const add = () => {
+                if(!name) return;
+                setStudents([...students, { id: Date.now().toString(), name, joinDate: new Date().toLocaleDateString() }]);
+                setName('');
+            };
+            return (
+                <div className="max-w-4xl mx-auto bg-white p-8 rounded-xl shadow-sm">
+                    <h2 className="text-2xl font-bold mb-6 text-slate-800">👥 學生檔案</h2>
+                    <div className="flex gap-4 mb-8">
+                        <input className="flex-1 border p-3 rounded-lg outline-none focus:border-blue-500" placeholder="學生姓名" value={name} onChange={e=>setName(e.target.value)} />
+                        <button onClick={add} className="bg-blue-600 text-white px-8 rounded-lg font-bold hover:bg-blue-700">新增</button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {students.map(s => (
+                            <div key={s.id} className="p-4 border rounded-lg bg-slate-50 flex justify-between items-center">
+                                <span className="font-bold">{s.name}</span>
+                                <button onClick={()=>{setStudents(students.filter(x=>x.id!==s.id)); setRecords(records.filter(r=>r.studentId!==s.id))}} className="text-red-400 hover:text-red-600 text-sm">刪除</button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        const InputView = () => {
+            const { students, records, setRecords, answerKeys, inputForm, setInputForm } = React.useContext(AppContext);
+            const { studentId, year, paper } = inputForm;
+            
+            const safeRecords = Array.isArray(records) ? records : [];
+            const existingRecords = useMemo(() => {
+                 return safeRecords.filter(r => r.studentId === studentId)
+                    .sort((a, b) => (parseInt(b.year)||0) - (parseInt(a.year)||0) || (a.paper||"").localeCompare(b.paper||""));
+            }, [safeRecords, studentId]);
+
+            const keyId = `${year}_${paper}`;
+            const sysKey = answerKeys[keyId] || {};
+            
+            let lqConfig = null;
+            if (paper === '1B') lqConfig = FULL_QUESTION_MAP[`${year}_1B`];
+            else if (paper.includes('2_')) lqConfig = FULL_QUESTION_MAP[`${year}_${paper}_LQ`];
+
+            useEffect(() => {
+                if (!studentId && students.length > 0) setInputForm(prev => ({ ...prev, studentId: students[0].id }));
+            }, [students]);
+
+            const toggleMC = (q, opt) => {
+                const isCorrect = sysKey[q] === opt;
+                setInputForm({
+                    ...inputForm, 
+                    answers: {...inputForm.answers, [q]: opt},
+                    scores: {...inputForm.scores, [q]: isCorrect ? 1 : 0}
+                });
+            };
+
+            const updateScore = (qKey, val, max) => {
+                let numVal = parseFloat(val);
+                if(val === '') numVal = ''; 
+                else if(numVal < 0) numVal = 0;
+                else if(numVal > max) numVal = max;
+                setInputForm({ ...inputForm, scores: {...inputForm.scores, [qKey]: numVal} });
+            };
+
+            const save = () => {
+                if(!studentId) return alert('請選擇學生');
+                const newRec = { ...inputForm, id: Date.now(), timestamp: new Date().toISOString() };
+                const others = records.filter(r => !(r.studentId===studentId && r.year===year && r.paper===paper));
+                setRecords([...others, newRec]);
+                alert('✅ 已儲存');
+            };
+
+            const showMC = paper === '1A' || paper.includes('2_');
+            const mcCount = paper === '1A' ? 33 : 8;
+            const showLQ = paper === '1B' || paper.includes('2_');
+
+            return (
+                <div className="max-w-5xl mx-auto bg-white p-8 rounded-xl shadow-sm">
+                    <h2 className="text-2xl font-bold mb-6">📝 輸入成績</h2>
+                    <div className="grid grid-cols-3 gap-4 mb-6 bg-blue-50 p-4 rounded-lg">
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 mb-1">學生</label>
+                            <select className="w-full border p-2 rounded" value={studentId} onChange={e=>setInputForm({...inputForm, studentId:e.target.value})}>
+                                <option value="">-- 請選擇 --</option>
+                                {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                            </select>
+                            {studentId && (
+                                <div className="mt-2 p-2 bg-slate-100 rounded text-[10px] text-slate-500 max-h-32 overflow-y-auto">
+                                    <div className="font-bold mb-1">已輸入紀錄 ({existingRecords.length}):</div>
+                                    <div className="flex flex-wrap gap-1">
+                                        {existingRecords.length === 0 ? <span>尚無紀錄</span> : 
+                                            existingRecords.map(r => <span key={r.id} className="bg-white border px-1 rounded shadow-sm text-slate-700">{r.year} {r.paper}</span>)
+                                        }
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 mb-1">年份</label>
+                            <select className="w-full border p-2 rounded" value={year} onChange={e=>setInputForm({...inputForm, year:e.target.value, answers:{}, scores:{}})}>
+                                {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 mb-1">試卷</label>
+                            <select className="w-full border p-2 rounded font-bold" value={paper} onChange={e=>setInputForm({...inputForm, paper:e.target.value, answers:{}, scores:{}})}>
+                                <optgroup label="Core (必修)"><option value="1A">Paper 1A (MC)</option><option value="1B">Paper 1B (LQ)</option></optgroup>
+                                <optgroup label="Electives (選修)"><option value="2_E3">E3 - Energy (MC+LQ)</option><option value="2_E4">E4 - Medical (MC+LQ)</option></optgroup>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    {showMC && (
+                        <div className="mb-8">
+                            <h3 className="font-bold text-slate-600 mb-3 border-b pb-2">MC 部份 (Q1-{mcCount})</h3>
+                            {Object.keys(sysKey).length === 0 && <div className="text-red-500 text-xs mb-2">⚠ 注意：此年份/試卷尚未設定標準答案，系統無法自動評分。</div>}
+                            <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+                                {Array.from({length: mcCount}).map((_, i) => {
+                                    const q = i+1;
+                                    const myAns = inputForm.answers[q];
+                                    const realAns = sysKey[q];
+                                    let statusClass = myAns && realAns ? (myAns===realAns ? "bg-green-50 border-green-300" : "bg-red-50 border-red-300") : "border-slate-200";
+
+                                    return (
+                                        <div key={q} className={`p-2 border rounded flex flex-col ${statusClass}`}>
+                                            <div className="flex justify-between items-center mb-1"><span className="font-bold text-slate-500">Q{q}</span></div>
+                                            <div className="flex justify-between">
+                                                {['A','B','C','D'].map(opt => (
+                                                    <button key={opt} onClick={()=>toggleMC(q, opt)} className={`w-6 h-6 text-xs rounded font-bold ${myAns===opt?'bg-slate-800 text-white':'bg-white text-slate-400 border'}`}>{opt}</button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+                    {showLQ && (
+                        <div>
+                            <h3 className="font-bold text-slate-600 mb-3 border-b pb-2">長題目部份 (LQ)</h3>
+                            {lqConfig ? (
+                                <div className="grid grid-cols-3 md:grid-cols-5 gap-4">
+                                    {lqConfig.map((item) => (
+                                        <div key={item.id} className="flex flex-col">
+                                            <div className="flex justify-between items-end mb-1">
+                                                <span className="text-sm font-bold text-slate-700">Q{item.id}</span>
+                                                <span className="text-[10px] text-slate-400 bg-slate-100 px-1 rounded">/{item.max}</span>
+                                            </div>
+                                            <input type="number" className="border p-2 rounded text-center focus:ring-2 focus:ring-blue-500 outline-none" value={inputForm.scores[item.id] ?? ''} onChange={e => updateScore(item.id, e.target.value, item.max)} />
+                                            <span className="text-[9px] text-center text-slate-300 mt-1 truncate" title={item.tid}>{item.tid}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (<div className="text-sm text-yellow-600 bg-yellow-50 p-2 rounded">此年份 ({year}) 尚未載入詳細題目地圖。</div>)}
+                        </div>
+                    )}
+                    <button onClick={save} className="w-full mt-6 bg-slate-800 text-white py-3 rounded font-bold hover:bg-slate-700 shadow-lg">儲存成績</button>
+                </div>
+            );
+        };
+
+        const DashboardView = () => {
+            const { students, records, dashStudent, setDashStudent, dashPaperType, setDashPaperType, getTopicInfo } = React.useContext(AppContext);
+            const [yearFilter, setYearFilter] = useState('All');
+            const [partFilter, setPartFilter] = useState('MC');
+
+            useEffect(() => {
+                if (!dashStudent && students.length > 0) setDashStudent(students[0].id);
+            }, [students, dashStudent]);
+
+            const subTopicStats = useMemo(() => {
+                if(!dashStudent) return [];
+                
+                const myRecs = records.filter(r => {
+                    if (r.studentId !== dashStudent) return false;
+                    if (yearFilter !== 'All' && r.year.toString() !== yearFilter.toString()) return false;
+                    if (partFilter === 'MC' && r.paper === '1B') return false; 
+                    
+                    const isPaper1 = r.paper === '1A' || r.paper === '1B';
+                    return dashPaperType === 'core' ? isPaper1 : !isPaper1;
+                });
+
+                const stats = {};
+                myRecs.forEach(r => {
+                    const scoreData = r.scores || {};
+                    Object.entries(scoreData).forEach(([q, score]) => {
+                        const isMC = r.paper === '1A' || (r.paper.includes('2_') && !isNaN(q) && parseInt(q) <= 8);
+                        if (partFilter === 'MC' && !isMC) return; 
+
+                        const info = getTopicInfo(r.year, r.paper, q);
+                        const tId = info.id;
+                        
+                        if(!stats[tId]) stats[tId] = { id: tId, topic: info.topic, section: info.section, earned: 0, max: 0, count: 0 };
+                        
+                        const earned = parseFloat(score) || 0;
+                        let max = 1;
+                        if (!isMC) {
+                            let mapKeyLQ = r.paper === '1B' ? `${r.year}_1B` : `${r.year}_${r.paper}_LQ`;
+                            const qMap = FULL_QUESTION_MAP[mapKeyLQ];
+                            if(Array.isArray(qMap)) {
+                                const qItem = qMap.find(i => i.id === q);
+                                if(qItem) max = qItem.max;
+                                else max = 10;
+                            } else max = 10;
+                        }
+                        
+                        stats[tId].earned += earned;
+                        stats[tId].max += max;
+                        stats[tId].count += 1;
+                    });
+                });
+
+                return Object.values(stats)
+                    .filter(item => {
+                        const isElectiveTopic = item.id.toString().startsWith('E');
+                        return dashPaperType === 'elective' ? isElectiveTopic : !isElectiveTopic;
+                    })
+                    .sort((a,b) => {
+                        const pctA = a.max > 0 ? (a.earned/a.max) : 0;
+                        const pctB = b.max > 0 ? (b.earned/b.max) : 0;
+                        return pctA - pctB;
+                    });
+
+            }, [records, dashStudent, dashPaperType, yearFilter, partFilter]);
+
+            const weakestList = subTopicStats.filter(t => (t.max > 0 && t.earned / t.max < 0.8)).slice(0, 50); 
+            const strongestList = [...subTopicStats].reverse().filter(t => (t.max > 0 && t.earned / t.max >= 0.8)).slice(0, 50);
+
+            return (
+                <div className="max-w-6xl mx-auto space-y-6">
+                    <div className="bg-white p-4 rounded-xl shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
+                        <h2 className="text-xl font-bold">📊 子課題診斷報告</h2>
+                        
+                        <div className="flex flex-wrap gap-4 items-center">
+                            <div className="flex flex-col gap-1">
+                                <select className="border p-2 rounded bg-white shadow-sm font-bold text-slate-600" value={dashStudent} onChange={e=>setDashStudent(e.target.value)}>
+                                    {students.length === 0 && <option value="">無學生資料</option>}
+                                    {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                </select>
+                                {dashStudent && (
+                                    <div className="text-[10px] text-slate-500 bg-slate-100 p-1 rounded flex flex-wrap gap-1 max-w-[200px]">
+                                        <span className="font-bold">已完成:</span>
+                                        {Array.from(new Set(records.filter(r => r.studentId === dashStudent).map(r => `${r.year} ${r.paper}`)))
+                                            .sort((a,b) => b.localeCompare(a))
+                                            .map(rp => <span key={rp} className="bg-white px-1 border">{rp}</span>)
+                                        }
+                                    </div>
+                                )}
+                            </div>
+                            
+                            <select className="border p-2 rounded bg-white shadow-sm font-bold text-slate-600" value={yearFilter} onChange={e=>setYearFilter(e.target.value)}>
+                                <option value="All">全部年份</option>
+                                {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
+                            </select>
+                            
+                            <select className="border p-2 rounded bg-white shadow-sm font-bold text-blue-600" value={partFilter} onChange={e=>setPartFilter(e.target.value)}>
+                                <option value="MC">🔥 只計 MC</option>
+                                <option value="ALL">全部 (MC + LQ)</option>
+                            </select>
+
+                            <div className="bg-slate-100 p-1 rounded-lg flex font-bold text-sm">
+                                <button onClick={()=>setDashPaperType('core')} className={`px-4 py-2 rounded-md transition ${dashPaperType==='core'?'bg-white text-blue-600 shadow':'text-slate-400'}`}>Paper 1</button>
+                                <button onClick={()=>setDashPaperType('elective')} className={`px-4 py-2 rounded-md transition ${dashPaperType==='elective'?'bg-white text-purple-600 shadow':'text-slate-400'}`}>Paper 2</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {subTopicStats.length === 0 ? (
+                        <div className="p-12 text-center text-slate-400 bg-white rounded-xl">尚無符合此條件的數據。</div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-[70vh]">
+                            <div className="bg-white p-4 rounded-xl shadow-sm border-t-4 border-red-500 flex flex-col h-full">
+                                <h3 className="font-bold text-lg mb-4 text-red-600 flex items-center gap-2 flex-shrink-0"><span className="text-2xl">⚠</span> 待改善 (Weakest)</h3>
+                                <div className="stats-list space-y-3 flex-1">
+                                    {weakestList.map(t => (
+                                        <div key={t.id} className="p-3 bg-red-50 border border-red-100 rounded-lg flex justify-between items-center">
+                                            <div className="overflow-hidden">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="sub-topic-tag bg-white text-red-600 px-1 border border-red-200 rounded text-sm">{t.id}</span>
+                                                    <span className="font-bold text-slate-800 truncate">{t.topic}</span>
+                                                </div>
+                                            </div>
+                                            <div className="text-right flex-shrink-0 ml-2">
+                                                <div className="text-xl font-bold text-red-600">{((t.earned/t.max)*100).toFixed(0)}%</div>
+                                                <div className="text-[10px] text-slate-400">{t.earned}/{t.max} 分</div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="bg-white p-4 rounded-xl shadow-sm border-t-4 border-green-500 flex flex-col h-full">
+                                <h3 className="font-bold text-lg mb-4 text-green-600 flex items-center gap-2 flex-shrink-0"><span className="text-2xl">★</span> 表現優異 (Strongest)</h3>
+                                <div className="stats-list space-y-3 flex-1">
+                                    {strongestList.map(t => (
+                                        <div key={t.id} className="p-3 bg-green-50 border border-green-100 rounded-lg flex justify-between items-center">
+                                            <div className="overflow-hidden">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="sub-topic-tag bg-white text-green-600 px-1 border border-green-200 rounded text-sm">{t.id}</span>
+                                                    <span className="font-bold text-slate-800 truncate">{t.topic}</span>
+                                                </div>
+                                            </div>
+                                            <div className="text-right flex-shrink-0 ml-2">
+                                                <div className="text-xl font-bold text-green-600">{((t.earned/t.max)*100).toFixed(0)}%</div>
+                                                <div className="text-[10px] text-slate-400">{t.earned}/{t.max} 分</div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const GenerateView = () => {
+            const { students, records, dashStudent, setDashStudent, genSettings, setGenSettings, selectedTopics, setSelectedTopics, generatedPrompt, setGeneratedPrompt, genHistory, setGenHistory, getTopicInfo } = React.useContext(AppContext);
+            const [studentStats, setStudentStats] = useState({});
+            const [yearFilter, setYearFilter] = useState('All');
+            const [partFilter, setPartFilter] = useState('MC');
+            const [weakThreshold, setWeakThreshold] = useState(60);
+
+            useEffect(() => {
+                if (!dashStudent) return;
+                
+                const myRecs = records.filter(r => {
+                    if (r.studentId !== dashStudent) return false;
+                    if (yearFilter !== 'All' && r.year.toString() !== yearFilter.toString()) return false;
+                    if (partFilter === 'MC' && r.paper === '1B') return false; 
+                    return true;
+                });
+                
+                const stats = {};
+                Object.keys(SYLLABUS_DATA).forEach(tid => { stats[tid] = { earned: 0, max: 0 }; });
+
+                myRecs.forEach(r => {
+                    const scoreData = r.scores || {};
+                    Object.entries(scoreData).forEach(([q, score]) => {
+                        const isMC = r.paper === '1A' || (r.paper.includes('2_') && !isNaN(q) && parseInt(q) <= 8);
+                        if (partFilter === 'MC' && !isMC) return;
+
+                        const numericScore = parseFloat(score) || 0;
+                        const info = getTopicInfo(r.year, r.paper, q);
+                        const tid = info.id;
+                        
+                        let qMax = 0;
+                        if (isMC) {
+                            qMax = 1;
+                        } else {
+                            let mapKeyLQ = r.paper === '1B' ? `${r.year}_1B` : `${r.year}_${r.paper}_LQ`;
+                            const lqList = FULL_QUESTION_MAP[mapKeyLQ];
+                            if(Array.isArray(lqList)) {
+                                const qItem = lqList.find(i => i.id === q);
+                                qMax = qItem ? qItem.max : 10;
+                            } else qMax = 10;
+                        }
+
+                        if(stats[tid]) {
+                            stats[tid].earned += numericScore;
+                            stats[tid].max += qMax;
+                        }
+                    });
+                });
+                setStudentStats(stats);
+            }, [dashStudent, records, yearFilter, partFilter]);
+
+            const toggleTopic = (tid) => selectedTopics.includes(tid) ? setSelectedTopics(selectedTopics.filter(t => t !== tid)) : setSelectedTopics([...selectedTopics, tid]);
+            const sortedTopicKeys = Object.keys(SYLLABUS_DATA).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+            const toggleAll = () => selectedTopics.length === sortedTopicKeys.length ? setSelectedTopics([]) : setSelectedTopics(sortedTopicKeys);
+
+            const generate = () => {
+                if (!dashStudent) return alert("請先選擇學生");
+                if (selectedTopics.length === 0) return alert("請至少選擇一個課題");
+
+                const myRecs = records.filter(r => {
+                    if (r.studentId !== dashStudent) return false;
+                    if (yearFilter !== 'All' && r.year.toString() !== yearFilter.toString()) return false;
+                    if (partFilter === 'MC' && r.paper === '1B') return false; 
+                    return true;
+                });
+                
+                let weakConcepts = [];
+                myRecs.forEach(r => {
+                    const scoreData = r.scores || {};
+                    Object.entries(scoreData).forEach(([q, score]) => {
+                        const isMC = r.paper === '1A' || (r.paper.includes('2_') && !isNaN(q) && parseInt(q) <= 8);
+                        if (partFilter === 'MC' && !isMC) return;
+
+                        const info = getTopicInfo(r.year, r.paper, q);
+                        if (selectedTopics.includes(info.id) && info.detail) {
+                            const earned = parseFloat(score) || 0;
+                            let max = 1;
+                            if (!isMC) {
+                                let mapKeyLQ = r.paper === '1B' ? `${r.year}_1B` : `${r.year}_${r.paper}_LQ`;
+                                const lqList = FULL_QUESTION_MAP[mapKeyLQ];
+                                if(Array.isArray(lqList)) {
+                                    const qItem = lqList.find(i => i.id === q);
+                                    max = qItem ? qItem.max : 10;
+                                } else max = 10;
+                            }
+                            if (earned < max) weakConcepts.push(`- [${info.id}] ${info.detail}`);
+                        }
+                    });
+                });
+
+                weakConcepts = [...new Set(weakConcepts)].slice(0, 8);
+
+                const topicListText = selectedTopics.sort().map(tid => {
+                    const s = studentStats[tid] || {earned:0, max:0};
+                    const pct = s.max > 0 ? Math.round((s.earned / s.max) * 100) + '%' : 'No Data';
+                    return `- [${tid}] ${SYLLABUS_DATA[tid].topic} (Score: ${pct})`;
+                }).join('\n');
+
+                const difficultyMap = { low: 'Foundation/Easy', medium: 'Standard HKDSE', high: 'Challenging/5**' };
+                const typeMap = { mc: 'Multiple Choice (MC) ONLY', lq: 'Long Questions (LQ) ONLY', mixed: 'Mixed (MC & LQ)' };
+                const langMap = { zh: 'Traditional Chinese (繁體中文)', en: 'English' };
+
+                const prompt = `Role: Professional HKDSE Physics Tutor.
+Task: Create a practice exercise.
+
+**Configuration:**
+- **Level:** HKDSE Physics
+- **Difficulty:** ${difficultyMap[genSettings.difficulty]}
+- **Format:** ${typeMap[genSettings.type]}
+- **Language:** ${langMap[genSettings.lang]}
+
+**Targeted Topics:**
+${topicListText}
+
+**Specific Weakness Concepts (CRITICAL):**
+The student has previously failed questions involving these specific concepts. 
+**Please ensure ~20% of the new questions specifically target these misconceptions:**
+${weakConcepts.length > 0 ? weakConcepts.join('\n') : "(General practice on topics above)"}
+
+**Requirements:**
+1. Generate distinctive questions for the selected topics.
+2. Integrate the "Specific Weakness Concepts" into the questions where natural.
+3. Provide a Marking Scheme with detailed explanations.
+4. If MC, provide 4 options (A,B,C,D).`.trim();
+
+                setGeneratedPrompt(prompt);
+
+                const sName = students.find(s=>s.id === dashStudent)?.name || "Unknown";
+                const newHistoryItem = {
+                    id: Date.now(), timestamp: new Date().toISOString(), studentId: dashStudent,
+                    studentName: sName, topics: selectedTopics, settings: genSettings,
+                    note: `Weaknesses: ${weakConcepts.length} items targeted.`
+                };
+                setGenHistory(prev => [newHistoryItem, ...prev]);
+                alert("Prompt 生成成功！\n已同時建立一條練習紀錄。");
+            };
+
+            return (
+                <div className="max-w-6xl mx-auto flex gap-6 h-[85vh]">
+                    <div className="w-5/12 bg-white p-5 rounded-xl shadow-sm flex flex-col h-full border border-slate-200">
+                        <h2 className="text-lg font-bold mb-4 flex items-center gap-2 text-slate-700">🛠️ 生成設定</h2>
+                        <div className="grid grid-cols-2 gap-3 mb-4">
+                            <div className="col-span-2 flex gap-2">
+                                <div className="flex-1">
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">目標學生</label>
+                                    <select className="w-full border p-2 rounded text-sm bg-slate-50" value={dashStudent} onChange={e=>setDashStudent(e.target.value)}>
+                                        {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                    </select>
+                                </div>
+                                <div className="flex-1">
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">過濾年份</label>
+                                    <select className="w-full border p-2 rounded text-sm bg-slate-50" value={yearFilter} onChange={e=>setYearFilter(e.target.value)}>
+                                        <option value="All">全部</option>
+                                        {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
+                                    </select>
+                                </div>
+                                <div className="flex-1">
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">過濾部分</label>
+                                    <select className="w-full border p-2 rounded text-sm text-blue-600 font-bold bg-slate-50" value={partFilter} onChange={e=>setPartFilter(e.target.value)}>
+                                        <option value="MC">🔥 只計MC</option>
+                                        <option value="ALL">MC+LQ</option>
+                                    </select>
+                                </div>
+                            </div>
+                            {dashStudent && (
+                                <div className="col-span-2 text-[10px] text-slate-500 bg-slate-100 p-1.5 rounded flex flex-wrap gap-1">
+                                    <span className="font-bold">已完成:</span>
+                                    {Array.from(new Set(records.filter(r => r.studentId === dashStudent).map(r => `${r.year} ${r.paper}`)))
+                                        .sort((a,b) => b.localeCompare(a)).map(rp => <span key={rp} className="bg-white px-1 border">{rp}</span>)}
+                                </div>
+                            )}
+                            <div><label className="block text-xs font-bold text-slate-500 mb-1">語言 (Lang)</label><select className="w-full border p-2 rounded text-sm" value={genSettings.lang} onChange={e=>setGenSettings({...genSettings, lang:e.target.value})}><option value="zh">繁體中文</option><option value="en">English</option></select></div>
+                            <div><label className="block text-xs font-bold text-slate-500 mb-1">難度 (Diff)</label><select className="w-full border p-2 rounded text-sm" value={genSettings.difficulty} onChange={e=>setGenSettings({...genSettings, difficulty:e.target.value})}><option value="low">低</option><option value="medium">中</option><option value="high">高</option></select></div>
+                            <div className="col-span-2"><label className="block text-xs font-bold text-slate-500 mb-1">題型 (Type)</label><select className="w-full border p-2 rounded text-sm" value={genSettings.type} onChange={e=>setGenSettings({...genSettings, type:e.target.value})}><option value="mixed">MC + LQ (混合)</option><option value="mc">MC Only</option><option value="lq">LQ Only</option></select></div>
+                        </div>
+                        <div className="flex-1 flex flex-col min-h-0 border rounded-lg bg-slate-50">
+                            <div className="p-2 border-b bg-slate-100 flex justify-between items-center flex-wrap gap-2">
+                                <span className="text-xs font-bold text-slate-600">選擇課題 ({selectedTopics.length})</span>
+                                
+                                <div className="flex items-center gap-1">
+                                    <div className="flex items-center bg-white border border-slate-300 rounded px-1 h-6">
+                                        <span className="text-[10px] text-slate-500 mr-1">低於</span>
+                                        <input type="number" className="w-7 text-center text-xs outline-none text-red-600 font-bold bg-transparent" value={weakThreshold} onChange={e=>setWeakThreshold(e.target.value)} />
+                                        <span className="text-[10px] text-slate-500">%</span>
+                                    </div>
+                                    <button onClick={() => {
+                                        const threshold = parseFloat(weakThreshold) / 100;
+                                        const weakTopics = sortedTopicKeys.filter(tid => {
+                                            const s = studentStats[tid];
+                                            return s && s.max > 0 && (s.earned / s.max) < threshold;
+                                        });
+                                        setSelectedTopics(weakTopics);
+                                    }} className="text-[10px] bg-red-100 text-red-600 px-2 h-6 rounded hover:bg-red-200 font-bold transition">
+                                        自動選弱點
+                                    </button>
+                                    <button onClick={toggleAll} className="text-[10px] text-blue-600 hover:underline border-l pl-2 ml-1 h-6">
+                                        {selectedTopics.length === sortedTopicKeys.length ? '全不選' : '全選全部'}
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="overflow-y-auto p-2 space-y-1 flex-1">
+                                {sortedTopicKeys.map(tid => {
+                                    const s = studentStats[tid] || {earned:0, max:0};
+                                    const hasData = s.max > 0;
+                                    const pct = hasData ? Math.round((s.earned / s.max) * 100) : 0;
+                                    let scoreColor = hasData ? (pct < 40 ? 'text-red-500 font-bold' : pct < 70 ? 'text-yellow-600 font-bold' : 'text-green-600 font-bold') : 'text-slate-400';
+                                    return (
+                                        <label key={tid} className="flex items-center gap-2 p-2 hover:bg-white rounded cursor-pointer border border-transparent hover:border-slate-200">
+                                            <input type="checkbox" checked={selectedTopics.includes(tid)} onChange={() => toggleTopic(tid)} className="w-4 h-4 rounded text-blue-600" />
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex justify-between items-center"><span className="text-xs font-mono font-bold text-slate-700">{tid}</span><span className={`text-xs ${scoreColor}`}>{hasData ? `${pct}%` : '--'}</span></div>
+                                                <div className="text-xs text-slate-500 truncate">{SYLLABUS_DATA[tid].topic}</div>
+                                            </div>
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                        <button onClick={generate} className="w-full py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-bold mt-4 shadow hover:shadow-lg">生成 Prompt ✨</button>
+                    </div>
+                    <div className="flex-1 bg-white p-6 rounded-xl shadow-sm h-full flex flex-col border border-slate-200">
+                        <h3 className="font-bold text-slate-700 mb-2">📝 生成結果 (Prompt Output)</h3>
+                        <textarea className="flex-1 w-full bg-slate-50 border p-4 rounded-lg font-mono text-sm resize-none outline-none" value={generatedPrompt} readOnly placeholder="請在左側選擇並點擊「生成」..."></textarea>
+                        <button onClick={()=>{navigator.clipboard.writeText(generatedPrompt); alert("已複製!")}} className="mt-4 py-3 bg-slate-800 text-white rounded-lg hover:bg-slate-700 font-bold flex justify-center gap-2">📋 複製並貼給 AI</button>
+                    </div>
+                </div>
+            );
+        };
+
+        const HistoryView = () => {
+            const { genHistory, setGenHistory } = React.useContext(AppContext);
+            const updateNote = (id, newNote) => setGenHistory(prev => prev.map(item => item.id === id ? { ...item, note: newNote } : item));
+            const deleteHistory = (id) => { if(confirm("確定刪除此紀錄?")) setGenHistory(prev => prev.filter(item => item.id !== id)); };
+            return (
+                <div className="max-w-6xl mx-auto bg-white p-8 rounded-xl shadow-sm min-h-[80vh]">
+                    <h2 className="text-2xl font-bold mb-6 text-slate-800 flex items-center gap-2">📜 練習生成紀錄</h2>
+                    {genHistory.length === 0 ? (<div className="text-center py-20 text-slate-400 bg-slate-50 rounded-lg">尚未生成任何練習。</div>) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead><tr className="bg-slate-100 text-slate-600 text-sm"><th className="p-3">時間 / 學生</th><th className="p-3">設定</th><th className="p-3">課題</th><th className="p-3 w-1/3">備註</th><th className="p-3 text-right">操作</th></tr></thead>
+                                <tbody className="text-sm">
+                                    {genHistory.map(item => (
+                                        <tr key={item.id} className="border-b border-slate-100 hover:bg-slate-50">
+                                            <td className="p-3 align-top"><div className="font-bold text-slate-800">{new Date(item.timestamp).toLocaleDateString()}</div><div className="text-xs text-slate-400">{new Date(item.timestamp).toLocaleTimeString()}</div><div className="mt-1 text-blue-600 font-bold">{item.studentName}</div></td>
+                                            <td className="p-3 align-top"><div className="flex flex-col gap-1"><span className="bg-gray-200 text-gray-700 px-2 py-0.5 rounded text-xs w-fit">{item.settings.difficulty}</span><span className="bg-gray-200 text-gray-700 px-2 py-0.5 rounded text-xs w-fit">{item.settings.type}</span></div></td>
+                                            <td className="p-3 align-top"><div className="flex flex-wrap gap-1">{item.topics.map(t => <span key={t} className="border border-slate-300 px-1 rounded text-xs font-mono">{t}</span>)}</div></td>
+                                            <td className="p-3 align-top"><textarea className="w-full border border-blue-200 bg-blue-50 p-2 rounded text-xs focus:ring-1 focus:ring-blue-500 outline-none resize-none" rows="3" value={item.note || ''} onChange={(e) => updateNote(item.id, e.target.value)}></textarea></td>
+                                            <td className="p-3 align-top text-right"><button onClick={() => deleteHistory(item.id)} className="text-slate-400 hover:text-red-500 p-2">✕</button></td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // ==========================
+        // 主應用程式 App
+        // ==========================
+        const App = () => {
             const [view, setView] = useState('students');
             const [students, setStudents] = useState([]);
             const [records, setRecords] = useState([]);
@@ -1467,19 +2129,14 @@
                 return PRELOADED_KEYS;
             });
 
-            // UI State
             const [inputForm, setInputForm] = useState({ studentId: '', year: '2016', paper: '1A', answers: {}, scores: {} });
             const [dashStudent, setDashStudent] = useState('');
             const [dashPaperType, setDashPaperType] = useState('core'); 
             
-            // AI Settings
             const [genSettings, setGenSettings] = useState({ difficulty: 'medium', type: 'mixed', lang: 'zh' });
             const [selectedTopics, setSelectedTopics] = useState([]);
             const [generatedPrompt, setGeneratedPrompt] = useState('');
-            
-            // 👇 [新增這行] 預設弱點篩選標準為 60%
-            const [weakThreshold, setWeakThreshold] = useState(60);
-            // Load & Save Data
+
             useEffect(() => {
                 const saved = localStorage.getItem('dsePhysV7');
                 if (saved) {
@@ -1508,7 +2165,6 @@
                 let topicId = null;
                 let specificDetail = null;
 
-                // 處理 MC
                 if (paper === '1A' || (paper.includes('2_') && !isNaN(qNum) && parseInt(qNum) <= 8)) {
                     if (mapDataMC && mapDataMC[qNum]) {
                         const rawData = mapDataMC[qNum];
@@ -1520,7 +2176,6 @@
                         }
                     }
                 } 
-                // 處理 LQ
                 else {
                     if (Array.isArray(mapDataLQ)) {
                         const qItem = mapDataLQ.find(item => item.id === qNum);
@@ -1541,679 +2196,45 @@
                 return { id: topicId, ...topicData, detail: specificDetail };
             };
 
-            const Sidebar = () => (
-                <div className="w-64 bg-slate-900 text-white h-screen fixed left-0 top-0 flex flex-col shadow-2xl z-10">
-                    <div className="p-6 border-b border-slate-700">
-                        <h1 className="text-xl font-bold tracking-wider italic">PHY MASTER</h1>
-                        <div className="text-xs text-orange-400 mt-1">V7.4 Pro Edition</div>
-                    </div>
-                    <nav className="p-4 space-y-2 flex-1 overflow-y-auto">
-                        {[
-                            {id: 'students', icon: '👥', label: '學生管理'},
-                            {id: 'input', icon: '📝', label: '輸入成績'},
-                            {id: 'dashboard', icon: '📊', label: '診斷報告'},
-                            {id: 'generate', icon: '🤖', label: 'AI 練習生成'},
-                            {id: 'history', icon: '📜', label: '生成紀錄'},
-                            {id: 'data', icon: '💾', label: '數據備份 (Data)'} 
-                        ].map(item => (
-                            <button key={item.id} onClick={() => setView(item.id)}
-                                className={`w-full flex items-center gap-3 px-4 py-3 rounded transition-all ${view===item.id ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
-                                <span>{item.icon}</span> {item.label}
-                            </button>
-                        ))}
-                    </nav>
-                </div>
-            );
-
-            // ==========================
-            // Views
-            // ==========================
-            const DataView = () => {
-                const fileInputRef = useRef(null);
-                const handleExport = () => {
-                    const data = { version: "7.4", timestamp: new Date().toISOString(), students, answerKeys, records, genHistory };
-                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = `PHY_MASTER_BACKUP_${new Date().toISOString().slice(0,10)}.json`;
-                    a.click();
-                };
-                const handleImport = (e) => {
-                    const file = e.target.files[0];
-                    if(!file) return;
-                    const reader = new FileReader();
-                    reader.onload = (event) => {
-                        try {
-                            const data = JSON.parse(event.target.result);
-                            if(confirm(`確認從檔案導入數據嗎？\n這將覆蓋現有數據！`)) {
-                                if(data.students) setStudents(data.students);
-                                if(data.answerKeys) setAnswerKeys(prev => ({...prev, ...data.answerKeys}));
-                                if(data.records) setRecords(data.records);
-                                if(data.genHistory) setGenHistory(data.genHistory);
-                                alert("✅ 導入成功！");
-                            }
-                        } catch(err) { alert("❌ 檔案格式錯誤"); }
-                    };
-                    reader.readAsText(file);
-                };
-                return (
-                    <div className="max-w-4xl mx-auto bg-white p-8 rounded-xl shadow-sm">
-                        <h2 className="text-2xl font-bold mb-6 text-slate-800">💾 數據備份與還原</h2>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                            <div className="p-6 border-2 border-dashed border-blue-200 rounded-xl bg-blue-50 flex flex-col items-center justify-center text-center">
-                                <span className="text-4xl mb-4">📤</span>
-                                <h3 className="text-xl font-bold text-slate-700 mb-2">導出數據 (Export)</h3>
-                                <button onClick={handleExport} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700 shadow transition">下載備份檔案</button>
-                            </div>
-                            <div className="p-6 border-2 border-dashed border-orange-200 rounded-xl bg-orange-50 flex flex-col items-center justify-center text-center">
-                                <span className="text-4xl mb-4">📥</span>
-                                <h3 className="text-xl font-bold text-slate-700 mb-2">導入數據 (Import)</h3>
-                                <input type="file" accept=".json" ref={fileInputRef} onChange={handleImport} className="hidden" />
-                                <button onClick={()=>fileInputRef.current.click()} className="bg-orange-500 text-white px-6 py-2 rounded-lg font-bold hover:bg-orange-600 shadow transition">選擇檔案上傳</button>
-                            </div>
-                        </div>
-                    </div>
-                );
+            const contextValue = {
+                view, setView,
+                students, setStudents,
+                records, setRecords,
+                genHistory, setGenHistory,
+                answerKeys, setAnswerKeys,
+                inputForm, setInputForm,
+                dashStudent, setDashStudent,
+                dashPaperType, setDashPaperType,
+                genSettings, setGenSettings,
+                selectedTopics, setSelectedTopics,
+                generatedPrompt, setGeneratedPrompt,
+                getTopicInfo
             };
 
-            const StudentsView = () => {
-                const [name, setName] = useState('');
-                const add = () => {
-                    if(!name) return;
-                    setStudents([...students, { id: Date.now().toString(), name, joinDate: new Date().toLocaleDateString() }]);
-                    setName('');
-                };
-                return (
-                    <div className="max-w-4xl mx-auto bg-white p-8 rounded-xl shadow-sm">
-                        <h2 className="text-2xl font-bold mb-6 text-slate-800">👥 學生檔案</h2>
-                        <div className="flex gap-4 mb-8">
-                            <input className="flex-1 border p-3 rounded-lg outline-none focus:border-blue-500" placeholder="學生姓名" value={name} onChange={e=>setName(e.target.value)} />
-                            <button onClick={add} className="bg-blue-600 text-white px-8 rounded-lg font-bold hover:bg-blue-700">新增</button>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            {students.map(s => (
-                                <div key={s.id} className="p-4 border rounded-lg bg-slate-50 flex justify-between">
-                                    <span className="font-bold">{s.name}</span>
-                                    <button onClick={()=>{setStudents(students.filter(x=>x.id!==s.id)); setRecords(records.filter(r=>r.studentId!==s.id))}} className="text-red-400 hover:text-red-600">刪除</button>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                );
-            };
-
-            const InputView = () => {
-                const { studentId, year, paper } = inputForm;
-                
-                const safeRecords = Array.isArray(records) ? records : [];
-                const existingRecords = useMemo(() => {
-                     return safeRecords.filter(r => r.studentId === studentId)
-                        .sort((a, b) => (parseInt(b.year)||0) - (parseInt(a.year)||0) || (a.paper||"").localeCompare(b.paper||""));
-                }, [safeRecords, studentId]);
-
-                const keyId = `${year}_${paper}`;
-                const sysKey = answerKeys[keyId] || {};
-                
-                let lqConfig = null;
-                if (paper === '1B') lqConfig = FULL_QUESTION_MAP[`${year}_1B`];
-                else if (paper.includes('2_')) lqConfig = FULL_QUESTION_MAP[`${year}_${paper}_LQ`];
-
-                useEffect(() => {
-                    if (!studentId && students.length > 0) setInputForm(prev => ({ ...prev, studentId: students[0].id }));
-                }, [students]);
-
-                const toggleMC = (q, opt) => {
-                    const isCorrect = sysKey[q] === opt;
-                    setInputForm({
-                        ...inputForm, 
-                        answers: {...inputForm.answers, [q]: opt},
-                        scores: {...inputForm.scores, [q]: isCorrect ? 1 : 0}
-                    });
-                };
-
-                const updateScore = (qKey, val, max) => {
-                    let numVal = parseFloat(val);
-                    if(val === '') numVal = ''; 
-                    else if(numVal < 0) numVal = 0;
-                    else if(numVal > max) numVal = max;
-                    setInputForm({ ...inputForm, scores: {...inputForm.scores, [qKey]: numVal} });
-                };
-
-                const save = () => {
-                    if(!studentId) return alert('請選擇學生');
-                    const newRec = { ...inputForm, id: Date.now(), timestamp: new Date().toISOString() };
-                    const others = records.filter(r => !(r.studentId===studentId && r.year===year && r.paper===paper));
-                    setRecords([...others, newRec]);
-                    alert('✅ 已儲存');
-                };
-
-                const showMC = paper === '1A' || paper.includes('2_');
-                const mcCount = paper === '1A' ? 33 : 8;
-                const showLQ = paper === '1B' || paper.includes('2_');
-
-                return (
-                    <div className="max-w-5xl mx-auto bg-white p-8 rounded-xl shadow-sm">
-                        <h2 className="text-2xl font-bold mb-6">📝 輸入成績</h2>
-                        <div className="grid grid-cols-3 gap-4 mb-6 bg-blue-50 p-4 rounded-lg">
-                            <div>
-                                <label className="block text-xs font-bold text-slate-500 mb-1">學生</label>
-                                <select className="w-full border p-2 rounded" value={studentId} onChange={e=>setInputForm({...inputForm, studentId:e.target.value})}>
-                                    <option value="">-- 請選擇 --</option>
-                                    {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                                </select>
-                                {studentId && (
-                                    <div className="mt-2 p-2 bg-slate-100 rounded text-[10px] text-slate-500 max-h-32 overflow-y-auto">
-                                        <div className="font-bold mb-1">已輸入紀錄 ({existingRecords.length}):</div>
-                                        <div className="flex flex-wrap gap-1">
-                                            {existingRecords.length === 0 ? <span>尚無紀錄</span> : 
-                                                existingRecords.map(r => <span key={r.id} className="bg-white border px-1 rounded shadow-sm text-slate-700">{r.year} {r.paper}</span>)
-                                            }
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-slate-500 mb-1">年份</label>
-                                <select className="w-full border p-2 rounded" value={year} onChange={e=>setInputForm({...inputForm, year:e.target.value, answers:{}, scores:{}})}>
-                                    {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-slate-500 mb-1">試卷</label>
-                                <select className="w-full border p-2 rounded font-bold" value={paper} onChange={e=>setInputForm({...inputForm, paper:e.target.value, answers:{}, scores:{}})}>
-                                    <optgroup label="Core (必修)"><option value="1A">Paper 1A (MC)</option><option value="1B">Paper 1B (LQ)</option></optgroup>
-                                    <optgroup label="Electives (選修)"><option value="2_E3">E3 - Energy (MC+LQ)</option><option value="2_E4">E4 - Medical (MC+LQ)</option></optgroup>
-                                </select>
-                            </div>
-                        </div>
-                        
-                        {showMC && (
-                            <div className="mb-8">
-                                <h3 className="font-bold text-slate-600 mb-3 border-b pb-2">MC 部份 (Q1-{mcCount})</h3>
-                                {Object.keys(sysKey).length === 0 && <div className="text-red-500 text-xs mb-2">⚠ 注意：此年份/試卷尚未設定標準答案，系統無法自動評分。</div>}
-                                <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
-                                    {Array.from({length: mcCount}).map((_, i) => {
-                                        const q = i+1;
-                                        const myAns = inputForm.answers[q];
-                                        const realAns = sysKey[q];
-                                        let statusClass = myAns && realAns ? (myAns===realAns ? "bg-green-50 border-green-300" : "bg-red-50 border-red-300") : "border-slate-200";
-
-                                        return (
-                                            <div key={q} className={`p-2 border rounded flex flex-col ${statusClass}`}>
-                                                <div className="flex justify-between items-center mb-1"><span className="font-bold text-slate-500">Q{q}</span></div>
-                                                <div className="flex justify-between">
-                                                    {['A','B','C','D'].map(opt => (
-                                                        <button key={opt} onClick={()=>toggleMC(q, opt)} className={`w-6 h-6 text-xs rounded font-bold ${myAns===opt?'bg-slate-800 text-white':'bg-white text-slate-400 border'}`}>{opt}</button>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )
-                                    })}
-                                </div>
-                            </div>
-                        )}
-
-                        {showLQ && (
-                            <div>
-                                <h3 className="font-bold text-slate-600 mb-3 border-b pb-2">長題目部份 (LQ)</h3>
-                                {lqConfig ? (
-                                    <div className="grid grid-cols-3 md:grid-cols-5 gap-4">
-                                        {lqConfig.map((item) => (
-                                            <div key={item.id} className="flex flex-col">
-                                                <div className="flex justify-between items-end mb-1">
-                                                    <span className="text-sm font-bold text-slate-700">Q{item.id}</span>
-                                                    <span className="text-[10px] text-slate-400 bg-slate-100 px-1 rounded">/{item.max}</span>
-                                                </div>
-                                                <input type="number" className="border p-2 rounded text-center focus:ring-2 focus:ring-blue-500 outline-none" value={inputForm.scores[item.id] ?? ''} onChange={e => updateScore(item.id, e.target.value, item.max)} />
-                                                <span className="text-[9px] text-center text-slate-300 mt-1 truncate" title={item.tid}>{item.tid}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (<div className="text-sm text-yellow-600 bg-yellow-50 p-2 rounded">此年份 ({year}) 尚未載入詳細題目地圖。</div>)}
-                            </div>
-                        )}
-                        <button onClick={save} className="w-full mt-6 bg-slate-800 text-white py-3 rounded font-bold hover:bg-slate-700 shadow-lg">儲存成績</button>
-                    </div>
-                );
-            };
-
-            const DashboardView = () => {
-                const [yearFilter, setYearFilter] = useState('All');
-                const [partFilter, setPartFilter] = useState('MC');
-
-                useEffect(() => {
-                    if (!dashStudent && students.length > 0) setDashStudent(students[0].id);
-                }, [students, dashStudent]);
-
-                const subTopicStats = useMemo(() => {
-                    if(!dashStudent) return [];
-                    
-                    const myRecs = records.filter(r => {
-                        if (r.studentId !== dashStudent) return false;
-                        if (yearFilter !== 'All' && r.year.toString() !== yearFilter.toString()) return false;
-                        if (partFilter === 'MC' && r.paper === '1B') return false; 
-                        
-                        const isPaper1 = r.paper === '1A' || r.paper === '1B';
-                        return dashPaperType === 'core' ? isPaper1 : !isPaper1;
-                    });
-
-                    const stats = {};
-                    myRecs.forEach(r => {
-                        const scoreData = r.scores || {};
-                        Object.entries(scoreData).forEach(([q, score]) => {
-                            const isMC = r.paper === '1A' || (r.paper.includes('2_') && !isNaN(q) && parseInt(q) <= 8);
-                            if (partFilter === 'MC' && !isMC) return; 
-
-                            const info = getTopicInfo(r.year, r.paper, q);
-                            const tId = info.id;
-                            
-                            if(!stats[tId]) stats[tId] = { id: tId, topic: info.topic, section: info.section, earned: 0, max: 0, count: 0 };
-                            
-                            const earned = parseFloat(score) || 0;
-                            let max = 1;
-                            if (!isMC) {
-                                let mapKeyLQ = r.paper === '1B' ? `${r.year}_1B` : `${r.year}_${r.paper}_LQ`;
-                                const qMap = FULL_QUESTION_MAP[mapKeyLQ];
-                                if(Array.isArray(qMap)) {
-                                    const qItem = qMap.find(i => i.id === q);
-                                    if(qItem) max = qItem.max;
-                                    else max = 10;
-                                } else max = 10;
-                            }
-                            
-                            stats[tId].earned += earned;
-                            stats[tId].max += max;
-                            stats[tId].count += 1;
-                        });
-                    });
-
-                    return Object.values(stats)
-                        .filter(item => {
-                            const isElectiveTopic = item.id.toString().startsWith('E');
-                            return dashPaperType === 'elective' ? isElectiveTopic : !isElectiveTopic;
-                        })
-                        .sort((a,b) => {
-                            const pctA = a.max > 0 ? (a.earned/a.max) : 0;
-                            const pctB = b.max > 0 ? (b.earned/b.max) : 0;
-                            return pctA - pctB;
-                        });
-
-                }, [records, dashStudent, dashPaperType, yearFilter, partFilter]);
-
-                // 只有得分率低於 70% 的課題，才會進入紅色的「待改善」列表
-                const weakestList = subTopicStats.filter(t => (t.max > 0 && t.earned / t.max < 0.7)).slice(0, 50); 
-                
-                // 得分率達到 70% 或以上 (包含全對 100%) 的課題，進入綠色的「表現優異」列表
-                const strongestList = [...subTopicStats].reverse().filter(t => (t.max > 0 && t.earned / t.max >= 0.7)).slice(0, 50);
-
-                return (
-                    <div className="max-w-6xl mx-auto space-y-6">
-                        <div className="bg-white p-4 rounded-xl shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
-                            <h2 className="text-xl font-bold">📊 子課題診斷報告</h2>
-                            
-                            <div className="flex flex-wrap gap-4 items-center">
-                                <div className="flex flex-col gap-1">
-                                    <select className="border p-2 rounded bg-white shadow-sm font-bold text-slate-600" value={dashStudent} onChange={e=>setDashStudent(e.target.value)}>
-                                        {students.length === 0 && <option value="">無學生資料</option>}
-                                        {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                                    </select>
-                                    {dashStudent && (
-                                        <div className="text-[10px] text-slate-500 bg-slate-100 p-1 rounded flex flex-wrap gap-1 max-w-[200px]">
-                                            <span className="font-bold">已完成:</span>
-                                            {Array.from(new Set(records.filter(r => r.studentId === dashStudent).map(r => `${r.year} ${r.paper}`)))
-                                                .sort((a,b) => b.localeCompare(a))
-                                                .map(rp => <span key={rp} className="bg-white px-1 border">{rp}</span>)
-                                            }
-                                        </div>
-                                    )}
-                                </div>
-                                
-                                <select className="border p-2 rounded bg-white shadow-sm font-bold text-slate-600" value={yearFilter} onChange={e=>setYearFilter(e.target.value)}>
-                                    <option value="All">全部年份</option>
-                                    {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
-                                </select>
-                                
-                                <select className="border p-2 rounded bg-white shadow-sm font-bold text-blue-600" value={partFilter} onChange={e=>setPartFilter(e.target.value)}>
-                                    <option value="MC">🔥 只計 MC</option>
-                                    <option value="ALL">全部 (MC + LQ)</option>
-                                </select>
-
-                                <div className="bg-slate-100 p-1 rounded-lg flex font-bold text-sm">
-                                    <button onClick={()=>setDashPaperType('core')} className={`px-4 py-2 rounded-md transition ${dashPaperType==='core'?'bg-white text-blue-600 shadow':'text-slate-400'}`}>Paper 1</button>
-                                    <button onClick={()=>setDashPaperType('elective')} className={`px-4 py-2 rounded-md transition ${dashPaperType==='elective'?'bg-white text-purple-600 shadow':'text-slate-400'}`}>Paper 2</button>
-                                </div>
-                            </div>
-                        </div>
-
-                        {subTopicStats.length === 0 ? (
-                            <div className="p-12 text-center text-slate-400 bg-white rounded-xl">尚無符合此條件的數據。</div>
-                        ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-[70vh]">
-                                <div className="bg-white p-4 rounded-xl shadow-sm border-t-4 border-red-500 flex flex-col h-full">
-                                    <h3 className="font-bold text-lg mb-4 text-red-600 flex items-center gap-2 flex-shrink-0"><span className="text-2xl">⚠</span> 待改善 (Weakest)</h3>
-                                    <div className="stats-list space-y-3 flex-1">
-                                        {weakestList.map(t => (
-                                            <div key={t.id} className="p-3 bg-red-50 border border-red-100 rounded-lg flex justify-between items-center">
-                                                <div className="overflow-hidden">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="sub-topic-tag bg-white text-red-600 px-1 border border-red-200 rounded text-sm">{t.id}</span>
-                                                        <span className="font-bold text-slate-800 truncate">{t.topic}</span>
-                                                    </div>
-                                                </div>
-                                                <div className="text-right flex-shrink-0 ml-2">
-                                                    <div className="text-xl font-bold text-red-600">{((t.earned/t.max)*100).toFixed(0)}%</div>
-                                                    <div className="text-[10px] text-slate-400">{t.earned}/{t.max} 分</div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                                <div className="bg-white p-4 rounded-xl shadow-sm border-t-4 border-green-500 flex flex-col h-full">
-                                    <h3 className="font-bold text-lg mb-4 text-green-600 flex items-center gap-2 flex-shrink-0"><span className="text-2xl">★</span> 表現優異 (Strongest)</h3>
-                                    <div className="stats-list space-y-3 flex-1">
-                                        {strongestList.map(t => (
-                                            <div key={t.id} className="p-3 bg-green-50 border border-green-100 rounded-lg flex justify-between items-center">
-                                                <div className="overflow-hidden">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="sub-topic-tag bg-white text-green-600 px-1 border border-green-200 rounded text-sm">{t.id}</span>
-                                                        <span className="font-bold text-slate-800 truncate">{t.topic}</span>
-                                                    </div>
-                                                </div>
-                                                <div className="text-right flex-shrink-0 ml-2">
-                                                    <div className="text-xl font-bold text-green-600">{((t.earned/t.max)*100).toFixed(0)}%</div>
-                                                    <div className="text-[10px] text-slate-400">{t.earned}/{t.max} 分</div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                );
-            };
-
-            const GenerateView = () => {
-                const [studentStats, setStudentStats] = useState({});
-                const [yearFilter, setYearFilter] = useState('All');
-                const [partFilter, setPartFilter] = useState('MC');
-
-                useEffect(() => {
-                    if (!dashStudent) return;
-                    
-                    const myRecs = records.filter(r => {
-                        if (r.studentId !== dashStudent) return false;
-                        if (yearFilter !== 'All' && r.year.toString() !== yearFilter.toString()) return false;
-                        if (partFilter === 'MC' && r.paper === '1B') return false; 
-                        return true;
-                    });
-                    
-                    const stats = {};
-                    Object.keys(SYLLABUS_DATA).forEach(tid => { stats[tid] = { earned: 0, max: 0 }; });
-
-                    myRecs.forEach(r => {
-                        const scoreData = r.scores || {};
-                        Object.entries(scoreData).forEach(([q, score]) => {
-                            const isMC = r.paper === '1A' || (r.paper.includes('2_') && !isNaN(q) && parseInt(q) <= 8);
-                            if (partFilter === 'MC' && !isMC) return;
-
-                            const numericScore = parseFloat(score) || 0;
-                            const info = getTopicInfo(r.year, r.paper, q);
-                            const tid = info.id;
-                            
-                            let qMax = 0;
-                            if (isMC) {
-                                qMax = 1;
-                            } else {
-                                let mapKeyLQ = r.paper === '1B' ? `${r.year}_1B` : `${r.year}_${r.paper}_LQ`;
-                                const lqList = FULL_QUESTION_MAP[mapKeyLQ];
-                                if(Array.isArray(lqList)) {
-                                    const qItem = lqList.find(i => i.id === q);
-                                    qMax = qItem ? qItem.max : 10;
-                                } else qMax = 10;
-                            }
-
-                            if(stats[tid]) {
-                                stats[tid].earned += numericScore;
-                                stats[tid].max += qMax;
-                            }
-                        });
-                    });
-                    setStudentStats(stats);
-                }, [dashStudent, records, yearFilter, partFilter]);
-
-                const toggleTopic = (tid) => selectedTopics.includes(tid) ? setSelectedTopics(selectedTopics.filter(t => t !== tid)) : setSelectedTopics([...selectedTopics, tid]);
-                const toggleAll = () => selectedTopics.length === Object.keys(SYLLABUS_DATA).length ? setSelectedTopics([]) : setSelectedTopics(Object.keys(SYLLABUS_DATA));
-
-                const generate = () => {
-                    if (!dashStudent) return alert("請先選擇學生");
-                    if (selectedTopics.length === 0) return alert("請至少選擇一個課題");
-
-                    const myRecs = records.filter(r => {
-                        if (r.studentId !== dashStudent) return false;
-                        if (yearFilter !== 'All' && r.year.toString() !== yearFilter.toString()) return false;
-                        if (partFilter === 'MC' && r.paper === '1B') return false; 
-                        return true;
-                    });
-                    
-                    let weakConcepts = [];
-                    myRecs.forEach(r => {
-                        const scoreData = r.scores || {};
-                        Object.entries(scoreData).forEach(([q, score]) => {
-                            const isMC = r.paper === '1A' || (r.paper.includes('2_') && !isNaN(q) && parseInt(q) <= 8);
-                            if (partFilter === 'MC' && !isMC) return;
-
-                            const info = getTopicInfo(r.year, r.paper, q);
-                            if (selectedTopics.includes(info.id) && info.detail) {
-                                const earned = parseFloat(score) || 0;
-                                let max = 1;
-                                if (!isMC) {
-                                    let mapKeyLQ = r.paper === '1B' ? `${r.year}_1B` : `${r.year}_${r.paper}_LQ`;
-                                    const lqList = FULL_QUESTION_MAP[mapKeyLQ];
-                                    if(Array.isArray(lqList)) {
-                                        const qItem = lqList.find(i => i.id === q);
-                                        max = qItem ? qItem.max : 10;
-                                    } else max = 10;
-                                }
-                                if (earned < max) weakConcepts.push(`- [${info.id}] ${info.detail}`);
-                            }
-                        });
-                    });
-
-                    weakConcepts = [...new Set(weakConcepts)].slice(0, 8);
-
-                    const topicListText = selectedTopics.sort().map(tid => {
-                        const s = studentStats[tid] || {earned:0, max:0};
-                        const pct = s.max > 0 ? Math.round((s.earned / s.max) * 100) + '%' : 'No Data';
-                        return `- [${tid}] ${SYLLABUS_DATA[tid].topic} (Score: ${pct})`;
-                    }).join('\n');
-
-                    const difficultyMap = { low: 'Foundation/Easy', medium: 'Standard HKDSE', high: 'Challenging/5**' };
-                    const typeMap = { mc: 'Multiple Choice (MC) ONLY', lq: 'Long Questions (LQ) ONLY', mixed: 'Mixed (MC & LQ)' };
-                    const langMap = { zh: 'Traditional Chinese (繁體中文)', en: 'English' };
-
-                    const prompt = `Role: Professional HKDSE Physics Tutor.
-Task: Create a practice exercise.
-
-**Configuration:**
-- **Level:** HKDSE Physics
-- **Difficulty:** ${difficultyMap[genSettings.difficulty]}
-- **Format:** ${typeMap[genSettings.type]}
-- **Language:** ${langMap[genSettings.lang]}
-
-**Targeted Topics:**
-${topicListText}
-
-**Specific Weakness Concepts (CRITICAL):**
-The student has previously failed questions involving these specific concepts. 
-**Please ensure ~20% of the new questions specifically target these misconceptions:**
-${weakConcepts.length > 0 ? weakConcepts.join('\n') : "(General practice on topics above)"}
-
-**Requirements:**
-1. Generate distinctive questions for the selected topics.
-2. Integrate the "Specific Weakness Concepts" into the questions where natural.
-3. Provide a Marking Scheme with detailed explanations.
-4. If MC, 生成互動式測驗
-5. If MC, provide 4 options (A,B,C,D).`.trim();
-                    
-
-                    setGeneratedPrompt(prompt);
-
-                    const sName = students.find(s=>s.id === dashStudent)?.name || "Unknown";
-                    const newHistoryItem = {
-                        id: Date.now(), timestamp: new Date().toISOString(), studentId: dashStudent,
-                        studentName: sName, topics: selectedTopics, settings: genSettings,
-                        note: `Weaknesses: ${weakConcepts.length} items targeted.`
-                    };
-                    setGenHistory(prev => [newHistoryItem, ...prev]);
-                    alert("Prompt 生成成功！\n已同時建立一條練習紀錄。");
-                };
-
-                const sortedTopicKeys = Object.keys(SYLLABUS_DATA).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
-
-                return (
-                    <div className="max-w-6xl mx-auto flex gap-6 h-[85vh]">
-                        <div className="w-5/12 bg-white p-5 rounded-xl shadow-sm flex flex-col h-full border border-slate-200">
-                            <h2 className="text-lg font-bold mb-4 flex items-center gap-2 text-slate-700">🛠️ 生成設定</h2>
-                            <div className="grid grid-cols-2 gap-3 mb-4">
-                                <div className="col-span-2 flex gap-2">
-                                    <div className="flex-1">
-                                        <label className="block text-xs font-bold text-slate-500 mb-1">目標學生</label>
-                                        <select className="w-full border p-2 rounded text-sm bg-slate-50" value={dashStudent} onChange={e=>setDashStudent(e.target.value)}>
-                                            {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                                        </select>
-                                    </div>
-                                    <div className="flex-1">
-                                        <label className="block text-xs font-bold text-slate-500 mb-1">過濾年份</label>
-                                        <select className="w-full border p-2 rounded text-sm bg-slate-50" value={yearFilter} onChange={e=>setYearFilter(e.target.value)}>
-                                            <option value="All">全部</option>
-                                            {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
-                                        </select>
-                                    </div>
-                                    <div className="flex-1">
-                                        <label className="block text-xs font-bold text-slate-500 mb-1">過濾部分</label>
-                                        <select className="w-full border p-2 rounded text-sm text-blue-600 font-bold bg-slate-50" value={partFilter} onChange={e=>setPartFilter(e.target.value)}>
-                                            <option value="MC">🔥 只計MC</option>
-                                            <option value="ALL">MC+LQ</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                {dashStudent && (
-                                    <div className="col-span-2 text-[10px] text-slate-500 bg-slate-100 p-1.5 rounded flex flex-wrap gap-1">
-                                        <span className="font-bold">已完成:</span>
-                                        {Array.from(new Set(records.filter(r => r.studentId === dashStudent).map(r => `${r.year} ${r.paper}`)))
-                                            .sort((a,b) => b.localeCompare(a)).map(rp => <span key={rp} className="bg-white px-1 border">{rp}</span>)}
-                                    </div>
-                                )}
-                                <div><label className="block text-xs font-bold text-slate-500 mb-1">語言 (Lang)</label><select className="w-full border p-2 rounded text-sm" value={genSettings.lang} onChange={e=>setGenSettings({...genSettings, lang:e.target.value})}><option value="zh">繁體中文</option><option value="en">English</option></select></div>
-                                <div><label className="block text-xs font-bold text-slate-500 mb-1">難度 (Diff)</label><select className="w-full border p-2 rounded text-sm" value={genSettings.difficulty} onChange={e=>setGenSettings({...genSettings, difficulty:e.target.value})}><option value="low">低</option><option value="medium">中</option><option value="high">高</option></select></div>
-                                <div className="col-span-2"><label className="block text-xs font-bold text-slate-500 mb-1">題型 (Type)</label><select className="w-full border p-2 rounded text-sm" value={genSettings.type} onChange={e=>setGenSettings({...genSettings, type:e.target.value})}><option value="mixed">MC + LQ (混合)</option><option value="mc">MC Only</option><option value="lq">LQ Only</option></select></div>
-                            </div>
-                            
-                            <div className="flex-1 flex flex-col min-h-0 border rounded-lg bg-slate-50">
-                                <div className="p-2 border-b bg-slate-100 flex justify-between items-center flex-wrap gap-2">
-                                    <span className="text-xs font-bold text-slate-600">選擇課題 ({selectedTopics.length})</span>
-                                    
-                                    <div className="flex items-center gap-1">
-                                        <div className="flex items-center bg-white border border-slate-300 rounded px-1 h-6">
-                                            <span className="text-[10px] text-slate-500 mr-1">低於</span>
-                                            <input type="number" className="w-7 text-center text-xs outline-none text-red-600 font-bold bg-transparent" value={weakThreshold} onChange={e=>setWeakThreshold(e.target.value)} />
-                                            <span className="text-[10px] text-slate-500">%</span>
-                                        </div>
-                                        <button onClick={() => {
-                                            const threshold = parseFloat(weakThreshold) / 100;
-                                            const weakTopics = sortedTopicKeys.filter(tid => {
-                                                const s = studentStats[tid];
-                                                return s && s.max > 0 && (s.earned / s.max) < threshold;
-                                            });
-                                            setSelectedTopics(weakTopics);
-                                        }} className="text-[10px] bg-red-100 text-red-600 px-2 h-6 rounded hover:bg-red-200 font-bold transition">
-                                            自動選弱點
-                                        </button>
-                                        <button onClick={toggleAll} className="text-[10px] text-blue-600 hover:underline border-l pl-2 ml-1 h-6">
-                                            {selectedTopics.length === sortedTopicKeys.length ? '全不選' : '全選全部'}
-                                        </button>
-                                    </div>
-                                </div>
-                                <div className="overflow-y-auto p-2 space-y-1 flex-1">
-                                    {sortedTopicKeys.map(tid => {
-                                        const s = studentStats[tid] || {earned:0, max:0};
-                                        const hasData = s.max > 0;
-                                        const pct = hasData ? Math.round((s.earned / s.max) * 100) : 0;
-                                        let scoreColor = hasData ? (pct < 40 ? 'text-red-500 font-bold' : pct < 70 ? 'text-yellow-600 font-bold' : 'text-green-600 font-bold') : 'text-slate-400';
-                                        return (
-                                            <label key={tid} className="flex items-center gap-2 p-2 hover:bg-white rounded cursor-pointer border border-transparent hover:border-slate-200">
-                                                <input type="checkbox" checked={selectedTopics.includes(tid)} onChange={() => toggleTopic(tid)} className="w-4 h-4 rounded text-blue-600" />
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="flex justify-between items-center"><span className="text-xs font-mono font-bold text-slate-700">{tid}</span><span className={`text-xs ${scoreColor}`}>{hasData ? `${pct}%` : '--'}</span></div>
-                                                    <div className="text-xs text-slate-500 truncate">{SYLLABUS_DATA[tid].topic}</div>
-                                                </div>
-                                            </label>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                            <button onClick={generate} className="w-full py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-bold mt-4 shadow hover:shadow-lg">生成 Prompt ✨</button>
-                        </div>
-                        <div className="flex-1 bg-white p-6 rounded-xl shadow-sm h-full flex flex-col border border-slate-200">
-                            <h3 className="font-bold text-slate-700 mb-2">📝 生成結果 (Prompt Output)</h3>
-                            <textarea className="flex-1 w-full bg-slate-50 border p-4 rounded-lg font-mono text-sm resize-none outline-none" value={generatedPrompt} readOnly placeholder="請在左側選擇並點擊「生成」..."></textarea>
-                            <button onClick={()=>{navigator.clipboard.writeText(generatedPrompt); alert("已複製!")}} className="mt-4 py-3 bg-slate-800 text-white rounded-lg hover:bg-slate-700 font-bold flex justify-center gap-2">📋 複製並貼給 AI</button>
-                        </div>
-                    </div>
-                );
-            };
-
-            const HistoryView = () => {
-                const updateNote = (id, newNote) => setGenHistory(prev => prev.map(item => item.id === id ? { ...item, note: newNote } : item));
-                const deleteHistory = (id) => { if(confirm("確定刪除此紀錄?")) setGenHistory(prev => prev.filter(item => item.id !== id)); };
-                return (
-                    <div className="max-w-6xl mx-auto bg-white p-8 rounded-xl shadow-sm min-h-[80vh]">
-                        <h2 className="text-2xl font-bold mb-6 text-slate-800 flex items-center gap-2">📜 練習生成紀錄</h2>
-                        {genHistory.length === 0 ? (<div className="text-center py-20 text-slate-400 bg-slate-50 rounded-lg">尚未生成任何練習。</div>) : (
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse">
-                                    <thead><tr className="bg-slate-100 text-slate-600 text-sm"><th className="p-3">時間 / 學生</th><th className="p-3">設定</th><th className="p-3">課題</th><th className="p-3 w-1/3">備註</th><th className="p-3 text-right">操作</th></tr></thead>
-                                    <tbody className="text-sm">
-                                        {genHistory.map(item => (
-                                            <tr key={item.id} className="border-b border-slate-100 hover:bg-slate-50">
-                                                <td className="p-3 align-top"><div className="font-bold text-slate-800">{new Date(item.timestamp).toLocaleDateString()}</div><div className="text-xs text-slate-400">{new Date(item.timestamp).toLocaleTimeString()}</div><div className="mt-1 text-blue-600 font-bold">{item.studentName}</div></td>
-                                                <td className="p-3 align-top"><div className="flex flex-col gap-1"><span className="bg-gray-200 text-gray-700 px-2 py-0.5 rounded text-xs w-fit">{item.settings.difficulty}</span><span className="bg-gray-200 text-gray-700 px-2 py-0.5 rounded text-xs w-fit">{item.settings.type}</span></div></td>
-                                                <td className="p-3 align-top"><div className="flex flex-wrap gap-1">{item.topics.map(t => <span key={t} className="border border-slate-300 px-1 rounded text-xs font-mono">{t}</span>)}</div></td>
-                                                <td className="p-3 align-top"><textarea className="w-full border border-blue-200 bg-blue-50 p-2 rounded text-xs focus:ring-1 focus:ring-blue-500 outline-none resize-none" rows="3" value={item.note || ''} onChange={(e) => updateNote(item.id, e.target.value)}></textarea></td>
-                                                <td className="p-3 align-top text-right"><button onClick={() => deleteHistory(item.id)} className="text-slate-400 hover:text-red-500 p-2">✕</button></td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-                    </div>
-                );
-            };
-
+            // 注意這裡變回了標準的 <StudentsView />，完美運行！
             return (
-                <div className="flex min-h-screen">
-                    <Sidebar />
-                    <div className="flex-1 ml-64 p-8 overflow-y-auto h-screen">
-                        {view === 'students' && StudentsView()}
-                        {view === 'input' && InputView()}
-                        {view === 'dashboard' && DashboardView()}
-                        {view === 'generate' && GenerateView()}
-                        {view === 'history' && HistoryView()}
-                        {view === 'data' && DataView()}
+                <AppContext.Provider value={contextValue}>
+                    <div className="flex min-h-screen">
+                        <Sidebar />
+                        <div className="flex-1 ml-64 p-8 overflow-y-auto h-screen">
+                            {view === 'students' && <StudentsView />}
+                            {view === 'input' && <InputView />}
+                            {view === 'dashboard' && <DashboardView />}
+                            {view === 'generate' && <GenerateView />}
+                            {view === 'history' && <HistoryView />}
+                            {view === 'data' && <DataView />}
+                        </div>
                     </div>
-                </div>
+                </AppContext.Provider>
             );
         };
-        // 👇 就是缺了這兩行！請把它們加在這裡 👇
+
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
-        // 👆 👆 👆 👆 👆 👆 👆 👆 👆 👆 👆 👆 👆 👆
     </script>
 </body>
 </html>
+
 
 
 
