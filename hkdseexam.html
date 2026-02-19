@@ -2176,9 +2176,14 @@ ${weakConcepts.length > 0 ? weakConcepts.join('\n') : "(General practice on topi
                 </div>
             );
         };
+        // 👇 就是缺了這兩行！請把它們加在這裡 👇
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+        // 👆 👆 👆 👆 👆 👆 👆 👆 👆 👆 👆 👆 👆 👆
     </script>
 </body>
 </html>
+
 
 
 
