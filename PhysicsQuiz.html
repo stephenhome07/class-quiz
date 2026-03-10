@@ -44,7 +44,7 @@
             return <span ref={containerRef} style={{ display: 'inline-flex', alignItems: 'center', verticalAlign: 'middle' }} />;
         };
 
-        const QUIZ_MAPS = {
+       const QUIZ_MAPS = {
             'CH02': {
                 title: '02 熱與內能',
                 questions: [
@@ -65,6 +65,24 @@
                     { id: 'LQ3a', type: 'LQ', max: 4, topicId: '1.3.1', topicDesc: '電器加熱所需的能量和時間計算' },
                     { id: 'LQ3b', type: 'LQ', max: 2, topicId: '1.3.2', topicDesc: '冷卻曲線圖繪製' },
                     { id: 'LQ3c', type: 'LQ', max: 1, topicId: '1.3.2', topicDesc: '比熱容量對冷卻線圖的影響' }
+                ]
+            },
+            'CH03': {
+                title: '03 物態變化',
+                questions: [
+                    { id: 'MC1', type: 'MC', max: 1, topicId: '1.2.1', topicDesc: '認識熱是兩物體因溫差而引致的能量轉移 (內能與時間關係)' },
+                    { id: 'MC2', type: 'MC', max: 1, topicId: '1.4.1', topicDesc: '根據熔點和沸點判斷物質狀態' },
+                    { id: 'MC3', type: 'MC', max: 1, topicId: '1.4.1', topicDesc: '分析冷卻曲線及物態變化' },
+                    { id: 'MC4', type: 'MC', max: 1, topicId: '1.4.1', topicDesc: '分析加熱曲線及識別物質的三種狀態' },
+                    { id: 'MC6', type: 'MC', max: 1, topicId: '1.4.1', topicDesc: '解決有關潛熱與比熱容量的混合計算問題' },
+                    { id: 'LQ1a', type: 'LQ', max: 4, topicId: '1.3.2', topicDesc: '從加熱線圖數據計算水的比熱容量' },
+                    { id: 'LQ1b', type: 'LQ', max: 2, topicId: '1.4.1', topicDesc: '從沸騰線圖數據計算水的汽化比潛熱' },
+                    { id: 'LQ1c', type: 'LQ', max: 1, topicId: '1.4.1', topicDesc: '改善量度潛熱實驗準確度的方法 (減少熱散失)' },
+                    { id: 'LQ2ai', type: 'LQ', max: 1, topicId: '1.1.1', topicDesc: '從加熱曲線找出最初溫度' },
+                    { id: 'LQ2aii', type: 'LQ', max: 1, topicId: '1.4.1', topicDesc: '從加熱曲線測定沸點' },
+                    { id: 'LQ2b', type: 'LQ', max: 3, topicId: '1.3.2', topicDesc: '運用 P=E/t 及 E=mcΔT 計算液體的比熱容量' },
+                    { id: 'LQ2ci', type: 'LQ', max: 2, topicId: '1.4.1', topicDesc: '解釋沸騰時質量減少的原因 (轉化為蒸汽)' },
+                    { id: 'LQ2cii', type: 'LQ', max: 2, topicId: '1.4.1', topicDesc: '運用 E=ml 計算液體的汽化比潛熱' }
                 ]
             }
         };
@@ -438,5 +456,6 @@
     </script>
 </body>
 </html>
+
 
 
