@@ -31,7 +31,6 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        // --- Icon Component ---
         const Icon = ({ name, size = 20, className = "" }) => {
             const containerRef = useRef(null);
             useEffect(() => {
@@ -45,8 +44,6 @@
             return <span ref={containerRef} style={{ display: 'inline-flex', alignItems: 'center', verticalAlign: 'middle' }} />;
         };
 
-        // --- Hardcoded Syllabus Maps ---
-        // 你可以稍後在此處加入 CH01, CH03 等其他的 MAP
         const QUIZ_MAPS = {
             'CH02': {
                 title: '02 熱與內能',
@@ -72,23 +69,21 @@
             }
         };
 
-        const SUBJECT_MODULES = [
-            ...Array.from({length: 32}, (_, i) => `CH${String(i+1).padStart(2, '0')}`),
-            ...Array.from({length: 10}, (_, i) => `E${String(i+1).padStart(2, '0')}`)
-        ];
-
-        // --- Main App ---
         const App = () => {
             const [view, setView] = useState('students');
             const [students, setStudents] = useState([]);
-            const [scores, setScores] = useState({}); // { studentId: { CH02: { MC1: 1, LQ1a: 2 } } }
+            const [scores, setScores] = useState({});
             const [selectedQuiz, setSelectedQuiz] = useState('CH02');
             const [selectedStudentId, setSelectedStudentId] = useState('');
-            
-            // Textarea for Excel Paste
             const [pasteData, setPasteData] = useState('');
 
-            // Load Data
+            // AI Prompt settings
+            const [aiLang, setAiLang] = useState('zh'); // zh, en
+            const [aiType, setAiType] = useState('Both'); // MC, LQ, Both
+            const [aiLevel, setAiLevel] = useState('LV3-4'); // LV2, LV3-4, LV5
+            const [aiMcCount, setAiMcCount] = useState(10);
+            const [aiLqCount, setAiLqCount] = useState(2);
+
             useEffect(() => {
                 const savedStudents = localStorage.getItem('hkdse_quiz_students');
                 const savedScores = localStorage.getItem('hkdse_quiz_scores');
@@ -96,24 +91,19 @@
                 if (savedScores) setScores(JSON.parse(savedScores));
             }, []);
 
-            // Save Data
             useEffect(() => {
                 localStorage.setItem('hkdse_quiz_students', JSON.stringify(students));
                 localStorage.setItem('hkdse_quiz_scores', JSON.stringify(scores));
             }, [students, scores]);
 
-            // Handle Excel Paste
             const handleImportStudents = () => {
                 const lines = pasteData.trim().split('\n');
                 const newStudents = [];
                 lines.forEach(line => {
                     const parts = line.split('\t');
                     if (parts.length >= 3) {
-                        const sClass = parts[0].trim();
-                        const sNum = parts[1].trim();
-                        const sName = parts[2].trim();
-                        const id = `${sClass}-${sNum}`;
-                        newStudents.push({ id, class: sClass, num: sNum, name: sName });
+                        const id = `${parts[0].trim()}-${parts[1].trim()}`;
+                        newStudents.push({ id, class: parts[0].trim(), num: parts[1].trim(), name: parts[2].trim() });
                     }
                 });
                 if (newStudents.length > 0) {
@@ -123,118 +113,71 @@
                 }
             };
 
-            // Score Input Handler
             const handleScoreChange = (studentId, quizId, qId, val) => {
                 const numVal = val === '' ? '' : parseFloat(val);
                 setScores(prev => ({
-                    ...prev,
-                    [studentId]: {
-                        ...(prev[studentId] || {}),
-                        [quizId]: {
-                            ...((prev[studentId] && prev[studentId][quizId]) || {}),
-                            [qId]: numVal
-                        }
-                    }
+                    ...prev, [studentId]: { ...(prev[studentId] || {}), [quizId]: { ...((prev[studentId] && prev[studentId][quizId]) || {}), [qId]: numVal } }
                 }));
             };
 
-            // Generate Weakness Analysis
             const getStudentAnalysis = (studentId, quizId) => {
                 const studentScores = (scores[studentId] || {})[quizId] || {};
                 const map = QUIZ_MAPS[quizId];
                 if (!map) return null;
 
                 const analysis = {};
-                let totalScore = 0;
-                let totalMax = 0;
+                let totalScore = 0; let totalMax = 0;
 
                 map.questions.forEach(q => {
                     const s = studentScores[q.id] || 0;
-                    totalScore += s;
-                    totalMax += q.max;
-
+                    totalScore += s; totalMax += q.max;
                     if (!analysis[q.topicId]) analysis[q.topicId] = { max: 0, score: 0, desc: q.topicDesc, weakPoints: [] };
-                    analysis[q.topicId].max += q.max;
-                    analysis[q.topicId].score += s;
-
-                    if (s < q.max * 0.5) { // Sub-question < 50%
-                        analysis[q.topicId].weakPoints.push(q.topicDesc);
-                    }
+                    analysis[q.topicId].max += q.max; analysis[q.topicId].score += s;
+                    if (s < q.max * 0.5) analysis[q.topicId].weakPoints.push(q.topicDesc);
                 });
 
                 const weakTopics = Object.keys(analysis).filter(k => (analysis[k].score / analysis[k].max) < 0.5);
-
                 return { totalScore, totalMax, analysis, weakTopics };
             };
 
-            // Export to CSV
-            const exportScores = () => {
+            const exportScoresCSV = () => {
                 const data = students.map(s => {
                     const row = { Class: s.class, ClassNumber: s.num, Name: s.name };
                     Object.keys(QUIZ_MAPS).forEach(quizId => {
                         const map = QUIZ_MAPS[quizId];
                         const sScores = (scores[s.id] || {})[quizId] || {};
                         let mcScore = 0, lqScore = 0, total = 0;
-                        
                         map.questions.forEach(q => {
                             const val = sScores[q.id] || 0;
                             if (q.type === 'MC') mcScore += val;
                             if (q.type === 'LQ') lqScore += val;
                             total += val;
                         });
-
-                        row[`${quizId}_Total`] = total;
-                        row[`${quizId}_MC`] = mcScore;
-                        row[`${quizId}_LQ`] = lqScore;
+                        row[`${quizId}_Total`] = total; row[`${quizId}_MC`] = mcScore; row[`${quizId}_LQ`] = lqScore;
                     });
                     return row;
                 });
-                
                 const csv = Papa.unparse(data);
                 const blob = new Blob(["\uFEFF"+csv], { type: 'text/csv;charset=utf-8;' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `Physics_Quiz_Scores.csv`;
-                a.click();
+                const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+                a.download = `Physics_Quiz_Scores.csv`; a.click();
             };
 
-            // Views
+            // --- Views Components ---
+            
             const StudentView = () => (
                 <div className="p-6">
                     <h2 className="text-2xl font-bold mb-4 flex items-center gap-2"><Icon name="Users" /> 學生管理 (Excel 匯入)</h2>
                     <div className="card p-4 mb-6">
                         <p className="text-sm text-gray-500 mb-2">請從 Excel 複製資料並貼上至下方文字方塊。格式必須為 3 欄：<b>班別 (Tab) 學號 (Tab) 姓名</b>。</p>
-                        <textarea 
-                            className="w-full h-32 p-2 border rounded text-sm mb-2 focus:ring-2 focus:ring-blue-400 outline-none" 
-                            placeholder="1A&#9;01&#9;Chan Tai Man&#10;1A&#9;02&#9;Lee Siu Ming"
-                            value={pasteData} onChange={e => setPasteData(e.target.value)}
-                        />
+                        <textarea className="w-full h-32 p-2 border rounded text-sm mb-2" value={pasteData} onChange={e => setPasteData(e.target.value)} />
                         <button onClick={handleImportStudents} className="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700">匯入學生資料</button>
-                    </div>
-
-                    <div className="card p-4">
-                        <h3 className="font-bold mb-2">目前學生名單 ({students.length} 人)</h3>
-                        <div className="max-h-64 overflow-y-auto">
-                            <table className="w-full text-sm text-left">
-                                <thead className="bg-gray-50 text-gray-700">
-                                    <tr><th className="p-2">班別</th><th className="p-2">學號</th><th className="p-2">姓名</th></tr>
-                                </thead>
-                                <tbody>
-                                    {students.map(s => (
-                                        <tr key={s.id} className="border-b"><td className="p-2">{s.class}</td><td className="p-2">{s.num}</td><td className="p-2">{s.name}</td></tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
                     </div>
                 </div>
             );
 
             const ScoreInputView = () => {
                 const map = QUIZ_MAPS[selectedQuiz];
-                if (!map) return <div className="p-6">請先在程式碼中設定 {selectedQuiz} 的 MAP。</div>;
-
                 return (
                     <div className="p-6 flex flex-col md:flex-row gap-6">
                         <div className="w-full md:w-1/4 card p-4 max-h-[80vh] overflow-y-auto">
@@ -243,58 +186,42 @@
                                 const ana = getStudentAnalysis(s.id, selectedQuiz);
                                 const isFail = ana && (ana.totalScore / ana.totalMax < 0.5);
                                 return (
-                                    <div key={s.id} 
-                                        onClick={() => setSelectedStudentId(s.id)}
-                                        className={`p-2 mb-1 rounded cursor-pointer border ${selectedStudentId === s.id ? 'bg-blue-100 border-blue-400' : 'hover:bg-gray-50 border-transparent'} flex justify-between`}
-                                    >
+                                    <div key={s.id} onClick={() => setSelectedStudentId(s.id)}
+                                        className={`p-2 mb-1 rounded cursor-pointer border ${selectedStudentId === s.id ? 'bg-blue-100 border-blue-400' : 'hover:bg-gray-50 border-transparent'} flex justify-between`}>
                                         <span>{s.class}({s.num}) {s.name}</span>
                                         {ana && <span className={`text-xs font-bold ${isFail ? 'text-red-500' : 'text-green-600'}`}>{ana.totalScore} / {ana.totalMax}</span>}
                                     </div>
                                 )
                             })}
                         </div>
-                        
                         <div className="flex-1 card p-6">
-                            <div className="flex justify-between items-center mb-6 border-b pb-4">
-                                <h2 className="text-xl font-bold">{map.title} - 成績輸入</h2>
-                                <select className="p-2 border rounded" value={selectedQuiz} onChange={e => setSelectedQuiz(e.target.value)}>
-                                    {Object.keys(QUIZ_MAPS).map(k => <option key={k} value={k}>{QUIZ_MAPS[k].title}</option>)}
-                                </select>
-                            </div>
-
+                            <h2 className="text-xl font-bold border-b pb-4 mb-4">{map.title} - 成績輸入</h2>
                             {selectedStudentId ? (
                                 <div>
-                                    <h3 className="font-bold text-lg mb-4 text-blue-700">MC 選擇題 (每題 {map.questions.filter(q=>q.type==='MC')[0]?.max || 1} 分)</h3>
-                                    <div className="grid grid-cols-4 sm:grid-cols-6 gap-4 mb-8">
+                                    <h3 className="font-bold text-blue-700 mb-2">MC 選擇題</h3>
+                                    <div className="grid grid-cols-6 gap-2 mb-6">
                                         {map.questions.filter(q => q.type === 'MC').map(q => (
-                                            <div key={q.id} className="flex flex-col items-center p-2 bg-gray-50 rounded border">
+                                            <div key={q.id} className="flex flex-col items-center p-2 bg-gray-50 border rounded">
                                                 <label className="text-xs font-bold mb-1">{q.id}</label>
-                                                <input type="number" min="0" max={q.max} 
-                                                    className="score-input"
+                                                <input type="number" min="0" max={q.max} className="score-input"
                                                     value={((scores[selectedStudentId] || {})[selectedQuiz] || {})[q.id] ?? ''}
-                                                    onChange={(e) => handleScoreChange(selectedStudentId, selectedQuiz, q.id, e.target.value)}
-                                                />
+                                                    onChange={(e) => handleScoreChange(selectedStudentId, selectedQuiz, q.id, e.target.value)} />
                                             </div>
                                         ))}
                                     </div>
-
-                                    <h3 className="font-bold text-lg mb-4 text-green-700">LQ 長題目</h3>
-                                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-4">
+                                    <h3 className="font-bold text-green-700 mb-2">LQ 長題目</h3>
+                                    <div className="grid grid-cols-4 gap-2">
                                         {map.questions.filter(q => q.type === 'LQ').map(q => (
-                                            <div key={q.id} className="flex flex-col items-center p-3 bg-gray-50 rounded border">
+                                            <div key={q.id} className="flex flex-col items-center p-2 bg-gray-50 border rounded">
                                                 <label className="text-sm font-bold mb-1">{q.id} <span className="text-gray-400 font-normal">/{q.max}</span></label>
-                                                <input type="number" min="0" max={q.max} 
-                                                    className="score-input w-16 text-lg"
+                                                <input type="number" min="0" max={q.max} className="score-input w-16"
                                                     value={((scores[selectedStudentId] || {})[selectedQuiz] || {})[q.id] ?? ''}
-                                                    onChange={(e) => handleScoreChange(selectedStudentId, selectedQuiz, q.id, e.target.value)}
-                                                />
+                                                    onChange={(e) => handleScoreChange(selectedStudentId, selectedQuiz, q.id, e.target.value)} />
                                             </div>
                                         ))}
                                     </div>
                                 </div>
-                            ) : (
-                                <div className="text-center text-gray-500 py-10">請從左側選擇學生以輸入成績</div>
-                            )}
+                            ) : (<div className="text-center text-gray-500 py-10">請從左側選擇學生</div>)}
                         </div>
                     </div>
                 );
@@ -305,22 +232,50 @@
                 const ana = selectedStudentId ? getStudentAnalysis(selectedStudentId, selectedQuiz) : null;
 
                 const generatePrompt = () => {
-                    if (!ana || ana.weakTopics.length === 0) return "此學生表現良好，暫不需要補底練習。";
+                    if (!ana || ana.weakTopics.length === 0) return aiLang === 'en' ? "This student is performing well." : "此學生表現良好，暫不需要補底練習。";
+                    
                     const weakList = ana.weakTopics.map(topic => {
                         const info = ana.analysis[topic];
-                        return `- ${topic}: ${info.desc} (具體弱點: ${[...new Set(info.weakPoints)].join(', ')})`;
+                        return `- ${topic}: ${info.desc} (${aiLang === 'en' ? 'Weakness' : '具體弱點'}: ${[...new Set(info.weakPoints)].join(', ')})`;
                     }).join('\n');
 
-                    return `你是一位香港 DSE 物理科老師。我的學生在小測「${QUIZ_MAPS[selectedQuiz].title}」中表現不合格。以下是系統分析出他的弱點課題 (Sub-topics)：\n\n${weakList}\n\n請根據以上弱點，為他生成一份「補底練習卷」，要求：\n1. 包含 5 題基礎 MC 題 (針對觀念釐清)\n2. 包含 2 題結構式題目 (LQ) (針對計算及常考情境)\n3. 必須符合 HKDSE 物理科課程指引難度\n4. 附上詳細的繁體中文解釋及計算步驟`;
+                    const isEng = aiLang === 'en';
+                    let prompt = isEng 
+                        ? `You are an HKDSE Physics teacher. My student failed some sub-topics in "${QUIZ_MAPS[selectedQuiz].title}". Based on the system analysis, their weak points are:\n\n${weakList}\n\nPlease generate a remedial worksheet based on these weaknesses with the following requirements:\n`
+                        : `你是一位香港 DSE 物理科老師。我的學生在小測「${QUIZ_MAPS[selectedQuiz].title}」中表現不合格。以下是系統分析出他的弱點課題 (Sub-topics)：\n\n${weakList}\n\n請根據以上弱點，為他生成一份「補底練習卷」，要求：\n`;
+
+                    let qIdx = 1;
+                    if (aiType === 'MC' || aiType === 'Both') {
+                        prompt += isEng ? `${qIdx++}. Include ${aiMcCount} fundamental Multiple Choice (MC) questions.\n` : `${qIdx++}. 包含 ${aiMcCount} 題基礎選擇題 (MC) (針對觀念釐清)。\n`;
+                    }
+                    if (aiType === 'LQ' || aiType === 'Both') {
+                        prompt += isEng ? `${qIdx++}. Include ${aiLqCount} Structured/Long Questions (LQ).\n` : `${qIdx++}. 包含 ${aiLqCount} 題結構式長題目 (LQ) (針對計算及常考情境)。\n`;
+                    }
+
+                    const levelDesc = { 'LV2': isEng?'Level 2 (Basic)':'基本 (Level 2)', 'LV3-4': isEng?'Level 3-4 (Standard)':'標準 (Level 3-4)', 'LV5': isEng?'Level 5/5* (Advanced)':'高階 (Level 5, 5*, 5**)' };
+                    
+                    prompt += isEng 
+                        ? `${qIdx++}. Difficulty: ${levelDesc[aiLevel]} standard of HKDSE Physics.\n${qIdx}. Provide detailed explanations and step-by-step calculations in English.`
+                        : `${qIdx++}. 難度必須符合 HKDSE 物理科 ${levelDesc[aiLevel]} 程度。\n${qIdx}. 附上詳細的繁體中文解釋及計算步驟。`;
+
+                    return prompt;
                 };
 
                 return (
                     <div className="p-6">
-                        <div className="flex justify-between mb-6">
+                        <div className="flex justify-between items-center mb-6">
                             <h2 className="text-2xl font-bold flex items-center gap-2"><Icon name="BarChart2" /> 弱點分析及補底生成</h2>
-                            <button onClick={exportScores} className="bg-green-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-green-700">
-                                <Icon name="Download" size={16}/> 匯出全班成績 (CSV)
-                            </button>
+                            <div className="flex gap-2">
+                                {/* 新增：學生下拉選單 */}
+                                <select className="p-2 border rounded-md shadow-sm outline-none" 
+                                    value={selectedStudentId} onChange={(e) => setSelectedStudentId(e.target.value)}>
+                                    <option value="">-- 請選擇學生 --</option>
+                                    {students.map(st => <option key={st.id} value={st.id}>{st.class}({st.num}) {st.name}</option>)}
+                                </select>
+                                <button onClick={exportScoresCSV} className="bg-green-600 text-white px-4 py-2 rounded flex items-center gap-2">
+                                    <Icon name="Download" size={16}/> 匯出全班 (CSV)
+                                </button>
+                            </div>
                         </div>
 
                         {s && ana ? (
@@ -328,26 +283,16 @@
                                 <div className="card p-6">
                                     <h3 className="font-bold text-xl mb-2">{s.class}({s.num}) {s.name} - {QUIZ_MAPS[selectedQuiz].title}</h3>
                                     <div className="text-3xl font-bold mb-4 flex items-baseline gap-2">
-                                        總分: <span className={ana.totalScore / ana.totalMax >= 0.5 ? 'text-green-600' : 'text-red-600'}>
-                                            {ana.totalScore} / {ana.totalMax}
-                                        </span>
-                                        <span className="text-sm text-gray-500">({Math.round((ana.totalScore/ana.totalMax)*100)}%)</span>
+                                        總分: <span className={ana.totalScore / ana.totalMax >= 0.5 ? 'text-green-600' : 'text-red-600'}>{ana.totalScore} / {ana.totalMax}</span>
                                     </div>
-
                                     <h4 className="font-bold bg-gray-100 p-2 rounded mb-2">課題表現 (Sub-topics)</h4>
                                     <div className="space-y-3">
                                         {Object.keys(ana.analysis).map(topic => {
-                                            const t = ana.analysis[topic];
-                                            const pct = (t.score / t.max) * 100;
+                                            const t = ana.analysis[topic]; const pct = (t.score / t.max) * 100;
                                             return (
                                                 <div key={topic} className="text-sm">
-                                                    <div className="flex justify-between mb-1">
-                                                        <span className="font-semibold">{topic} - {t.desc}</span>
-                                                        <span className={pct >= 50 ? 'text-green-600' : 'text-red-600 font-bold'}>{t.score}/{t.max} ({Math.round(pct)}%)</span>
-                                                    </div>
-                                                    <div className="w-full bg-gray-200 rounded-full h-2">
-                                                        <div className={`h-2 rounded-full ${pct >= 50 ? 'bg-green-500' : 'bg-red-500'}`} style={{ width: `${pct}%` }}></div>
-                                                    </div>
+                                                    <div className="flex justify-between mb-1"><span className="font-semibold">{topic} - {t.desc}</span><span className={pct>=50?'text-green-600':'text-red-600'}>{t.score}/{t.max} ({Math.round(pct)}%)</span></div>
+                                                    <div className="w-full bg-gray-200 rounded-full h-2"><div className={`h-2 rounded-full ${pct>=50?'bg-green-500':'bg-red-500'}`} style={{width:`${pct}%`}}></div></div>
                                                 </div>
                                             )
                                         })}
@@ -355,59 +300,124 @@
                                 </div>
 
                                 <div className="card p-6 bg-blue-50 border-blue-200">
-                                    <h3 className="font-bold text-xl mb-4 flex items-center gap-2 text-blue-800"><Icon name="Zap" /> AI 補底練習生成指令</h3>
-                                    <p className="text-sm text-blue-700 mb-2">基於學生的表現，系統自動生成了以下 Prompt。請複製並貼上至 ChatGPT / Claude 中生成練習：</p>
-                                    <textarea 
-                                        readOnly
-                                        className="w-full h-64 p-3 rounded border border-blue-300 text-sm bg-white"
-                                        value={generatePrompt()}
-                                    />
-                                    <button onClick={() => navigator.clipboard.writeText(generatePrompt())} className="mt-3 bg-blue-600 text-white w-full py-2 rounded shadow hover:bg-blue-700">
+                                    <h3 className="font-bold text-xl mb-3 text-blue-800">AI 補底練習生成指令</h3>
+                                    
+                                    {/* AI 設定面板 */}
+                                    <div className="grid grid-cols-2 gap-2 mb-4 text-sm bg-white p-3 rounded border border-blue-100 shadow-sm">
+                                        <div>
+                                            <label className="block text-gray-600 mb-1">語言 (Language)</label>
+                                            <select className="w-full p-1 border rounded" value={aiLang} onChange={e=>setAiLang(e.target.value)}>
+                                                <option value="zh">繁體中文</option><option value="en">English</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-gray-600 mb-1">難度 (Level)</label>
+                                            <select className="w-full p-1 border rounded" value={aiLevel} onChange={e=>setAiLevel(e.target.value)}>
+                                                <option value="LV2">基本 (Level 2)</option><option value="LV3-4">標準 (Level 3-4)</option><option value="LV5">高階 (Level 5/5*)</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-gray-600 mb-1">題型</label>
+                                            <select className="w-full p-1 border rounded" value={aiType} onChange={e=>setAiType(e.target.value)}>
+                                                <option value="Both">MC + LQ</option><option value="MC">只限 MC</option><option value="LQ">只限 LQ</option>
+                                            </select>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <div className="flex-1">
+                                                <label className="block text-gray-600 mb-1">MC 數</label>
+                                                <input type="number" className="w-full p-1 border rounded" value={aiMcCount} onChange={e=>setAiMcCount(e.target.value)} disabled={aiType==='LQ'}/>
+                                            </div>
+                                            <div className="flex-1">
+                                                <label className="block text-gray-600 mb-1">LQ 數</label>
+                                                <input type="number" className="w-full p-1 border rounded" value={aiLqCount} onChange={e=>setAiLqCount(e.target.value)} disabled={aiType==='MC'}/>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <textarea readOnly className="w-full h-48 p-3 rounded border border-blue-300 text-sm bg-white outline-none" value={generatePrompt()} />
+                                    <button onClick={() => navigator.clipboard.writeText(generatePrompt())} className="mt-3 bg-blue-600 text-white w-full py-2 rounded shadow hover:bg-blue-700 font-bold">
                                         複製指令 (Copy Prompt)
                                     </button>
                                 </div>
                             </div>
-                        ) : (
-                            <div className="card p-10 text-center text-gray-500">請先在「成績輸入」選擇學生並輸入成績。</div>
-                        )}
+                        ) : (<div className="card p-10 text-center text-gray-500">請從上方選單選擇一位學生</div>)}
+                    </div>
+                );
+            };
+
+            const BackupView = () => {
+                const handleExportJSON = () => {
+                    const dataObj = { students, scores };
+                    const blob = new Blob([JSON.stringify(dataObj)], { type: 'application/json' });
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = `HKDSE_QuizData_Backup_${new Date().toISOString().slice(0,10)}.json`;
+                    a.click();
+                };
+
+                const handleImportJSON = (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        try {
+                            const parsed = JSON.parse(event.target.result);
+                            if (parsed.students && parsed.scores) {
+                                setStudents(parsed.students); setScores(parsed.scores);
+                                alert("成功匯入並還原備份資料！");
+                            } else alert("備份檔案格式不正確！");
+                        } catch (err) { alert("讀取檔案失敗！"); }
+                    };
+                    reader.readAsText(file);
+                };
+
+                return (
+                    <div className="p-6">
+                        <h2 className="text-2xl font-bold mb-6 flex items-center gap-2"><Icon name="Database" /> 數據備份與還原</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="card p-6 flex flex-col items-center text-center">
+                                <div className="bg-blue-100 p-4 rounded-full text-blue-600 mb-4"><Icon name="UploadCloud" size={40}/></div>
+                                <h3 className="font-bold text-lg mb-2">匯出備份 (換電腦用)</h3>
+                                <p className="text-sm text-gray-500 mb-4">將所有學生物件與成績紀錄下載成一個 JSON 檔案。你可以將檔案儲存在 USB 或 Google Drive。</p>
+                                <button onClick={handleExportJSON} className="bg-blue-600 text-white px-6 py-2 rounded shadow">下載備份檔 (.json)</button>
+                            </div>
+                            <div className="card p-6 flex flex-col items-center text-center">
+                                <div className="bg-orange-100 p-4 rounded-full text-orange-600 mb-4"><Icon name="DownloadCloud" size={40}/></div>
+                                <h3 className="font-bold text-lg mb-2">還原資料 (匯入)</h3>
+                                <p className="text-sm text-gray-500 mb-4">從另一部電腦下載的 JSON 檔案匯入此系統。(注意：這會覆蓋當前瀏覽器的紀錄)</p>
+                                <label className="bg-orange-500 text-white px-6 py-2 rounded shadow cursor-pointer hover:bg-orange-600">
+                                    選擇檔案並匯入
+                                    <input type="file" accept=".json" className="hidden" onChange={handleImportJSON} />
+                                </label>
+                            </div>
+                        </div>
                     </div>
                 );
             };
 
             const Sidebar = () => (
                 <div className="w-64 bg-slate-800 text-white h-screen fixed left-0 top-0 flex flex-col z-10 shadow-lg">
-                    <div className="p-6 border-b border-slate-700">
-                        <h1 className="text-lg font-bold">HKDSE Physics</h1>
-                        <p className="text-xs text-slate-400 mt-1">Quiz Analyzer Pro</p>
-                    </div>
+                    <div className="p-6 border-b border-slate-700"><h1 className="text-lg font-bold">HKDSE Physics</h1><p className="text-xs text-slate-400 mt-1">Quiz Analyzer Pro</p></div>
                     <nav className="flex-1 p-4 space-y-2">
-                        <button onClick={() => setView('students')} className={`w-full flex items-center gap-3 px-4 py-3 text-left rounded-lg transition ${view === 'students' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}>
-                            <Icon name="Users" size={18} /> 學生管理
-                        </button>
-                        <button onClick={() => setView('scores')} className={`w-full flex items-center gap-3 px-4 py-3 text-left rounded-lg transition ${view === 'scores' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}>
-                            <Icon name="Edit3" size={18} /> 小測成績輸入
-                        </button>
-                        <button onClick={() => setView('analysis')} className={`w-full flex items-center gap-3 px-4 py-3 text-left rounded-lg transition ${view === 'analysis' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}>
-                            <Icon name="BarChart2" size={18} /> 弱點分析 & 補底
-                        </button>
+                        <button onClick={() => setView('students')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'students' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="Users" size={18} /> 學生管理</button>
+                        <button onClick={() => setView('scores')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'scores' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="Edit3" size={18} /> 小測成績輸入</button>
+                        <button onClick={() => setView('analysis')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'analysis' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="BarChart2" size={18} /> 弱點分析 & 補底</button>
+                        <button onClick={() => setView('backup')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'backup' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="Database" size={18} /> 數據備份與還原</button>
                     </nav>
                 </div>
             );
 
             return (
-                <div className="flex min-h-screen relative">
-                    <Sidebar />
-                    <div className="flex-1 ml-64 overflow-hidden">
-                        {view === 'students' && <StudentView />}
-                        {view === 'scores' && <ScoreInputView />}
-                        {view === 'analysis' && <AnalysisView />}
-                    </div>
-                </div>
+                <div className="flex min-h-screen relative"><Sidebar /><div className="flex-1 ml-64 overflow-hidden">
+                    {view === 'students' && <StudentView />}
+                    {view === 'scores' && <ScoreInputView />}
+                    {view === 'analysis' && <AnalysisView />}
+                    {view === 'backup' && <BackupView />}
+                </div></div>
             );
         };
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        const root = ReactDOM.createRoot(document.getElementById('root')); root.render(<App />);
     </script>
 </body>
 </html>
