@@ -379,7 +379,108 @@
                     </div>
                 );
             };
+            const StudentReportView = () => {
+                const s = students.find(x => x.id === selectedStudentId);
+                
+                // 計算跨小測的綜合分析數據
+                const getCombinedAnalysis = () => {
+                    if (!s) return null;
+                    const combined = {};
+                    let grandTotal = 0;
+                    let grandMax = 0;
+                    
+                    Object.keys(QUIZ_MAPS).forEach(quizId => {
+                        const ana = getStudentAnalysis(s.id, quizId);
+                        if (ana) {
+                            grandTotal += ana.totalScore;
+                            grandMax += ana.totalMax;
+                            Object.keys(ana.analysis).forEach(topicId => {
+                                if (!combined[topicId]) {
+                                    combined[topicId] = { ...ana.analysis[topicId] };
+                                } else {
+                                    combined[topicId].score += ana.analysis[topicId].score;
+                                    combined[topicId].max += ana.analysis[topicId].max;
+                                    combined[topicId].weakPoints = [...new Set([...combined[topicId].weakPoints, ...ana.analysis[topicId].weakPoints])];
+                                }
+                            });
+                        }
+                    });
+                    
+                    const weakTopics = Object.keys(combined).filter(k => (combined[k].score / combined[k].max) < 0.5);
+                    return { combined, grandTotal, grandMax, weakTopics };
+                };
 
+                const data = getCombinedAnalysis();
+
+                const generateExamPrompt = () => {
+                    if (!data || data.weakTopics.length === 0) return "此學生表現良好，只需作常規溫習。";
+                    const weakList = data.weakTopics.map(topic => {
+                        const info = data.combined[topic];
+                        return `- ${topic}: ${info.desc} (具體弱點: ${info.weakPoints.join(', ')})`;
+                    }).join('\n');
+                    
+                    return `你是一位香港 DSE 物理科老師。我的學生即將應付統測／大考（涵蓋多個課題）。以下是他目前最薄弱的跨課題知識點：\n\n${weakList}\n\n請為他度身訂造一份「大考前綜合特訓卷」，要求：\n1. 針對上述弱點，生成 5 題跨課題的高階選擇題 (MC)，訓練他的綜合分析能力。\n2. 生成 2 題結構式長題目 (LQ)，模擬 DSE 常見的跨課題題型。\n3. 提供詳細的繁體中文解釋、點出學生常犯的思考陷阱 (Common traps) 及計算步驟。`;
+                };
+
+                return (
+                    <div className="p-6">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-2xl font-bold flex items-center gap-2"><Icon name="FileText" /> 統測 / 大考總覽 (跨課題)</h2>
+                            <select className="p-2 border rounded-md shadow-sm outline-none font-bold text-blue-700 bg-blue-50" 
+                                value={selectedStudentId} onChange={(e) => setSelectedStudentId(e.target.value)}>
+                                <option value="">-- 請選擇學生 --</option>
+                                {students.map(st => <option key={st.id} value={st.id}>{st.class}({st.num}) {st.name}</option>)}
+                            </select>
+                        </div>
+
+                        {s && data && Object.keys(data.combined).length > 0 ? (
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                {/* 左側：知識點紅綠燈 */}
+                                <div className="card p-6">
+                                    <h3 className="font-bold text-xl mb-4">{s.name} 的知識點紅綠燈 (全課題)</h3>
+                                    <div className="text-sm text-gray-500 mb-4 flex gap-4">
+                                        <span className="flex items-center gap-1"><span className="w-3 h-3 bg-green-500 rounded-full"></span> 良好 (>70%)</span>
+                                        <span className="flex items-center gap-1"><span className="w-3 h-3 bg-yellow-500 rounded-full"></span> 尚可 (50-70%)</span>
+                                        <span className="flex items-center gap-1"><span className="w-3 h-3 bg-red-500 rounded-full"></span> 需急救 (&lt;50%)</span>
+                                    </div>
+                                    <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
+                                        {Object.keys(data.combined).map(topic => {
+                                            const t = data.combined[topic];
+                                            const pct = (t.score / t.max) * 100;
+                                            let colorClass = 'bg-green-500';
+                                            let textClass = 'text-green-600';
+                                            if (pct < 50) { colorClass = 'bg-red-500'; textClass = 'text-red-600'; }
+                                            else if (pct < 70) { colorClass = 'bg-yellow-500'; textClass = 'text-yellow-600'; }
+
+                                            return (
+                                                <div key={topic} className={`p-3 border-l-4 rounded bg-gray-50 ${colorClass.replace('bg-', 'border-')}`}>
+                                                    <div className="flex justify-between mb-2">
+                                                        <span className="font-semibold text-gray-800">{topic} - {t.desc}</span>
+                                                        <span className={`font-bold ${textClass}`}>{Math.round(pct)}% ({t.score}/{t.max})</span>
+                                                    </div>
+                                                    <div className="w-full bg-gray-200 rounded-full h-2">
+                                                        <div className={`h-2 rounded-full ${colorClass}`} style={{width: `${pct}%`}}></div>
+                                                    </div>
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                </div>
+                                
+                                {/* 右側：大考綜合特訓 AI 指令 */}
+                                <div className="card p-6 bg-purple-50 border-purple-200">
+                                    <h3 className="font-bold text-xl mb-3 text-purple-800">大考綜合溫習 AI 指令</h3>
+                                    <p className="text-sm text-gray-600 mb-4">系統已自動掃描該學生在所有小測中的**紅燈課題**，一鍵生成跨課題溫習卷。</p>
+                                    <textarea readOnly className="w-full h-64 p-3 rounded border border-purple-300 text-sm bg-white outline-none" value={generateExamPrompt()} />
+                                    <button onClick={() => navigator.clipboard.writeText(generateExamPrompt())} className="mt-3 bg-purple-600 text-white w-full py-2 rounded shadow hover:bg-purple-700 font-bold">
+                                        複製指令 (生成大考特訓卷)
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (<div className="card p-10 text-center text-gray-500">請從上方選單選擇一位學生，或確保該學生已有成績紀錄。</div>)}
+                    </div>
+                );
+            };
             const BackupView = () => {
                 const handleExportJSON = () => {
                     const dataObj = { students, scores };
@@ -437,6 +538,7 @@
                         <button onClick={() => setView('students')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'students' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="Users" size={18} /> 學生管理</button>
                         <button onClick={() => setView('scores')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'scores' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="Edit3" size={18} /> 小測成績輸入</button>
                         <button onClick={() => setView('analysis')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'analysis' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="BarChart2" size={18} /> 弱點分析 & 補底</button>
+                        <button onClick={() => setView('report')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'report' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="FileText" size={18} /> 統測/大考總表</button>
                         <button onClick={() => setView('backup')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'backup' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="Database" size={18} /> 數據備份與還原</button>
                     </nav>
                 </div>
@@ -447,6 +549,7 @@
                     {view === 'students' && <StudentView />}
                     {view === 'scores' && <ScoreInputView />}
                     {view === 'analysis' && <AnalysisView />}
+                    {view === 'report' && <StudentReportView />}
                     {view === 'backup' && <BackupView />}
                 </div></div>
             );
@@ -456,6 +559,7 @@
     </script>
 </body>
 </html>
+
 
 
 
