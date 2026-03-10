@@ -259,7 +259,7 @@
                     const isEng = aiLang === 'en';
                     let prompt = isEng 
                         ? `You are an HKDSE Physics teacher. My student failed some sub-topics in "${QUIZ_MAPS[selectedQuiz].title}". Based on the system analysis, their weak points are:\n\n${weakList}\n\nPlease generate a remedial worksheet based on these weaknesses with the following requirements:\n`
-                        : `你是一位香港 DSE 物理科老師。我的學生在小測「${QUIZ_MAPS[selectedQuiz].title}」中表現不合格。以下是系統分析出他的弱點課題 (Sub-topics)：\n\n${weakList}\n\n請根據以上弱點，為他生成一份「補底練習卷」，要求：\n`;
+                        : `你是一位香港 DSE 物理科老師。我的學生在小測「${QUIZ_MAPS[selectedQuiz].title}」中表現不合格。以下是系統分析出他的弱點課題 (Sub-topics)：\n\n${weakList}\n\n請根據以上弱點，為他生成一份「互動練習卷」，要求：\n`;
 
                     let qIdx = 1;
                     if (aiType === 'MC' || aiType === 'Both') {
@@ -438,4 +438,5 @@
     </script>
 </body>
 </html>
+
 
