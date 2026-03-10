@@ -413,13 +413,33 @@
                 const data = getCombinedAnalysis();
 
                 const generateExamPrompt = () => {
-                    if (!data || data.weakTopics.length === 0) return "此學生表現良好，只需作常規溫習。";
+                    if (!data || data.weakTopics.length === 0) return aiLang === 'en' ? "This student is performing well. Regular revision is sufficient." : "此學生表現良好，只需作常規溫習。";
+                    
                     const weakList = data.weakTopics.map(topic => {
                         const info = data.combined[topic];
-                        return `- ${topic}: ${info.desc} (具體弱點: ${info.weakPoints.join(', ')})`;
+                        return `- ${topic}: ${info.desc} (${aiLang === 'en' ? 'Weaknesses' : '具體弱點'}: ${info.weakPoints.join(', ')})`;
                     }).join('\n');
                     
-                    return `你是一位香港 DSE 物理科老師。我的學生即將應付統測／大考（涵蓋多個課題）。以下是他目前最薄弱的跨課題知識點：\n\n${weakList}\n\n請為他度身訂造一份「大考前綜合特訓卷」，要求：\n1. 針對上述弱點，生成 5 題跨課題的高階選擇題 (MC)，訓練他的綜合分析能力。\n2. 生成 2 題結構式長題目 (LQ)，模擬 DSE 常見的跨課題題型。\n3. 提供詳細的繁體中文解釋、點出學生常犯的思考陷阱 (Common traps) 及計算步驟。`;
+                    const isEng = aiLang === 'en';
+                    let prompt = isEng 
+                        ? `You are an HKDSE Physics teacher. My student is preparing for a major exam covering multiple topics. Here are their weakest cross-topic areas based on past quizzes:\n\n${weakList}\n\nPlease generate a "Comprehensive Exam Revision Paper" tailored to these weaknesses, with the following requirements:\n`
+                        : `你是一位香港 DSE 物理科老師。我的學生即將應付統測／大考（涵蓋多個課題）。以下是他目前最薄弱的跨課題知識點：\n\n${weakList}\n\n請為他度身訂造一份「大考前綜合特訓卷」，要求：\n`;
+
+                    let qIdx = 1;
+                    if (aiType === 'MC' || aiType === 'Both') {
+                        prompt += isEng ? `${qIdx++}. Generate ${aiMcCount} cross-topic Multiple Choice (MC) questions targeting these weaknesses.\n` : `${qIdx++}. 針對上述弱點，生成 ${aiMcCount} 題跨課題的選擇題 (MC)，訓練他的綜合分析能力。\n`;
+                    }
+                    if (aiType === 'LQ' || aiType === 'Both') {
+                        prompt += isEng ? `${qIdx++}. Generate ${aiLqCount} cross-topic Structured/Long Questions (LQ) mimicking standard DSE formats.\n` : `${qIdx++}. 生成 ${aiLqCount} 題結構式長題目 (LQ)，模擬 DSE 常見的跨課題題型。\n`;
+                    }
+
+                    const levelDesc = { 'LV2': isEng?'Level 2 (Basic)':'基本 (Level 2)', 'LV3-4': isEng?'Level 3-4 (Standard)':'標準 (Level 3-4)', 'LV5': isEng?'Level 5/5* (Advanced)':'高階 (Level 5, 5*, 5**)' };
+                    
+                    prompt += isEng 
+                        ? `${qIdx++}. Difficulty: ${levelDesc[aiLevel]} standard of HKDSE Physics.\n${qIdx}. Provide detailed explanations, highlight common traps, and show step-by-step calculations in English.`
+                        : `${qIdx++}. 難度必須符合 HKDSE 物理科 ${levelDesc[aiLevel]} 程度。\n${qIdx}. 提供詳細的繁體中文解釋、點出學生常犯的思考陷阱 (Common traps) 及計算步驟。`;
+
+                    return prompt;
                 };
 
                 return (
@@ -471,7 +491,40 @@
                                 <div className="card p-6 bg-purple-50 border-purple-200">
                                     <h3 className="font-bold text-xl mb-3 text-purple-800">大考綜合溫習 AI 指令</h3>
                                     <p className="text-sm text-gray-600 mb-4">系統已自動掃描該學生在所有小測中的**紅燈課題**，一鍵生成跨課題溫習卷。</p>
-                                    <textarea readOnly className="w-full h-64 p-3 rounded border border-purple-300 text-sm bg-white outline-none" value={generateExamPrompt()} />
+                                    
+                                    {/* AI 設定面板 */}
+                                    <div className="grid grid-cols-2 gap-2 mb-4 text-sm bg-white p-3 rounded border border-purple-100 shadow-sm">
+                                        <div>
+                                            <label className="block text-gray-600 mb-1">語言 (Language)</label>
+                                            <select className="w-full p-1 border rounded" value={aiLang} onChange={e=>setAiLang(e.target.value)}>
+                                                <option value="zh">繁體中文</option><option value="en">English</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-gray-600 mb-1">難度 (Level)</label>
+                                            <select className="w-full p-1 border rounded" value={aiLevel} onChange={e=>setAiLevel(e.target.value)}>
+                                                <option value="LV2">基本 (Level 2)</option><option value="LV3-4">標準 (Level 3-4)</option><option value="LV5">高階 (Level 5/5*)</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-gray-600 mb-1">題型</label>
+                                            <select className="w-full p-1 border rounded" value={aiType} onChange={e=>setAiType(e.target.value)}>
+                                                <option value="Both">MC + LQ</option><option value="MC">只限 MC</option><option value="LQ">只限 LQ</option>
+                                            </select>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <div className="flex-1">
+                                                <label className="block text-gray-600 mb-1">MC 數</label>
+                                                <input type="number" className="w-full p-1 border rounded" value={aiMcCount} onChange={e=>setAiMcCount(e.target.value)} disabled={aiType==='LQ'}/>
+                                            </div>
+                                            <div className="flex-1">
+                                                <label className="block text-gray-600 mb-1">LQ 數</label>
+                                                <input type="number" className="w-full p-1 border rounded" value={aiLqCount} onChange={e=>setAiLqCount(e.target.value)} disabled={aiType==='MC'}/>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <textarea readOnly className="w-full h-48 p-3 rounded border border-purple-300 text-sm bg-white outline-none" value={generateExamPrompt()} />
                                     <button onClick={() => navigator.clipboard.writeText(generateExamPrompt())} className="mt-3 bg-purple-600 text-white w-full py-2 rounded shadow hover:bg-purple-700 font-bold">
                                         複製指令 (生成大考特訓卷)
                                     </button>
@@ -559,6 +612,7 @@
     </script>
 </body>
 </html>
+
 
 
 
