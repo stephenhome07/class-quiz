@@ -164,14 +164,15 @@
                     Object.keys(QUIZ_MAPS).forEach(quizId => {
                         const map = QUIZ_MAPS[quizId];
                         const sScores = (scores[s.id] || {})[quizId] || {};
-                        let mcScore = 0, lqScore = 0, total = 0;
+                        let total = 0;
+                        
+                        // 只計算總分，不再區分 MC 和 LQ
                         map.questions.forEach(q => {
-                            const val = sScores[q.id] || 0;
-                            if (q.type === 'MC') mcScore += val;
-                            if (q.type === 'LQ') lqScore += val;
-                            total += val;
+                            total += (sScores[q.id] || 0);
                         });
-                        row[`${quizId}_Total`] = total; row[`${quizId}_MC`] = mcScore; row[`${quizId}_LQ`] = lqScore;
+                        
+                        // 欄位名稱直接顯示 CH01, CH02 等
+                        row[quizId] = total; 
                     });
                     return row;
                 });
@@ -751,6 +752,7 @@
     </script>
 </body>
 </html>
+
 
 
 
