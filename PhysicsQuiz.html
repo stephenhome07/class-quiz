@@ -534,6 +534,143 @@
                     </div>
                 );
             };
+
+            
+            const StudentChartView = () => {
+                const chartRef = React.useRef(null);
+                const chartInstance = React.useRef(null);
+
+                // 計算圖表所需的數據
+                const getChartData = () => {
+                    if (!selectedStudentId) return null;
+                    
+                    const topicStats = {}; 
+
+                    // 收集並計算所有小測中的知識點總分與該學生得分
+                    Object.keys(QUIZ_MAPS).forEach(quizId => {
+                        const map = QUIZ_MAPS[quizId];
+                        students.forEach(st => {
+                            const stScores = (scores[st.id] || {})[quizId] || {};
+                            map.questions.forEach(q => {
+                                const val = parseFloat(stScores[q.id]);
+                                if (!isNaN(val)) {
+                                    if (!topicStats[q.topicId]) {
+                                        topicStats[q.topicId] = { desc: q.topicDesc, studentScore: 0, studentMax: 0, classScore: 0, classMax: 0 };
+                                    }
+                                    // 累加全級總分
+                                    topicStats[q.topicId].classScore += val;
+                                    topicStats[q.topicId].classMax += q.max;
+                                    
+                                    // 累加選定學生總分
+                                    if (st.id === selectedStudentId) {
+                                        topicStats[q.topicId].studentScore += val;
+                                        topicStats[q.topicId].studentMax += q.max;
+                                    }
+                                }
+                            });
+                        });
+                    });
+
+                    const labels = [];
+                    const studentData = [];
+                    const averageData = [];
+
+                    Object.keys(topicStats).forEach(topicId => {
+                        const stat = topicStats[topicId];
+                        if (stat.classMax > 0 && stat.studentMax > 0) {
+                            // 限制標籤長度以免圖表變形
+                            const labelText = `${topicId} ${stat.desc}`;
+                            labels.push(labelText.length > 20 ? labelText.substring(0, 20) + '...' : labelText);
+                            studentData.push(((stat.studentScore / stat.studentMax) * 100).toFixed(1));
+                            averageData.push(((stat.classScore / stat.classMax) * 100).toFixed(1));
+                        }
+                    });
+
+                    return { labels, studentData, averageData };
+                };
+
+                React.useEffect(() => {
+                    const data = getChartData();
+                    if (!data || data.labels.length === 0 || !chartRef.current) return;
+
+                    // 確保銷毀舊圖表，避免重疊
+                    if (chartInstance.current) {
+                        chartInstance.current.destroy();
+                    }
+
+                    const ctx = chartRef.current.getContext('2d');
+                    chartInstance.current = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: data.labels,
+                            datasets: [
+                                {
+                                    label: '該學生表現 (%)',
+                                    data: data.studentData,
+                                    backgroundColor: 'rgba(59, 130, 246, 0.7)', // 藍色
+                                    borderColor: 'rgba(59, 130, 246, 1)',
+                                    borderWidth: 1
+                                },
+                                {
+                                    label: '全級平均 (%)',
+                                    data: data.averageData,
+                                    backgroundColor: 'rgba(156, 163, 175, 0.5)', // 灰色
+                                    borderColor: 'rgba(156, 163, 175, 1)',
+                                    borderWidth: 1
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            indexAxis: 'y', // 設為橫向長條圖，較易閱讀長文字標籤
+                            scales: {
+                                x: { 
+                                    beginAtZero: true, 
+                                    max: 100,
+                                    title: { display: true, text: '得分百分比 (%)' }
+                                }
+                            },
+                            plugins: {
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            return context.dataset.label + ': ' + context.parsed.x + '%';
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+
+                    return () => {
+                        if (chartInstance.current) chartInstance.current.destroy();
+                    };
+                }, [selectedStudentId, scores]); // 當學生或成績改變時重新繪製
+
+                return (
+                    <div className="p-6 h-full flex flex-col">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-2xl font-bold flex items-center gap-2"><Icon name="BarChart2" /> 課題圖表分析</h2>
+                            <select className="p-2 border rounded-md shadow-sm outline-none font-bold text-blue-700 bg-blue-50" 
+                                value={selectedStudentId} onChange={(e) => setSelectedStudentId(e.target.value)}>
+                                <option value="">-- 請選擇學生 --</option>
+                                {students.map(st => <option key={st.id} value={st.id}>{st.class}({st.num}) {st.name}</option>)}
+                            </select>
+                        </div>
+
+                        {selectedStudentId ? (
+                            <div className="card p-6 flex-1 min-h-[600px] flex flex-col">
+                                <h3 className="font-bold text-xl mb-4 text-center">各知識點掌握度比較 (學生 vs 全級平均)</h3>
+                                <div className="flex-1 relative w-full">
+                                    <canvas ref={chartRef}></canvas>
+                                </div>
+                            </div>
+                        ) : (<div className="card p-10 text-center text-gray-500">請從上方選單選擇一位學生以檢視圖表。</div>)}
+                    </div>
+                );
+            };
+            
             const BackupView = () => {
                 const handleExportJSON = () => {
                     const dataObj = { students, scores };
@@ -592,6 +729,7 @@
                         <button onClick={() => setView('scores')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'scores' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="Edit3" size={18} /> 小測成績輸入</button>
                         <button onClick={() => setView('analysis')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'analysis' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="BarChart2" size={18} /> 弱點分析 & 補底</button>
                         <button onClick={() => setView('report')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'report' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="FileText" size={18} /> 統測/大考總表</button>
+                        <button onClick={() => setView('chart')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'chart' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="BarChart2" size={18} /> 課題圖表分析</button>
                         <button onClick={() => setView('backup')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'backup' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="Database" size={18} /> 數據備份與還原</button>
                     </nav>
                 </div>
@@ -603,6 +741,7 @@
                     {view === 'scores' && <ScoreInputView />}
                     {view === 'analysis' && <AnalysisView />}
                     {view === 'report' && <StudentReportView />}
+                    {view === 'chart' && <StudentChartView />}
                     {view === 'backup' && <BackupView />}
                 </div></div>
             );
@@ -612,6 +751,7 @@
     </script>
 </body>
 </html>
+
 
 
 
