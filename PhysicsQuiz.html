@@ -180,6 +180,7 @@
                 const map = QUIZ_MAPS[selectedQuiz];
                 return (
                     <div className="p-6 flex flex-col md:flex-row gap-6">
+                        {/* 左側：學生選擇區 */}
                         <div className="w-full md:w-1/4 card p-4 max-h-[80vh] overflow-y-auto">
                             <h3 className="font-bold mb-4">選擇學生</h3>
                             {students.map(s => {
@@ -194,8 +195,24 @@
                                 )
                             })}
                         </div>
+                        
+                        {/* 右側：成績輸入區 */}
                         <div className="flex-1 card p-6">
-                            <h2 className="text-xl font-bold border-b pb-4 mb-4">{map.title} - 成績輸入</h2>
+                            <div className="flex justify-between items-center border-b pb-4 mb-4">
+                                <h2 className="text-xl font-bold">成績輸入</h2>
+                                
+                                {/* 新增：小測選擇下拉表單 */}
+                                <select 
+                                    className="p-2 border rounded-md shadow-sm outline-none font-bold text-blue-700 bg-blue-50"
+                                    value={selectedQuiz} 
+                                    onChange={(e) => setSelectedQuiz(e.target.value)}
+                                >
+                                    {Object.keys(QUIZ_MAPS).map(key => (
+                                        <option key={key} value={key}>{QUIZ_MAPS[key].title}</option>
+                                    ))}
+                                </select>
+                            </div>
+
                             {selectedStudentId ? (
                                 <div>
                                     <h3 className="font-bold text-blue-700 mb-2">MC 選擇題</h3>
@@ -421,3 +438,4 @@
     </script>
 </body>
 </html>
+
