@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HKDSE Physics Quiz Analyzer Pro V1.1</title>
+    <title>HKDSE Physics Quiz Analyzer V1.2</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -295,12 +295,10 @@
                 const generatePrompt = () => {
                     if (!ana || ana.weakTopics.length === 0) return aiLang === 'en' ? "This student is performing well." : "此學生表現良好，暫不需要補底練習。";
                     
-                    const weakList = data.weakTopics.map(topic => {
-                        const info = data.combined[topic];
-                        // 修正：將 info.desc 改為 info.topicName，並確保弱點不重複
+                       const weakList = ana.weakTopics.map(topic => {
+                        const info = ana.analysis[topic];
                         return `- ${topic} ${info.topicName} (${aiLang === 'en' ? 'Specific Weaknesses' : '具體錯題概念'}: ${[...new Set(info.weakPoints)].join(', ')})`;
                     }).join('\n');
-
                     const isEng = aiLang === 'en';
                     let prompt = isEng 
                         ? `You are an HKDSE Physics teacher. My student failed some sub-topics in "${QUIZ_MAPS[selectedQuiz].title}". Based on the system analysis, their weak points are:\n\n${weakList}\n\nPlease generate a remedial worksheet based on these weaknesses with the following requirements:\n`
@@ -442,9 +440,10 @@
                 const generateExamPrompt = () => {
                     if (!data || data.weakTopics.length === 0) return aiLang === 'en' ? "This student is performing well. Regular revision is sufficient." : "此學生表現良好，只需作常規溫習。";
                     
+                    // 修正：將 info.desc 換成 info.topicName，並更新括號內的文字
                     const weakList = data.weakTopics.map(topic => {
                         const info = data.combined[topic];
-                        return `- ${topic}: ${info.desc} (${aiLang === 'en' ? 'Weaknesses' : '具體弱點'}: ${info.weakPoints.join(', ')})`;
+                        return `- ${topic} ${info.topicName} (${aiLang === 'en' ? 'Specific Weaknesses' : '具體錯題概念'}: ${info.weakPoints.join(', ')})`;
                     }).join('\n');
                     
                     const isEng = aiLang === 'en';
@@ -582,7 +581,8 @@
                                 const val = parseFloat(stScores[q.id]);
                                 if (!isNaN(val)) {
                                     if (!topicStats[q.topicId]) {
-                                        topicStats[q.topicId] = { desc: q.topicDesc, studentScore: 0, studentMax: 0, classScore: 0, classMax: 0 };
+                                        // 修正：圖表的標籤應該使用大課題名稱 (SYLLABUS_TOPICS)，而不是單一題目的描述 (q.topicDesc)
+                                        topicStats[q.topicId] = { desc: SYLLABUS_TOPICS[q.topicId] || '未知課題', studentScore: 0, studentMax: 0, classScore: 0, classMax: 0 };
                                     }
                                     // 累加全級總分
                                     topicStats[q.topicId].classScore += val;
@@ -778,6 +778,7 @@
     </script>
 </body>
 </html>
+
 
 
 
