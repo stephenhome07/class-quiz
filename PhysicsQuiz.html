@@ -44,69 +44,58 @@
             return <span ref={containerRef} style={{ display: 'inline-flex', alignItems: 'center', verticalAlign: 'middle' }} />;
         };
 
-       const QUIZ_MAPS = {
+// 新增：官方課題名稱對照表
+        const SYLLABUS_TOPICS = {
+            '1.1.1': '量度温度',
+            '1.2.1': '內能與能量轉移',
+            '1.3.1': '功率與量度轉移的能量',
+            '1.3.2': '熱容量和比熱容量',
+            '1.4.1': '潛熱',
+            '1.5.1': '氣體定律'
+            // 日後有新課題可直接在此加入
+        };
+
+        const QUIZ_MAPS = {
             'CH02': {
                 title: '02 熱與內能',
                 questions: [
-                    { id: 'MC1', type: 'MC', max: 1, topicId: '1.2.1', topicDesc: '內能與能量轉移 (描述質量和温度對系統內能的影響)' },
-                    { id: 'MC2', type: 'MC', max: 1, topicId: '1.2.1', topicDesc: '內能與能量轉移 (認識熱是兩物體因温差而引致的能量轉移)' },
-                    { id: 'MC3', type: 'MC', max: 1, topicId: '1.3.1', topicDesc: '功率與量度轉移的能量 (認識功率)' },
-                    { id: 'MC4', type: 'MC', max: 1, topicId: '1.3.2', topicDesc: '熱容量和比熱容量 (解決有關比熱容量的問題)' },
-                    { id: 'MC5', type: 'MC', max: 1, topicId: '1.3.2', topicDesc: '熱容量和比熱容量 (解決有關比熱容量的問題)' },
-                    { id: 'MC6', type: 'MC', max: 1, topicId: '1.5.1', topicDesc: '氣體定律 (以體積—温度關係線圖的外插法測定絕對零度)' },
-                    { id: 'MC7', type: 'MC', max: 1, topicId: '1.3.2', topicDesc: '熱容量和比熱容量 (測定物質的比熱容量)' },
-                    { id: 'MC8', type: 'MC', max: 1, topicId: '1.2.1', topicDesc: '內能與能量轉移 (連繫內能與系統內分子隨機運動的動能)' },
-                    { id: 'LQ1a', type: 'LQ', max: 2, topicId: '1.3.2', topicDesc: '熱容量和比熱容量 (討論水具有高比熱容量的實際重要性)' },
-                    { id: 'LQ1b', type: 'LQ', max: 2, topicId: '1.3.2', topicDesc: '熱容量和比熱容量 (討論水具有高比熱容量的實際重要性)' },
-                    { id: 'LQ1c', type: 'LQ', max: 2, topicId: '1.3.2', topicDesc: '熱容量和比熱容量 (討論水具有高比熱容量的實際重要性)' },
-                    { id: 'LQ2a', type: 'LQ', max: 2, topicId: '1.3.2', topicDesc: '熱容量和比熱容量 (定義熱容量)' },
-                    { id: 'LQ2b', type: 'LQ', max: 3, topicId: '1.3.2', topicDesc: '熱容量和比熱容量 (解決有關比熱容量的問題)' },
-                    { id: 'LQ2c', type: 'LQ', max: 2, topicId: '1.2.1', topicDesc: '內能與能量轉移 (闡釋温度為系統內分子隨機運動平均動能的定量關係)' },
-                    { id: 'LQ3a', type: 'LQ', max: 4, topicId: '1.3.1', topicDesc: '功率與量度轉移的能量 (認識功率)' },
-                    { id: 'LQ3b', type: 'LQ', max: 2, topicId: '1.3.2', topicDesc: '熱容量和比熱容量 (解決有關比熱容量的問題)' },
-                    { id: 'LQ3c', type: 'LQ', max: 1, topicId: '1.3.2', topicDesc: '熱容量和比熱容量 (解決有關比熱容量的問題)' }
+                    { id: 'MC1', type: 'MC', max: 1, topicId: '1.2.1', topicDesc: '描述質量和温度對系統內能的影響' },
+                    { id: 'MC2', type: 'MC', max: 1, topicId: '1.2.1', topicDesc: '認識熱是兩物體因温差而引致的能量轉移' },
+                    { id: 'MC3', type: 'MC', max: 1, topicId: '1.3.1', topicDesc: '認識功率' },
+                    { id: 'MC4', type: 'MC', max: 1, topicId: '1.3.2', topicDesc: '解決有關比熱容量的問題' },
+                    { id: 'MC5', type: 'MC', max: 1, topicId: '1.3.2', topicDesc: '解決有關比熱容量的問題' },
+                    { id: 'MC6', type: 'MC', max: 1, topicId: '1.5.1', topicDesc: '以體積—温度關係線圖的外插法測定絕對零度' },
+                    { id: 'MC7', type: 'MC', max: 1, topicId: '1.3.2', topicDesc: '測定物質的比熱容量' },
+                    { id: 'MC8', type: 'MC', max: 1, topicId: '1.2.1', topicDesc: '連繫內能與系統內分子隨機運動的動能' },
+                    { id: 'LQ1a', type: 'LQ', max: 2, topicId: '1.3.2', topicDesc: '討論水具有高比熱容量的實際重要性' },
+                    { id: 'LQ1b', type: 'LQ', max: 2, topicId: '1.3.2', topicDesc: '討論水具有高比熱容量的實際重要性' },
+                    { id: 'LQ1c', type: 'LQ', max: 2, topicId: '1.3.2', topicDesc: '討論水具有高比熱容量的實際重要性' },
+                    { id: 'LQ2a', type: 'LQ', max: 2, topicId: '1.3.2', topicDesc: '定義熱容量' },
+                    { id: 'LQ2b', type: 'LQ', max: 3, topicId: '1.3.2', topicDesc: '解決有關比熱容量的問題' },
+                    { id: 'LQ2c', type: 'LQ', max: 2, topicId: '1.2.1', topicDesc: '闡釋温度為系統內分子隨機運動平均動能的定量關係' },
+                    { id: 'LQ3a', type: 'LQ', max: 4, topicId: '1.3.1', topicDesc: '認識功率' },
+                    { id: 'LQ3b', type: 'LQ', max: 2, topicId: '1.3.2', topicDesc: '解決有關比熱容量的問題' },
+                    { id: 'LQ3c', type: 'LQ', max: 1, topicId: '1.3.2', topicDesc: '解決有關比熱容量的問題' }
                 ]
             },
             'CH03': {
                 title: '03 物態變化',
                 questions: [
-                    { id: 'MC1', type: 'MC', max: 1, topicId: '1.2.1', topicDesc: '內能與能量轉移 (認識熱是兩物體因温差而引致的能量轉移)' },
-                    { id: 'MC2', type: 'MC', max: 1, topicId: '1.4.1', topicDesc: '潛熱 (說出物質的三種狀態及測定熔點和沸點)' },
-                    { id: 'MC3', type: 'MC', max: 1, topicId: '1.4.1', topicDesc: '潛熱 (認識潛熱為在固定温度下物態變化時的能量轉移)' },
-                    { id: 'MC4', type: 'MC', max: 1, topicId: '1.4.1', topicDesc: '潛熱 (認識潛熱為在固定温度下物態變化時的能量轉移)' },
-                    { id: 'MC6', type: 'MC', max: 1, topicId: '1.4.1', topicDesc: '潛熱 (解決有關潛熱的問題)' },
-                    { id: 'LQ1a', type: 'LQ', max: 4, topicId: '1.3.2', topicDesc: '熱容量和比熱容量 (解決有關比熱容量的問題)' },
-                    { id: 'LQ1b', type: 'LQ', max: 2, topicId: '1.4.1', topicDesc: '潛熱 (解決有關潛熱的問題)' },
-                    { id: 'LQ1c', type: 'LQ', max: 1, topicId: '1.4.1', topicDesc: '潛熱 (解決有關潛熱的問題)' },
-                    { id: 'LQ2ai', type: 'LQ', max: 1, topicId: '1.1.1', topicDesc: '量度温度 (認識温度為物體冷熱程度的標誌)' },
-                    { id: 'LQ2aii', type: 'LQ', max: 1, topicId: '1.4.1', topicDesc: '潛熱 (測定熔點和沸點)' },
-                    { id: 'LQ2b', type: 'LQ', max: 3, topicId: '1.3.2', topicDesc: '熱容量和比熱容量 (解決有關比熱容量的問題)' },
-                    { id: 'LQ2ci', type: 'LQ', max: 2, topicId: '1.4.1', topicDesc: '潛熱 (認識潛熱為在固定温度下物態變化時的能量轉移)' },
-                    { id: 'LQ2cii', type: 'LQ', max: 2, topicId: '1.4.1', topicDesc: '潛熱 (解決有關潛熱的問題)' }
-                ]
-            },
-           'CH09': {
-                title: '09 功、能量和功率',
-                questions: [
-            { id: 'MC1', type: 'MC', max: 1, topicId: '2.4.1', topicDesc: '計算恆力所作的功 (考慮角度)' },
-            { id: 'MC2', type: 'MC', max: 1, topicId: '2.4.2', topicDesc: '分析斜面上動能與勢能的轉換' },
-            { id: 'MC3', type: 'MC', max: 1, topicId: '2.4.2', topicDesc: '計算物體獲得的重力勢能' },
-            { id: 'MC4', type: 'MC', max: 1, topicId: '2.4.3', topicDesc: '計算汽車加速時的平均功率' },
-            { id: 'MC5', type: 'MC', max: 1, topicId: '2.4.1', topicDesc: '計算拉力對物體所作的功 (排除摩擦力干擾)' },
-            { id: 'MC6', type: 'MC', max: 1, topicId: '2.4.1', topicDesc: '功與位移的關係線圖 (W-s 圖)' },
-            { id: 'MC7', type: 'MC', max: 1, topicId: '2.4.2', topicDesc: '分析垂直上拋運動中的動能、勢能及時間關係' },
-            { id: 'LQ1a', type: 'LQ', max: 2, topicId: '2.4.2', topicDesc: '計算提升石塊至高處所獲得的勢能' },
-            { id: 'LQ1b', type: 'LQ', max: 2, topicId: '2.4.1', topicDesc: '計算克服斜面摩擦力所需的額外能量' },
-            { id: 'LQ1c', type: 'LQ', max: 2, topicId: '2.4.2', topicDesc: '計算運送物體的總能量需求' },
-            { id: 'LQ2a', type: 'LQ', max: 1, topicId: '2.1.2', topicDesc: '根據勻速運動判斷受到的摩擦力' },
-            { id: 'LQ2b', type: 'LQ', max: 2, topicId: '2.4.3', topicDesc: '運用 P=Fv 計算克服摩擦力的功率' },
-            { id: 'LQ3ai', type: 'LQ', max: 2, topicId: '2.4.2', topicDesc: '從勢能-時間線圖讀取初始高度' },
-            { id: 'LQ3aii', type: 'LQ', max: 2, topicId: '2.4.2', topicDesc: '從勢能-時間線圖分析最高點高度' },
-            { id: 'LQ3b', type: 'LQ', max: 3, topicId: '2.4.2', topicDesc: '繪製動能隨時間變化的線圖' },
-            { id: 'LQ3c', type: 'LQ', max: 2, topicId: '2.4.2', topicDesc: '利用能量守恆及功計算男孩進入水中的最大深度' }
+                    { id: 'MC1', type: 'MC', max: 1, topicId: '1.2.1', topicDesc: '認識熱是兩物體因温差而引致的能量轉移' },
+                    { id: 'MC2', type: 'MC', max: 1, topicId: '1.4.1', topicDesc: '說出物質的三種狀態及測定熔點和沸點' },
+                    { id: 'MC3', type: 'MC', max: 1, topicId: '1.4.1', topicDesc: '認識潛熱為在固定温度下物態變化時的能量轉移' },
+                    { id: 'MC4', type: 'MC', max: 1, topicId: '1.4.1', topicDesc: '認識潛熱為在固定温度下物態變化時的能量轉移' },
+                    { id: 'MC6', type: 'MC', max: 1, topicId: '1.4.1', topicDesc: '解決有關潛熱的問題' },
+                    { id: 'LQ1a', type: 'LQ', max: 4, topicId: '1.3.2', topicDesc: '解決有關比熱容量的問題' },
+                    { id: 'LQ1b', type: 'LQ', max: 2, topicId: '1.4.1', topicDesc: '解決有關潛熱的問題' },
+                    { id: 'LQ1c', type: 'LQ', max: 1, topicId: '1.4.1', topicDesc: '解決有關潛熱的問題' },
+                    { id: 'LQ2ai', type: 'LQ', max: 1, topicId: '1.1.1', topicDesc: '認識温度為物體冷熱程度的標誌' },
+                    { id: 'LQ2aii', type: 'LQ', max: 1, topicId: '1.4.1', topicDesc: '測定熔點和沸點' },
+                    { id: 'LQ2b', type: 'LQ', max: 3, topicId: '1.3.2', topicDesc: '解決有關比熱容量的問題' },
+                    { id: 'LQ2ci', type: 'LQ', max: 2, topicId: '1.4.1', topicDesc: '認識潛熱為在固定温度下物態變化時的能量轉移' },
+                    { id: 'LQ2cii', type: 'LQ', max: 2, topicId: '1.4.1', topicDesc: '解決有關潛熱的問題' }
                 ]
             }
-
         };
 
         const App = () => {
@@ -160,7 +149,7 @@
                 }));
             };
 
-            const getStudentAnalysis = (studentId, quizId) => {
+        const getStudentAnalysis = (studentId, quizId) => {
                 const studentScores = (scores[studentId] || {})[quizId] || {};
                 const map = QUIZ_MAPS[quizId];
                 if (!map) return null;
@@ -171,8 +160,19 @@
                 map.questions.forEach(q => {
                     const s = studentScores[q.id] || 0;
                     totalScore += s; totalMax += q.max;
-                    if (!analysis[q.topicId]) analysis[q.topicId] = { max: 0, score: 0, desc: q.topicDesc, weakPoints: [] };
-                    analysis[q.topicId].max += q.max; analysis[q.topicId].score += s;
+                    
+                    if (!analysis[q.topicId]) {
+                        analysis[q.topicId] = { 
+                            max: 0, 
+                            score: 0, 
+                            topicName: SYLLABUS_TOPICS[q.topicId] || '未知課題', 
+                            weakPoints: [] 
+                        };
+                    }
+                    analysis[q.topicId].max += q.max; 
+                    analysis[q.topicId].score += s;
+                    
+                    // 如果這題得分低於一半，就把「具體的題目描述」加進弱點清單
                     if (s < q.max * 0.5) analysis[q.topicId].weakPoints.push(q.topicDesc);
                 });
 
@@ -292,9 +292,10 @@
                 const generatePrompt = () => {
                     if (!ana || ana.weakTopics.length === 0) return aiLang === 'en' ? "This student is performing well." : "此學生表現良好，暫不需要補底練習。";
                     
-                    const weakList = ana.weakTopics.map(topic => {
-                        const info = ana.analysis[topic];
-                        return `- ${topic}: ${info.desc} (${aiLang === 'en' ? 'Weakness' : '具體弱點'}: ${[...new Set(info.weakPoints)].join(', ')})`;
+                    const weakList = ana.weakTopics.map(topicId => {
+                        const info = ana.analysis[topicId];
+                        // 這裡會變成例如： "- 1.2.1 內能與能量轉移 (具體錯題概念: 描述質量和温度對系統內能的影響, 認識熱是...)"
+                        return `- ${topicId} ${info.topicName} (${aiLang === 'en' ? 'Specific Weaknesses' : '具體錯題概念'}: ${[...new Set(info.weakPoints)].join(', ')})`;
                     }).join('\n');
 
                     const isEng = aiLang === 'en';
@@ -349,7 +350,7 @@
                                             const t = ana.analysis[topic]; const pct = (t.score / t.max) * 100;
                                             return (
                                                 <div key={topic} className="text-sm">
-                                                    <div className="flex justify-between mb-1"><span className="font-semibold">{topic} - {t.desc}</span><span className={pct>=50?'text-green-600':'text-red-600'}>{t.score}/{t.max} ({Math.round(pct)}%)</span></div>
+                                                    <div className="flex justify-between mb-1"><span className="font-semibold">{topic} {t.topicName}</span><span className={pct>=50?'text-green-600':'text-red-600'}>{t.score}/{t.max} ({Math.round(pct)}%)</span></div>
                                                     <div className="w-full bg-gray-200 rounded-full h-2"><div className={`h-2 rounded-full ${pct>=50?'bg-green-500':'bg-red-500'}`} style={{width:`${pct}%`}}></div></div>
                                                 </div>
                                             )
@@ -774,6 +775,7 @@
     </script>
 </body>
 </html>
+
 
 
 
