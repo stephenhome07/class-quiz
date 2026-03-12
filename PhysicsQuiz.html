@@ -150,7 +150,10 @@
             };
 
         const getStudentAnalysis = (studentId, quizId) => {
-                const studentScores = (scores[studentId] || {})[quizId] || {};
+                // 新增：檢查該學生是否真的有這份小測的成績紀錄，若無則直接跳過
+                const studentScores = (scores[studentId] || {})[quizId];
+                if (!studentScores || Object.keys(studentScores).length === 0) return null;
+
                 const map = QUIZ_MAPS[quizId];
                 if (!map) return null;
 
@@ -292,10 +295,10 @@
                 const generatePrompt = () => {
                     if (!ana || ana.weakTopics.length === 0) return aiLang === 'en' ? "This student is performing well." : "此學生表現良好，暫不需要補底練習。";
                     
-                    const weakList = ana.weakTopics.map(topicId => {
-                        const info = ana.analysis[topicId];
-                        // 這裡會變成例如： "- 1.2.1 內能與能量轉移 (具體錯題概念: 描述質量和温度對系統內能的影響, 認識熱是...)"
-                        return `- ${topicId} ${info.topicName} (${aiLang === 'en' ? 'Specific Weaknesses' : '具體錯題概念'}: ${[...new Set(info.weakPoints)].join(', ')})`;
+                    const weakList = data.weakTopics.map(topic => {
+                        const info = data.combined[topic];
+                        // 修正：將 info.desc 改為 info.topicName，並確保弱點不重複
+                        return `- ${topic} ${info.topicName} (${aiLang === 'en' ? 'Specific Weaknesses' : '具體錯題概念'}: ${[...new Set(info.weakPoints)].join(', ')})`;
                     }).join('\n');
 
                     const isEng = aiLang === 'en';
@@ -499,7 +502,7 @@
                                             return (
                                                 <div key={topic} className={`p-3 border-l-4 rounded bg-gray-50 ${colorClass.replace('bg-', 'border-')}`}>
                                                     <div className="flex justify-between mb-2">
-                                                        <span className="font-semibold text-gray-800">{topic} - {t.desc}</span>
+                                                        <span className="font-semibold text-gray-800">{topic} {t.topicName}</span>
                                                         <span className={`font-bold ${textClass}`}>{Math.round(pct)}% ({t.score}/{t.max})</span>
                                                     </div>
                                                     <div className="w-full bg-gray-200 rounded-full h-2">
@@ -775,6 +778,7 @@
     </script>
 </body>
 </html>
+
 
 
 
