@@ -843,6 +843,191 @@
                     </div>
                 );
             };
+
+            // 新增：全班課題綜合分析版面
+            const TopicAnalysisView = () => {
+                const [localQuiz, setLocalQuiz] = useState('CH02');
+                const map = QUIZ_MAPS[localQuiz];
+
+                const getClassStats = () => {
+                    if (!map || students.length === 0) return null;
+
+                    let classTotalScore = 0;
+                    let classTotalMax = 0;
+                    let studentsAttempted = 0;
+
+                    const qStats = {}; 
+                    const conceptStats = {}; 
+
+                    // 初始化題目統計
+                    map.questions.forEach(q => {
+                        qStats[q.id] = { id: q.id, type: q.type, max: q.max, total: 0, attempts: 0, desc: q.topicDesc, topicId: q.topicId };
+                    });
+
+                    // 收集全班數據
+                    students.forEach(st => {
+                        const stScores = (scores[st.id] || {})[localQuiz];
+                        if (stScores && Object.keys(stScores).length > 0) {
+                            studentsAttempted++;
+                            map.questions.forEach(q => {
+                                const val = parseFloat(stScores[q.id]);
+                                if (!isNaN(val)) {
+                                    classTotalScore += val;
+                                    classTotalMax += q.max;
+                                    qStats[q.id].total += val;
+                                    qStats[q.id].attempts++;
+
+                                    if (!conceptStats[q.topicId]) {
+                                        conceptStats[q.topicId] = { 
+                                            topicId: q.topicId, 
+                                            topicName: SYLLABUS_TOPICS[q.topicId] || '未知課題', 
+                                            total: 0, max: 0, specificDesc: new Set() 
+                                        };
+                                    }
+                                    conceptStats[q.topicId].total += val;
+                                    conceptStats[q.topicId].max += q.max;
+                                    conceptStats[q.topicId].specificDesc.add(q.topicDesc);
+                                }
+                            });
+                        }
+                    });
+
+                    if (studentsAttempted === 0) return null;
+
+                    // 計算每題平均得分率並排序 (由低至高)
+                    const processedQStats = Object.values(qStats).map(q => ({
+                        ...q,
+                        pct: q.attempts > 0 ? (q.total / (q.max * q.attempts)) * 100 : 0
+                    })).sort((a, b) => a.pct - b.pct);
+
+                    // 計算每個概念平均得分率並排序 (由低至高)
+                    const processedConceptStats = Object.values(conceptStats).map(c => ({
+                        ...c,
+                        pct: c.max > 0 ? (c.total / c.max) * 100 : 0,
+                        specificDescArray: Array.from(c.specificDesc)
+                    })).sort((a, b) => a.pct - b.pct);
+
+                    return { classTotalScore, classTotalMax, studentsAttempted, processedQStats, processedConceptStats };
+                };
+
+                const stats = getClassStats();
+
+                const generateClassReviewPrompt = () => {
+                    if (!stats) return "目前沒有足夠數據生成教案。";
+                    
+                    // 抽取最弱的 3 個概念
+                    const weakestConcepts = stats.processedConceptStats.slice(0, 3).map(c => 
+                        `- ${c.topicId} ${c.topicName} (全班平均得分率: ${Math.round(c.pct)}%)\n  具體難點: ${c.specificDescArray.join(', ')}`
+                    ).join('\n');
+
+                    // 抽取最弱的 3 條題目
+                    const weakestQuestions = stats.processedQStats.slice(0, 3).map(q => 
+                        `- 題號 ${q.id} (${q.type}): ${q.desc} (全班平均: ${Math.round(q.pct)}%)`
+                    ).join('\n');
+
+                    return `你是一位經驗豐富的香港 DSE 物理科老師。我的全班學生剛完成了「${map.title}」的小測。以下是系統綜合出來的全班共同盲點與難點：\n\n【全班最弱的基礎概念】\n${weakestConcepts}\n\n【全班失分最多的具體題目】\n${weakestQuestions}\n\n我準備為他們進行「試後檢討 (Post-exam Review)」。請為我設計一份大約 15 分鐘的教學重溫大綱，要求：\n1. 針對上述的「最弱概念」，提供易於理解的日常例子或比喻來重新解說。\n2. 針對「失分最多的題目」，點出學生常犯的迷思概念 (Misconceptions) 及思考陷阱。\n3. 提供 3 條簡單直接的「黑板提問 (Concept Checking Questions)」，讓我能在堂上即時考問全班，以確保他們已經明白。`;
+                };
+
+                return (
+                    <div className="p-6 h-full flex flex-col overflow-y-auto">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-2xl font-bold flex items-center gap-2"><Icon name="Target" /> 全班課題綜合分析</h2>
+                            <select className="p-2 border rounded-md shadow-sm outline-none font-bold text-blue-700 bg-blue-50" 
+                                value={localQuiz} onChange={(e) => setLocalQuiz(e.target.value)}>
+                                {Object.keys(QUIZ_MAPS).map(k => <option key={k} value={k}>{QUIZ_MAPS[k].title}</option>)}
+                            </select>
+                        </div>
+
+                        {stats ? (
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                <div className="space-y-6">
+                                    {/* 概覽卡片 */}
+                                    <div className="card p-6 flex justify-around text-center items-center">
+                                        <div>
+                                            <div className="text-sm text-gray-500 mb-1">參與人數</div>
+                                            <div className="text-3xl font-bold text-blue-600">{stats.studentsAttempted}</div>
+                                        </div>
+                                        <div className="w-px h-12 bg-gray-200"></div>
+                                        <div>
+                                            <div className="text-sm text-gray-500 mb-1">全班平均得分</div>
+                                            <div className="text-3xl font-bold text-green-600">
+                                                {((stats.classTotalScore / stats.studentsAttempted) || 0).toFixed(1)} <span className="text-lg text-gray-400">/ {stats.classTotalMax / stats.studentsAttempted}</span>
+                                            </div>
+                                        </div>
+                                        <div className="w-px h-12 bg-gray-200"></div>
+                                        <div>
+                                            <div className="text-sm text-gray-500 mb-1">整體得分率</div>
+                                            <div className="text-3xl font-bold text-purple-600">
+                                                {((stats.classTotalScore / stats.classTotalMax) * 100).toFixed(1)}%
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* 全班最弱題目 (Top 5) */}
+                                    <div className="card p-6">
+                                        <h3 className="font-bold text-lg mb-4 text-red-700 flex items-center gap-2"><Icon name="AlertTriangle" size={20}/> 難點題目 (全班失分最多 Top 5)</h3>
+                                        <div className="space-y-3">
+                                            {stats.processedQStats.slice(0, 5).map((q, idx) => (
+                                                <div key={q.id} className="flex items-center justify-between p-3 bg-red-50 rounded border border-red-100">
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="bg-red-200 text-red-800 font-bold px-2 py-1 rounded text-xs">#{idx + 1}</span>
+                                                        <div>
+                                                            <div className="font-bold">{q.id} <span className="text-xs text-gray-500 font-normal ml-1">({q.type})</span></div>
+                                                            <div className="text-sm text-gray-600">{q.desc}</div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <div className={`font-bold ${q.pct < 50 ? 'text-red-600' : 'text-yellow-600'}`}>{Math.round(q.pct)}%</div>
+                                                        <div className="text-xs text-gray-400">平均得分率</div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    
+                                    {/* 全班概念掌握度 */}
+                                    <div className="card p-6">
+                                        <h3 className="font-bold text-lg mb-4 text-gray-800">各知識點全班掌握度</h3>
+                                        <div className="space-y-4">
+                                            {stats.processedConceptStats.map(c => {
+                                                let colorClass = c.pct >= 70 ? 'bg-green-500' : c.pct >= 50 ? 'bg-yellow-500' : 'bg-red-500';
+                                                let textClass = c.pct >= 70 ? 'text-green-600' : c.pct >= 50 ? 'text-yellow-600' : 'text-red-600';
+                                                return (
+                                                    <div key={c.topicId} className="text-sm">
+                                                        <div className="flex justify-between mb-1">
+                                                            <span className="font-semibold text-gray-700">{c.topicId} {c.topicName}</span>
+                                                            <span className={`font-bold ${textClass}`}>{Math.round(c.pct)}%</span>
+                                                        </div>
+                                                        <div className="w-full bg-gray-200 rounded-full h-2">
+                                                            <div className={`h-2 rounded-full ${colorClass}`} style={{width: `${c.pct}%`}}></div>
+                                                        </div>
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 右側：AI 堂上檢討教案生成 */}
+                                <div className="card p-6 bg-orange-50 border-orange-200 h-fit">
+                                    <h3 className="font-bold text-xl mb-3 text-orange-800 flex items-center gap-2"><Icon name="Lightbulb" /> 全班試後檢討 AI 教案生成</h3>
+                                    <p className="text-sm text-gray-700 mb-4">系統已找出全班的共同盲點。複製以下指令給 AI，為下一堂課快速準備「試後檢討 (Post-exam Review)」的講解策略及黑板提問。</p>
+                                    <textarea readOnly className="w-full h-80 p-3 rounded border border-orange-300 text-sm bg-white outline-none resize-none" value={generateClassReviewPrompt()} />
+                                    <button onClick={() => navigator.clipboard.writeText(generateClassReviewPrompt())} className="mt-4 bg-orange-600 text-white w-full py-3 rounded-lg shadow hover:bg-orange-700 font-bold transition flex justify-center items-center gap-2">
+                                        <Icon name="Copy" size={18} /> 複製指令 (生成檢討教案)
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="card p-10 text-center text-gray-500 flex flex-col items-center">
+                                <Icon name="Inbox" size={48} className="text-gray-300 mb-4" />
+                                <p>目前 {QUIZ_MAPS[localQuiz]?.title} 尚未有任何學生成績紀錄。</p>
+                                <p className="text-sm mt-2">請先在「小測成績輸入」中輸入分數後再來檢視全班綜合分析。</p>
+                            </div>
+                        )}
+                    </div>
+                );
+            };
             
             const BackupView = () => {
                 const handleExportJSON = () => {
@@ -903,6 +1088,7 @@
                         <button onClick={() => setView('analysis')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'analysis' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="BarChart2" size={18} /> 弱點分析 & 補底</button>
                         <button onClick={() => setView('report')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'report' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="FileText" size={18} /> 統測/大考總表</button>
                         <button onClick={() => setView('chart')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'chart' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="BarChart2" size={18} /> 課題圖表分析</button>
+                        <button onClick={() => setView('topicAnalysis')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'topicAnalysis' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="Target" size={18} /> 課題綜合分析 (全班)</button>
                         <button onClick={() => setView('backup')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'backup' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="Database" size={18} /> 數據備份與還原</button>
                     </nav>
                 </div>
@@ -915,6 +1101,7 @@
                     {view === 'analysis' && <AnalysisView />}
                     {view === 'report' && <StudentReportView />}
                     {view === 'chart' && <StudentChartView />}
+                    {view === 'topicAnalysis' && <TopicAnalysisView />}
                     {view === 'backup' && <BackupView />}
                 </div></div>
             );
