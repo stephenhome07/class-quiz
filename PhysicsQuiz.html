@@ -404,6 +404,31 @@
 
             const ScoreInputView = () => {
                 const map = QUIZ_MAPS[selectedQuiz];
+
+                // 新增：清除單一學生特定小測的所有成績紀錄
+                const deleteRecord = () => {
+                    if (!selectedStudentId || !selectedQuiz) return;
+                    
+                    // 檢查該學生是否有這份小測的成績
+                    const studentScores = scores[selectedStudentId];
+                    if (!studentScores || !studentScores[selectedQuiz] || Object.keys(studentScores[selectedQuiz]).length === 0) {
+                        alert('此同學尚未有這份小測的成績紀錄。');
+                        return;
+                    }
+
+                    if (window.confirm('確定要完全清除這位同學在此小測的分數紀錄嗎？這會將他從這份小測的數據分析中移除。')) {
+                        // 使用 setScores 更新狀態，useEffect 會自動幫忙儲存到 LocalStorage
+                        setScores(prev => {
+                            const newScores = { ...prev };
+                            if (newScores[selectedStudentId]) {
+                                delete newScores[selectedStudentId][selectedQuiz];
+                            }
+                            return newScores;
+                        });
+                        alert('紀錄已成功清除！');
+                    }
+                };
+
                 return (
                     <div className="p-6 flex flex-col md:flex-row gap-6">
                         {/* 左側：學生選擇區 */}
@@ -427,7 +452,7 @@
                             <div className="flex justify-between items-center border-b pb-4 mb-4">
                                 <h2 className="text-xl font-bold">成績輸入</h2>
                                 
-                                {/* 新增：小測選擇下拉表單 */}
+                                {/* 小測選擇下拉表單 */}
                                 <select 
                                     className="p-2 border rounded-md shadow-sm outline-none font-bold text-blue-700 bg-blue-50"
                                     value={selectedQuiz} 
@@ -462,6 +487,17 @@
                                                     onChange={(e) => handleScoreChange(selectedStudentId, selectedQuiz, q.id, e.target.value)} />
                                             </div>
                                         ))}
+                                    </div>
+
+                                    {/* 新增：刪除按鈕區塊 */}
+                                    <div className="mt-8 pt-4 border-t border-gray-100 flex justify-end">
+                                        <button 
+                                            onClick={deleteRecord} 
+                                            disabled={!(scores[selectedStudentId] && scores[selectedStudentId][selectedQuiz] && Object.keys(scores[selectedStudentId][selectedQuiz]).length > 0)}
+                                            className="px-4 py-2 bg-red-50 text-red-600 rounded-lg shadow-sm hover:bg-red-100 font-bold transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            <Icon name="Trash2" size={18} /> 清除此卷紀錄
+                                        </button>
                                     </div>
                                 </div>
                             ) : (<div className="text-center text-gray-500 py-10">請從左側選擇學生</div>)}
