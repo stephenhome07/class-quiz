@@ -391,8 +391,7 @@
 
             // --- Views Components ---
             
-            // 學生名單管理視圖
-            const StudentView = () => {
+           const StudentView = () => {
                 
                 // 新增：刪除學生的函數
                 const handleDeleteStudent = (id, name) => {
@@ -411,56 +410,58 @@
                 };
 
                 return (
-                    <div className="p-6 h-full flex flex-col">
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-2xl font-bold flex items-center gap-2"><Icon name="Users" /> 學生名單管理</h2>
-                            <div className="flex items-center gap-4 bg-white p-2 rounded-lg shadow-sm border border-gray-100">
-                                <div className="flex gap-2 items-center">
-                                    <input id="csv-upload" type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
-                                    <label htmlFor="csv-upload" className="cursor-pointer bg-blue-50 text-blue-600 px-4 py-2 rounded font-bold hover:bg-blue-100 transition flex items-center gap-2">
-                                        <Icon name="Upload" size={18} /> 匯入學生 CSV
-                                    </label>
-                                </div>
-                            </div>
+                    <div className="p-6">
+                        <h2 className="text-2xl font-bold mb-4 flex items-center gap-2"><Icon name="Users" /> 學生管理 (Excel 匯入)</h2>
+                        
+                        {/* 匯入學生區塊 */}
+                        <div className="card p-4 mb-6">
+                            <p className="text-sm text-gray-500 mb-2">請從 Excel 複製資料並貼上至下方文字方塊。格式必須為 3 欄：<b>班別 (Tab) 學號 (Tab) 姓名</b>。</p>
+                            <textarea 
+                                className="w-full h-32 p-2 border rounded text-sm mb-2 outline-none focus:ring-2 focus:ring-blue-400" 
+                                value={pasteData} 
+                                onChange={e => setPasteData(e.target.value)} 
+                                placeholder="例如：&#10;5A&#9;01&#9;陳大文&#10;5A&#9;02&#9;李小明"
+                            />
+                            <button onClick={handleImportStudents} className="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 font-bold">匯入學生資料</button>
                         </div>
 
-                        <div className="flex-1 overflow-auto bg-white rounded-xl shadow-sm border border-gray-100">
-                            <table className="w-full border-collapse">
-                                <thead className="bg-blue-50 text-blue-800 text-left sticky top-0">
-                                    <tr>
-                                        <th className="p-3">班別</th>
-                                        <th className="p-3">學號</th>
-                                        <th className="p-3">姓名</th>
-                                        {/* 新增：操作欄位標題 */}
-                                        <th className="p-3 w-20 text-center">操作</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {students.map(s => (
-                                        <tr key={s.id} className="border-t hover:bg-gray-50 transition">
-                                            <td className="p-3">{s.class}</td>
-                                            <td className="p-3">{s.num}</td>
-                                            <td className="p-3 font-bold">{s.name}</td>
-                                            {/* 新增：刪除按鈕 */}
-                                            <td className="p-3 text-center">
-                                                <button 
-                                                    onClick={() => handleDeleteStudent(s.id, s.name)}
-                                                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                                                    title="移除此學生"
-                                                >
-                                                    <Icon name="Trash2" size={18} />
-                                                </button>
-                                            </td>
+                        {/* 學生名單與刪除區塊 */}
+                        <div className="card p-4">
+                            <h3 className="font-bold mb-4 text-lg text-gray-800 flex items-center gap-2">目前學生名單 ({students.length} 人)</h3>
+                            <div className="max-h-96 overflow-y-auto">
+                                <table className="w-full border-collapse">
+                                    <thead className="bg-gray-50 text-gray-700 text-left sticky top-0">
+                                        <tr>
+                                            <th className="p-3 border-b">班別</th>
+                                            <th className="p-3 border-b">學號</th>
+                                            <th className="p-3 border-b">姓名</th>
+                                            <th className="p-3 border-b text-center w-20">操作</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                            {students.length === 0 && (
-                                <div className="text-center p-10 text-gray-400">
-                                    <Icon name="UserX" size={48} className="mx-auto mb-3 opacity-50" />
-                                    <p>目前沒有學生資料，請由右上角匯入 CSV</p>
-                                </div>
-                            )}
+                                    </thead>
+                                    <tbody>
+                                        {students.length > 0 ? students.map(s => (
+                                            <tr key={s.id} className="border-b hover:bg-gray-50 transition">
+                                                <td className="p-3">{s.class}</td>
+                                                <td className="p-3">{s.num}</td>
+                                                <td className="p-3 font-bold text-gray-800">{s.name}</td>
+                                                <td className="p-3 text-center">
+                                                    <button 
+                                                        onClick={() => handleDeleteStudent(s.id, s.name)}
+                                                        className="text-gray-400 hover:text-red-600 hover:bg-red-50 p-2 rounded transition"
+                                                        title="移除此學生及其所有成績"
+                                                    >
+                                                        <Icon name="Trash2" size={18} />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        )) : (
+                                            <tr>
+                                                <td colSpan="4" className="text-center p-8 text-gray-400">尚未匯入任何學生</td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 );
