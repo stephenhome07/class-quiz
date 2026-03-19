@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HKDSE Physics Quiz Analyzer V1.3</title>
+    <title>HKDSE Physics Quiz Analyzer V2.0</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -404,7 +404,7 @@ const App = () => {
             // --- Views Components ---
             
            const StudentView = () => {
-                
+                const [pasteData, setPasteData] = React.useState('');
                 // 新增：刪除學生的函數
                 const handleDeleteStudent = (id, name) => {
                     if (window.confirm(`確定要移除學生「${name}」嗎？\n注意：這將會同時刪除該學生的所有小測成績紀錄，且無法復原。`)) {
