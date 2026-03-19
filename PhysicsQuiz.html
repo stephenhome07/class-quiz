@@ -480,6 +480,7 @@ const App = () => {
             };
 
             const ScoreInputView = () => {
+                const [selectedQuiz, setSelectedQuiz] = React.useState(Object.keys(QUIZ_MAPS)[0]);
                 const map = QUIZ_MAPS[selectedQuiz];
 
                 // 新增：清除單一學生特定小測的所有成績紀錄
@@ -766,6 +767,7 @@ const App = () => {
 
             
             const StudentReportView = () => {
+                const [selectedStudent, setSelectedStudent] = React.useState('');
                 const s = students.find(x => x.id === selectedStudentId);
                 
                 // 計算跨小測的綜合分析數據
