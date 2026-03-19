@@ -587,7 +587,7 @@ const App = () => {
 
  // 弱點分析與 AI 補底卷生成視圖
             const AnalysisView = () => {
-                const [selectedStudent, setSelectedStudent] = React.useState('');
+                const [selectedStudentId, setSelectedStudentId] = React.useState('');
                 const [selectedQuiz, setSelectedQuiz] = React.useState(Object.keys(QUIZ_MAPS)[0]);
                 
                 // AI 設定狀態
@@ -768,7 +768,7 @@ const App = () => {
 
             
             const StudentReportView = () => {
-                const [selectedStudent, setSelectedStudent] = React.useState('');
+                const [selectedStudentId, setSelectedStudentId] = React.useState('');
                 const s = students.find(x => x.id === selectedStudentId);
                 
                 // 計算跨小測的綜合分析數據
