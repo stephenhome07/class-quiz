@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Physics Quiz Analyzer V2.01</title>
+    <title>Physics Quiz Analyzer V2.02</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -481,6 +481,7 @@ const App = () => {
 
             const ScoreInputView = () => {
                 const [selectedQuiz, setSelectedQuiz] = React.useState(Object.keys(QUIZ_MAPS)[0]);
+                const [selectedStudentId, setSelectedStudentId] = React.useState('');
                 const map = QUIZ_MAPS[selectedQuiz];
 
                 // 新增：清除單一學生特定小測的所有成績紀錄
@@ -926,6 +927,8 @@ const App = () => {
 
             
             const StudentChartView = () => {
+                const [chartStudentId, setChartStudentId] = React.useState('');
+                const [chartQuiz, setChartQuiz] = React.useState(Object.keys(QUIZ_MAPS)[0]);
                 const chartRef = React.useRef(null);
                 const chartInstance = React.useRef(null);
 
