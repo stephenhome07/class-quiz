@@ -927,7 +927,7 @@ const App = () => {
 
             
             const StudentChartView = () => {
-                const [chartStudentId, setChartStudentId] = React.useState('');
+                const [selectedStudentId, setSelectedStudentId] = React.useState('');
                 const [chartQuiz, setChartQuiz] = React.useState(Object.keys(QUIZ_MAPS)[0]);
                 const chartRef = React.useRef(null);
                 const chartInstance = React.useRef(null);
