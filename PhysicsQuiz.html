@@ -180,100 +180,70 @@
         };
 
         const QUIZ_MAPS = {
-            'CH02': {
-                title: '02 熱與內能',
-                questions: [
-                    { id: 'MC1', type: 'MC', max: 1, topicId: '1.2.1', topicDesc: '描述質量和温度對系統內能的影響' },
-                    { id: 'MC2', type: 'MC', max: 1, topicId: '1.2.1', topicDesc: '認識熱是兩物體因温差而引致的能量轉移' },
-                    { id: 'MC3', type: 'MC', max: 1, topicId: '1.3.1', topicDesc: '認識功率' },
-                    { id: 'MC4', type: 'MC', max: 1, topicId: '1.3.2', topicDesc: '解決有關比熱容量的問題' },
-                    { id: 'MC5', type: 'MC', max: 1, topicId: '1.3.2', topicDesc: '解決有關比熱容量的問題' },
-                    { id: 'MC6', type: 'MC', max: 1, topicId: '1.5.1', topicDesc: '以體積—温度關係線圖的外插法測定絕對零度' },
-                    { id: 'MC7', type: 'MC', max: 1, topicId: '1.3.2', topicDesc: '測定物質的比熱容量' },
-                    { id: 'MC8', type: 'MC', max: 1, topicId: '1.2.1', topicDesc: '連繫內能與系統內分子隨機運動的動能' },
-                    { id: 'LQ1a', type: 'LQ', max: 2, topicId: '1.3.2', topicDesc: '討論水具有高比熱容量的實際重要性' },
-                    { id: 'LQ1b', type: 'LQ', max: 2, topicId: '1.3.2', topicDesc: '討論水具有高比熱容量的實際重要性' },
-                    { id: 'LQ1c', type: 'LQ', max: 2, topicId: '1.3.2', topicDesc: '討論水具有高比熱容量的實際重要性' },
-                    { id: 'LQ2a', type: 'LQ', max: 2, topicId: '1.3.2', topicDesc: '定義熱容量' },
-                    { id: 'LQ2b', type: 'LQ', max: 3, topicId: '1.3.2', topicDesc: '解決有關比熱容量的問題' },
-                    { id: 'LQ2c', type: 'LQ', max: 2, topicId: '1.2.1', topicDesc: '闡釋温度為系統內分子隨機運動平均動能的定量關係' },
-                    { id: 'LQ3a', type: 'LQ', max: 4, topicId: '1.3.1', topicDesc: '認識功率' },
-                    { id: 'LQ3b', type: 'LQ', max: 2, topicId: '1.3.2', topicDesc: '解決有關比熱容量的問題' },
-                    { id: 'LQ3c', type: 'LQ', max: 1, topicId: '1.3.2', topicDesc: '解決有關比熱容量的問題' }
-                ]
-            },
-            'CH03': {
-                title: '03 物態變化',
-                questions: [
-                    { id: 'MC1', type: 'MC', max: 1, topicId: '1.2.1', topicDesc: '認識熱是兩物體因温差而引致的能量轉移' },
-                    { id: 'MC2', type: 'MC', max: 1, topicId: '1.4.1', topicDesc: '說出物質的三種狀態及測定熔點和沸點' },
-                    { id: 'MC3', type: 'MC', max: 1, topicId: '1.4.1', topicDesc: '認識潛熱為在固定温度下物態變化時的能量轉移' },
-                    { id: 'MC4', type: 'MC', max: 1, topicId: '1.4.1', topicDesc: '認識潛熱為在固定温度下物態變化時的能量轉移' },
-                    { id: 'MC6', type: 'MC', max: 1, topicId: '1.4.1', topicDesc: '解決有關潛熱的問題' },
-                    { id: 'LQ1a', type: 'LQ', max: 4, topicId: '1.3.2', topicDesc: '解決有關比熱容量的問題' },
-                    { id: 'LQ1b', type: 'LQ', max: 2, topicId: '1.4.1', topicDesc: '解決有關潛熱的問題' },
-                    { id: 'LQ1c', type: 'LQ', max: 1, topicId: '1.4.1', topicDesc: '解決有關潛熱的問題' },
-                    { id: 'LQ2ai', type: 'LQ', max: 1, topicId: '1.1.1', topicDesc: '認識温度為物體冷熱程度的標誌' },
-                    { id: 'LQ2aii', type: 'LQ', max: 1, topicId: '1.4.1', topicDesc: '測定熔點和沸點' },
-                    { id: 'LQ2b', type: 'LQ', max: 3, topicId: '1.3.2', topicDesc: '解決有關比熱容量的問題' },
-                    { id: 'LQ2ci', type: 'LQ', max: 2, topicId: '1.4.1', topicDesc: '認識潛熱為在固定温度下物態變化時的能量轉移' },
-                    { id: 'LQ2cii', type: 'LQ', max: 2, topicId: '1.4.1', topicDesc: '解決有關潛熱的問題' }
-                ]
-            },
             'CH09': {
                 title: '09 功、能量和功率',
                 questions: [
-                    { id: 'MC1', type: 'MC', max: 1, topicId: '2.6.1', topicDesc: '解決有關機械功的問題 (考慮力與位移的角度)' },
-                    { id: 'MC2', type: 'MC', max: 1, topicId: '2.6.3', topicDesc: '討論勢能和動能的相互轉換 (考慮能量損耗的情況)' },
-                    { id: 'MC3', type: 'MC', max: 1, topicId: '2.6.2', topicDesc: '應用重力勢能公式 PE = mgh 解決問題' },
-                    { id: 'MC4', type: 'MC', max: 1, topicId: '2.6.4', topicDesc: '應用功率公式 P = E/t 解決平均功率問題' },
-                    { id: 'MC5', type: 'MC', max: 1, topicId: '2.6.1', topicDesc: '定義及計算機械功 W = Fs cos θ' },
-                    { id: 'MC6', type: 'MC', max: 1, topicId: '2.6.1', topicDesc: '分析功 W 與位移 s 的線圖關係' },
-                    { id: 'MC7', type: 'MC', max: 1, topicId: '2.6.3', topicDesc: '分析勢能和動能的相互轉換 (垂直上拋運動)' },
-                    { id: 'LQ1a', type: 'LQ', max: 2, topicId: '2.6.2', topicDesc: '計算物體獲得的重力勢能 PE = mgh' },
-                    { id: 'LQ1b', type: 'LQ', max: 2, topicId: '2.6.1', topicDesc: '計算克服摩擦力所需作的功' },
-                    { id: 'LQ1c', type: 'LQ', max: 2, topicId: '2.6.3', topicDesc: '計算包含能量損耗在內的總能量需求' },
-                    { id: 'LQ2a', type: 'LQ', max: 1, topicId: '2.3.1', topicDesc: '明白摩擦力為一種阻礙運動的力 (勻速運動受力分析)' },
-                    { id: 'LQ2b', type: 'LQ', max: 2, topicId: '2.6.4', topicDesc: '應用公式 P = Fv 解決與功率相關的問題' },
-                    { id: 'LQ3ai', type: 'LQ', max: 2, topicId: '2.6.2', topicDesc: '從勢能線圖讀取重力勢能並計算高度' },
-                    { id: 'LQ3aii', type: 'LQ', max: 2, topicId: '2.6.2', topicDesc: '應用 PE = mgh 解決有關重力勢能的問題 (最高點分析)' },
-                    { id: 'LQ3b', type: 'LQ', max: 3, topicId: '2.6.3', topicDesc: '根據能量守恆繪製動能隨時間變化的線圖' },
-                    { id: 'LQ3c', type: 'LQ', max: 2, topicId: '2.6.3', topicDesc: '解決有關能量守恆定律的問題 (功與能量轉換)' }
+                    // Part A: MC (選擇題)
+                    { id: 'MC1', type: 'MC', max: 1, level: '中', topicId: '2.6.1', topicDesc: '計算與位移成夾角的施力所作的功' },
+                    { id: 'MC2', type: 'MC', max: 1, level: '淺', topicId: '2.6.3', topicDesc: '分析無摩擦斜面上物體的動能與勢能變化' },
+                    { id: 'MC3', type: 'MC', max: 1, level: '淺', topicId: '2.6.2', topicDesc: '計算物體垂直提升時獲得的重力勢能' },
+                    { id: 'MC4', type: 'MC', max: 1, level: '中', topicId: '2.6.4', topicDesc: '利用動能變化及時間計算汽車的平均功率' },
+                    { id: 'MC5', type: 'MC', max: 1, level: '深', topicId: '2.6.1', topicDesc: '計算特定施力所作的功 (殺手題：需分辨施力作功與淨力作功，不被摩擦力干擾)' },
+                    { id: 'MC6', type: 'MC', max: 1, level: '深', topicId: '2.6.1', topicDesc: '分析勻加速運動中，作功與位移的線圖關係' },
+                    { id: 'MC7', type: 'MC', max: 1, level: '深', topicId: '2.6.2', topicDesc: '比較不同質量拋體的最高點勢能、動能及飛行時間' },
+
+                    // Part B: Long Questions (長題目)
+                    // Q1: 建造金字塔 (拉動石塊上斜坡)
+                    { id: 'LQ1a', type: 'LQ', max: 2, level: '淺', topicId: '2.6.2', topicDesc: '計算石塊被拉至頂部時所增加的重力勢能' },
+                    { id: 'LQ1b', type: 'LQ', max: 2, level: '中', topicId: '2.6.1', topicDesc: '計算克服斜面摩擦力所作的功 (需先由重量計算摩擦力)' },
+                    { id: 'LQ1c', type: 'LQ', max: 2, level: '淺', topicId: '2.6.3', topicDesc: '計算拉動石塊所需的總能量 (勢能增加 + 克服摩擦力作功)' },
+
+                    // Q2: 推動重物 (恆速運動)
+                    { id: 'LQ2a', type: 'LQ', max: 1, level: '淺', topicId: '2.3.2', topicDesc: '應用牛頓第一定律分析恆速運動中的摩擦力' },
+                    { id: 'LQ2b', type: 'LQ', max: 2, level: '中', topicId: '2.6.4', topicDesc: '應用 P = Fv 公式計算克服摩擦力的功率' },
+
+                    // Q3: 跳水男孩 (勢能與動能轉換)
+                    { id: 'LQ3ai', type: 'LQ', max: 2, level: '淺', topicId: '2.6.2', topicDesc: '從勢能-時間線圖中讀取並計算起跳點的高度' },
+                    { id: 'LQ3aii', type: 'LQ', max: 2, level: '淺', topicId: '2.6.2', topicDesc: '從勢能-時間線圖中讀取並計算最高點的高度' },
+                    { id: 'LQ3b', type: 'LQ', max: 3, level: '深', topicId: '2.6.3', topicDesc: '根據能量守恆定律，描繪對應的動能-時間線圖' },
+                    { id: 'LQ3c', type: 'LQ', max: 2, level: '深', topicId: '2.6.3', topicDesc: '利用能量守恆定律計算物體克服水阻力作功後的最大深度' }
                 ]
             },
-             'CH25': {
+            
+                'CH25': {
                 title: '25 電功率和家居電路',
                 questions: [
-                    // 多項選擇題
-                    { id: 'MC1', type: 'MC', max: 1, topicId: '4.4.1', topicDesc: '解決有關電器額定值的問題及計算實際功率' },
-                    { id: 'MC2', type: 'MC', max: 1, topicId: '4.4.1', topicDesc: '計算消耗的電能與所需繳付的電費' },
-                    { id: 'MC3', type: 'MC', max: 1, topicId: '4.4.2', topicDesc: '認識三腳插座及插頭內電線的顏色編碼' },
-                    { id: 'MC4', type: 'MC', max: 1, topicId: '4.4.2', topicDesc: '認識斷路器的運作及計算電路的最大負載數量' },
-                    { id: 'MC5', type: 'MC', max: 1, topicId: '4.2.5', topicDesc: '計算串聯電路中電阻器所損耗的功率' },
-                    { id: 'MC6', type: 'MC', max: 1, topicId: '4.3.1', topicDesc: '利用歐姆定律分析包含燈泡和可變電阻的串聯電路' },
+                    // Part A: MC (選擇題)
+                    { id: 'MC1', type: 'MC', max: 1, level: '中', topicId: '4.4.1', topicDesc: '計算不同電壓下電器的實際消耗功率' },
+                    { id: 'MC2', type: 'MC', max: 1, level: '淺', topicId: '4.4.1', topicDesc: '計算電費 (千瓦時 kWh 的應用)' },
+                    { id: 'MC3', type: 'MC', max: 1, level: '淺', topicId: '4.4.2', topicDesc: '辨認三腳插頭的正確接線顏色 (活線、中線、水線)' },
+                    { id: 'MC4', type: 'MC', max: 1, level: '中', topicId: '4.4.2', topicDesc: '利用斷路器額定值計算可並聯的最多電器數量' },
+                    { id: 'MC5', type: 'MC', max: 1, level: '深', topicId: '4.2.5', topicDesc: '計算電阻器網絡中個別電阻的耗損功率' },
+                    { id: 'MC6', type: 'MC', max: 1, level: '深', topicId: '4.3.1', topicDesc: '分析包含燈泡和可變電阻的串聯電路並計算電阻值' },
 
-                    // 結構性題目 1
-                    { id: 'LQ1a', type: 'LQ', max: 1, topicId: '4.4.1', topicDesc: '解釋電器額定值（電壓與功率）的物理意義' },
-                    { id: 'LQ1b(i)', type: 'LQ', max: 2, topicId: '4.3.1', topicDesc: '計算並聯電路從電源獲取的總電流' },
-                    { id: 'LQ1b(ii)', type: 'LQ', max: 3, topicId: '4.4.1', topicDesc: '比較及解釋不同照明電器（燈泡與光管）的能源效益差異' },
+                    // Part B: Long Questions (長題目)
+                    // Q1: 燈泡與光管 (220V, 60W)
+                    { id: 'LQ1a', type: 'LQ', max: 1, level: '淺', topicId: '4.4.1', topicDesc: '解釋電器額定值 (220V, 60W) 的物理意義' },
+                    { id: 'LQ1bi', type: 'LQ', max: 2, level: '淺', topicId: '4.4.1', topicDesc: '計算電器正常操作時的電流' },
+                    { id: 'LQ1bii', type: 'LQ', max: 3, level: '中', topicId: '4.4.1', topicDesc: '比較不同發光裝置的能量轉換效率及亮度' },
 
-                    // 結構性題目 2
-                    { id: 'LQ2a', type: 'LQ', max: 4, topicId: '4.2.5', topicDesc: '計算電動機的電輸入功率與機械輸出功率' },
-                    { id: 'LQ2b', type: 'LQ', max: 2, topicId: '4.2.5', topicDesc: '計算電動機的能量轉換效率' },
-                    { id: 'LQ2c', type: 'LQ', max: 1, topicId: '4.2.5', topicDesc: '指出電動機操作時功率損失的原因（克服摩擦力作功）' },
+                    // Q2: 電動機 (Motor) 吊起重物
+                    { id: 'LQ2a', type: 'LQ', max: 4, level: '中', topicId: '2.6.4', topicDesc: '分別計算電動機的輸入電功率及輸出的機械功率' },
+                    { id: 'LQ2b', type: 'LQ', max: 2, level: '淺', topicId: '2.6.4', topicDesc: '計算系統的能量轉換效率 (Efficiency)' },
+                    { id: 'LQ2c', type: 'LQ', max: 1, level: '淺', topicId: '2.6.3', topicDesc: '指出機器運作時能量流失的原因 (克服摩擦力作功)' },
 
-                    // 結構性題目 3
-                    { id: 'LQ3a', type: 'LQ', max: 3, topicId: '4.4.1', topicDesc: '分析電壓改變對電器輸出功率的影響並指出相關計算假設' },
-                    { id: 'LQ3b', type: 'LQ', max: 4, topicId: '4.4.2', topicDesc: '計算總電流並評估多個電器共用一個插座時保險絲會否燒毁' },
+                    // Q3: 帶香港電器到日本使用 (110V vs 220V)
+                    { id: 'LQ3a', type: 'LQ', max: 3, level: '中', topicId: '4.4.1', topicDesc: '解釋電器在較低電壓下操作時變暗的原因及列出假設' },
+                    { id: 'LQ3b', type: 'LQ', max: 4, level: '深', topicId: '4.4.2', topicDesc: '分析在錯誤電壓下多個電器並聯時，總電流與保險絲額定值的關係' },
 
-                    // 結構性題目 4
-                    { id: 'LQ4a(i)', type: 'LQ', max: 3, topicId: '4.4.1', topicDesc: '根據電器的額定值計算其電阻值' },
-                    { id: 'LQ4a(ii)', type: 'LQ', max: 3, topicId: '4.3.1', topicDesc: '計算並聯電路中流經各個分支的電流' },
-                    { id: 'LQ4a(iii)', type: 'LQ', max: 2, topicId: '4.4.1', topicDesc: '比較並聯接駁時各電器消耗的功率及亮度' },
-                    { id: 'LQ4b(i)', type: 'LQ', max: 1, topicId: '4.3.1', topicDesc: '計算串聯電路中的總電流' },
-                    { id: 'LQ4b(ii)', type: 'LQ', max: 2, topicId: '4.3.1', topicDesc: '計算串聯電路中各元件兩端的電壓降' },
-                    { id: 'LQ4b(iii)', type: 'LQ', max: 2, topicId: '4.2.5', topicDesc: '比較串聯接駁時各電器消耗的功率及亮度' },
-                    { id: 'LQ4c', type: 'LQ', max: 2, topicId: '4.4.2', topicDesc: '解釋家居電器普遍採用並聯方式接駁的優點' }
+                    // Q4: 燈泡 X (40W) 和燈泡 Y (25W) 的並聯與串聯比較
+                    { id: 'LQ4ai', type: 'LQ', max: 3, level: '淺', topicId: '4.4.1', topicDesc: '利用額定值計算燈泡的電阻' },
+                    { id: 'LQ4aii', type: 'LQ', max: 3, level: '淺', topicId: '4.4.1', topicDesc: '計算並聯電路中各分支的電流' },
+                    { id: 'LQ4aiii', type: 'LQ', max: 2, level: '中', topicId: '4.4.1', topicDesc: '比較並聯燈泡的實際功率及亮度' },
+                    { id: 'LQ4bi', type: 'LQ', max: 1, level: '深', topicId: '4.3.1', topicDesc: '計算兩個不同電阻燈泡串聯時的電流' },
+                    { id: 'LQ4bii', type: 'LQ', max: 2, level: '深', topicId: '4.3.1', topicDesc: '計算串聯電路中的電壓分配' },
+                    { id: 'LQ4biii', type: 'LQ', max: 2, level: '深', topicId: '4.3.1', topicDesc: '計算並比較串聯燈泡的實際功率及亮度 (殺手題常客)' },
+                    { id: 'LQ4c', type: 'LQ', max: 2, level: '淺', topicId: '4.4.2', topicDesc: '解釋家居電器採用並聯連接的兩個主要優點' }
                 ]
             }
         
@@ -1047,9 +1017,9 @@
                 );
             };
 
-            // 新增：全班課題綜合分析版面
+            // 全班課題綜合分析版面 (加入 P-Value 難度診斷)
             const TopicAnalysisView = () => {
-                const [localQuiz, setLocalQuiz] = useState('CH02');
+                const [localQuiz, setLocalQuiz] = React.useState(Object.keys(QUIZ_MAPS)[0]);
                 const map = QUIZ_MAPS[localQuiz];
 
                 const getClassStats = () => {
@@ -1062,12 +1032,11 @@
                     const qStats = {}; 
                     const conceptStats = {}; 
 
-                    // 初始化題目統計
                     map.questions.forEach(q => {
-                        qStats[q.id] = { id: q.id, type: q.type, max: q.max, total: 0, attempts: 0, desc: q.topicDesc, topicId: q.topicId };
+                        // 新增：讀取題目的預設難度 q.level
+                        qStats[q.id] = { id: q.id, type: q.type, max: q.max, total: 0, attempts: 0, desc: q.topicDesc, topicId: q.topicId, originalLevel: q.level };
                     });
 
-                    // 收集全班數據
                     students.forEach(st => {
                         const stScores = (scores[st.id] || {})[localQuiz];
                         if (stScores && Object.keys(stScores).length > 0) {
@@ -1097,13 +1066,11 @@
 
                     if (studentsAttempted === 0) return null;
 
-                    // 計算每題平均得分率並排序 (由低至高)
                     const processedQStats = Object.values(qStats).map(q => ({
                         ...q,
                         pct: q.attempts > 0 ? (q.total / (q.max * q.attempts)) * 100 : 0
                     })).sort((a, b) => a.pct - b.pct);
 
-                    // 計算每個概念平均得分率並排序 (由低至高)
                     const processedConceptStats = Object.values(conceptStats).map(c => ({
                         ...c,
                         pct: c.max > 0 ? (c.total / c.max) * 100 : 0,
@@ -1115,15 +1082,23 @@
 
                 const stats = getClassStats();
 
+                // 計算難度分佈 (P-Value)
+                const difficultyStats = { easy: [], medium: [], hard: [] };
+                if (stats) {
+                    stats.processedQStats.forEach(q => {
+                        if (q.pct >= 70) difficultyStats.easy.push(q);
+                        else if (q.pct >= 40) difficultyStats.medium.push(q);
+                        else difficultyStats.hard.push(q);
+                    });
+                }
+
                 const generateClassReviewPrompt = () => {
                     if (!stats) return "目前沒有足夠數據生成教案。";
                     
-                    // 抽取最弱的 3 個概念
                     const weakestConcepts = stats.processedConceptStats.slice(0, 3).map(c => 
                         `- ${c.topicId} ${c.topicName} (全班平均得分率: ${Math.round(c.pct)}%)\n  具體難點: ${c.specificDescArray.join(', ')}`
                     ).join('\n');
 
-                    // 抽取最弱的 3 條題目
                     const weakestQuestions = stats.processedQStats.slice(0, 3).map(q => 
                         `- 題號 ${q.id} (${q.type}): ${q.desc} (全班平均: ${Math.round(q.pct)}%)`
                     ).join('\n');
@@ -1132,7 +1107,7 @@
                 };
 
                 return (
-                    <div className="p-6 h-full flex flex-col overflow-y-auto">
+                    <div className="p-6 h-full overflow-y-auto">
                         <div className="flex justify-between items-center mb-6">
                             <h2 className="text-2xl font-bold flex items-center gap-2"><Icon name="Target" /> 全班課題綜合分析</h2>
                             <select className="p-2 border rounded-md shadow-sm outline-none font-bold text-blue-700 bg-blue-50" 
@@ -1142,95 +1117,162 @@
                         </div>
 
                         {stats ? (
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                <div className="space-y-6">
-                                    {/* 概覽卡片 */}
-                                    <div className="card p-6 flex justify-around text-center items-center">
-                                        <div>
-                                            <div className="text-sm text-gray-500 mb-1">參與人數</div>
-                                            <div className="text-3xl font-bold text-blue-600">{stats.studentsAttempted}</div>
+                            <div className="space-y-6">
+                                {/* 上半部：原本的分析區塊 */}
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                    <div className="space-y-6">
+                                        <div className="card p-6 flex justify-around text-center items-center">
+                                            <div><div className="text-sm text-gray-500 mb-1">參與人數</div><div className="text-3xl font-bold text-blue-600">{stats.studentsAttempted}</div></div>
+                                            <div className="w-px h-12 bg-gray-200"></div>
+                                            <div><div className="text-sm text-gray-500 mb-1">全班平均得分</div><div className="text-3xl font-bold text-green-600">{((stats.classTotalScore / stats.studentsAttempted) || 0).toFixed(1)} <span className="text-lg text-gray-400">/ {stats.classTotalMax / stats.studentsAttempted}</span></div></div>
+                                            <div className="w-px h-12 bg-gray-200"></div>
+                                            <div><div className="text-sm text-gray-500 mb-1">整體得分率</div><div className="text-3xl font-bold text-purple-600">{((stats.classTotalScore / stats.classTotalMax) * 100).toFixed(1)}%</div></div>
                                         </div>
-                                        <div className="w-px h-12 bg-gray-200"></div>
-                                        <div>
-                                            <div className="text-sm text-gray-500 mb-1">全班平均得分</div>
-                                            <div className="text-3xl font-bold text-green-600">
-                                                {((stats.classTotalScore / stats.studentsAttempted) || 0).toFixed(1)} <span className="text-lg text-gray-400">/ {stats.classTotalMax / stats.studentsAttempted}</span>
+
+                                        <div className="card p-6">
+                                            <h3 className="font-bold text-lg mb-4 text-red-700 flex items-center gap-2"><Icon name="AlertTriangle" size={20}/> 難點題目 (全班失分最多 Top 10)</h3>
+                                            <div className="space-y-3">
+                                                {stats.processedQStats.slice(0, 10).map((q, idx) => (
+                                                    <div key={q.id} className="flex items-center justify-between p-3 bg-red-50 rounded border border-red-100">
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="bg-red-200 text-red-800 font-bold px-2 py-1 rounded text-xs">#{idx + 1}</span>
+                                                            <div>
+                                                                <div className="font-bold">{q.id} <span className="text-xs text-gray-500 font-normal ml-1">({q.type})</span></div>
+                                                                <div className="text-sm text-gray-600">{q.desc}</div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <div className={`font-bold ${q.pct < 50 ? 'text-red-600' : 'text-yellow-600'}`}>{Math.round(q.pct)}%</div>
+                                                            <div className="text-xs text-gray-400">平均得分率</div>
+                                                        </div>
+                                                    </div>
+                                                ))}
                                             </div>
                                         </div>
-                                        <div className="w-px h-12 bg-gray-200"></div>
-                                        <div>
-                                            <div className="text-sm text-gray-500 mb-1">整體得分率</div>
-                                            <div className="text-3xl font-bold text-purple-600">
-                                                {((stats.classTotalScore / stats.classTotalMax) * 100).toFixed(1)}%
+                                        
+                                        <div className="card p-6">
+                                            <h3 className="font-bold text-lg mb-4 text-gray-800">各知識點全班掌握度</h3>
+                                            <div className="space-y-4">
+                                                {stats.processedConceptStats.map(c => {
+                                                    let colorClass = c.pct >= 70 ? 'bg-green-500' : c.pct >= 50 ? 'bg-yellow-500' : 'bg-red-500';
+                                                    let textClass = c.pct >= 70 ? 'text-green-600' : c.pct >= 50 ? 'text-yellow-600' : 'text-red-600';
+                                                    return (
+                                                        <div key={c.topicId} className="text-sm">
+                                                            <div className="flex justify-between mb-1">
+                                                                <span className="font-semibold text-gray-700">{c.topicId} {c.topicName}</span>
+                                                                <span className={`font-bold ${textClass}`}>{Math.round(c.pct)}%</span>
+                                                            </div>
+                                                            <div className="w-full bg-gray-200 rounded-full h-2">
+                                                                <div className={`h-2 rounded-full ${colorClass}`} style={{width: `${c.pct}%`}}></div>
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                })}
                                             </div>
                                         </div>
                                     </div>
 
-                                    {/* 全班最弱題目 (Top 5) */}
-                                    <div className="card p-6">
-                                        <h3 className="font-bold text-lg mb-4 text-red-700 flex items-center gap-2"><Icon name="AlertTriangle" size={20}/> 難點題目 (全班失分最多 Top 10)</h3>
-                                        <div className="space-y-3">
-                                            {stats.processedQStats.slice(0, 10).map((q, idx) => (
-                                                <div key={q.id} className="flex items-center justify-between p-3 bg-red-50 rounded border border-red-100">
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="bg-red-200 text-red-800 font-bold px-2 py-1 rounded text-xs">#{idx + 1}</span>
-                                                        <div>
-                                                            <div className="font-bold">{q.id} <span className="text-xs text-gray-500 font-normal ml-1">({q.type})</span></div>
-                                                            <div className="text-sm text-gray-600">{q.desc}</div>
-                                                        </div>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <div className={`font-bold ${q.pct < 50 ? 'text-red-600' : 'text-yellow-600'}`}>{Math.round(q.pct)}%</div>
-                                                        <div className="text-xs text-gray-400">平均得分率</div>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    
-                                    {/* 全班概念掌握度 */}
-                                    <div className="card p-6">
-                                        <h3 className="font-bold text-lg mb-4 text-gray-800">各知識點全班掌握度</h3>
-                                        <div className="space-y-4">
-                                            {stats.processedConceptStats.map(c => {
-                                                let colorClass = c.pct >= 70 ? 'bg-green-500' : c.pct >= 50 ? 'bg-yellow-500' : 'bg-red-500';
-                                                let textClass = c.pct >= 70 ? 'text-green-600' : c.pct >= 50 ? 'text-yellow-600' : 'text-red-600';
-                                                return (
-                                                    <div key={c.topicId} className="text-sm">
-                                                        <div className="flex justify-between mb-1">
-                                                            <span className="font-semibold text-gray-700">{c.topicId} {c.topicName}</span>
-                                                            <span className={`font-bold ${textClass}`}>{Math.round(c.pct)}%</span>
-                                                        </div>
-                                                        <div className="w-full bg-gray-200 rounded-full h-2">
-                                                            <div className={`h-2 rounded-full ${colorClass}`} style={{width: `${c.pct}%`}}></div>
-                                                        </div>
-                                                    </div>
-                                                )
-                                            })}
-                                        </div>
+                                    <div className="card p-6 bg-orange-50 border-orange-200 h-fit">
+                                        <h3 className="font-bold text-xl mb-3 text-orange-800 flex items-center gap-2"><Icon name="Lightbulb" /> 全班試後檢討 AI 教案生成</h3>
+                                        <p className="text-sm text-gray-700 mb-4">系統已找出全班的共同盲點。複製以下指令給 AI，為下一堂課快速準備「試後檢討 (Post-exam Review)」的講解策略及黑板提問。</p>
+                                        <textarea readOnly className="w-full h-80 p-3 rounded border border-orange-300 text-sm bg-white outline-none resize-none" value={generateClassReviewPrompt()} />
+                                        <button onClick={() => navigator.clipboard.writeText(generateClassReviewPrompt())} className="mt-4 bg-orange-600 text-white w-full py-3 rounded-lg shadow hover:bg-orange-700 font-bold transition flex justify-center items-center gap-2">
+                                            <Icon name="Copy" size={18} /> 複製指令 (生成檢討教案)
+                                        </button>
                                     </div>
                                 </div>
 
-                                {/* 右側：AI 堂上檢討教案生成 */}
-                                <div className="card p-6 bg-orange-50 border-orange-200 h-fit">
-                                    <h3 className="font-bold text-xl mb-3 text-orange-800 flex items-center gap-2"><Icon name="Lightbulb" /> 全班試後檢討 AI 教案生成</h3>
-                                    <p className="text-sm text-gray-700 mb-4">系統已找出全班的共同盲點。複製以下指令給 AI，為下一堂課快速準備「試後檢討 (Post-exam Review)」的講解策略及黑板提問。</p>
-                                    <textarea readOnly className="w-full h-80 p-3 rounded border border-orange-300 text-sm bg-white outline-none resize-none" value={generateClassReviewPrompt()} />
-                                    <button onClick={() => navigator.clipboard.writeText(generateClassReviewPrompt())} className="mt-4 bg-orange-600 text-white w-full py-3 rounded-lg shadow hover:bg-orange-700 font-bold transition flex justify-center items-center gap-2">
-                                        <Icon name="Copy" size={18} /> 複製指令 (生成檢討教案)
-                                    </button>
+                                {/* 下半部：新增的 P-Value 難度診斷區塊 */}
+                                <div className="card p-6">
+                                    <h3 className="font-bold text-xl mb-4 text-indigo-800 flex items-center gap-2">
+                                        <Icon name="BarChart" size={24}/> 試卷難度診斷 (P-Value 難度指數)
+                                    </h3>
+                                    <p className="text-sm text-gray-600 mb-6">
+                                        根據考評局標準，P-Value (平均得分率) 反映了題目對學生的實際體感難度。系統會將得分率分為：<strong className="text-green-600">淺 (≥70%)</strong>、<strong className="text-yellow-600">中 (40%-69%)</strong>、<strong className="text-red-600">深 (&lt;40%)</strong>，助你診斷本次測驗的深淺度是否符合預期。
+                                    </p>
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 text-center">
+                                        <div className="bg-green-50 p-4 rounded-xl border border-green-200">
+                                            <div className="font-bold text-green-700 mb-2">🟢 淺 (P-Value ≥ 70%)</div>
+                                            <div className="text-3xl font-black text-green-600 mb-2">{difficultyStats.easy.length} <span className="text-sm font-normal text-green-700">題</span></div>
+                                            <div className="text-xs text-green-600">{difficultyStats.easy.map(q => q.id).join(', ') || '無'}</div>
+                                        </div>
+                                        <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200">
+                                            <div className="font-bold text-yellow-700 mb-2">🟡 中 (40% ≤ P-Value &lt; 70%)</div>
+                                            <div className="text-3xl font-black text-yellow-600 mb-2">{difficultyStats.medium.length} <span className="text-sm font-normal text-yellow-700">題</span></div>
+                                            <div className="text-xs text-yellow-600">{difficultyStats.medium.map(q => q.id).join(', ') || '無'}</div>
+                                        </div>
+                                        <div className="bg-red-50 p-4 rounded-xl border border-red-200">
+                                            <div className="font-bold text-red-700 mb-2">🔴 深 (P-Value &lt; 40%)</div>
+                                            <div className="text-3xl font-black text-red-600 mb-2">{difficultyStats.hard.length} <span className="text-sm font-normal text-red-700">題</span></div>
+                                            <div className="text-xs text-red-600">{difficultyStats.hard.map(q => q.id).join(', ') || '無'}</div>
+                                        </div>
+                                    </div>
+
+                                    {/* 實測 vs 預設難度對比列表 */}
+                                    <div className="overflow-x-auto rounded-lg border border-gray-200">
+                                        <table className="w-full text-sm text-left border-collapse">
+                                            <thead className="bg-indigo-50 text-indigo-800">
+                                                <tr>
+                                                    <th className="p-3 border-b">題號</th>
+                                                    <th className="p-3 border-b w-1/3">考核概念</th>
+                                                    <th className="p-3 border-b">老師預設難度</th>
+                                                    <th className="p-3 border-b">學生實測得分率</th>
+                                                    <th className="p-3 border-b">學生實際體感</th>
+                                                    <th className="p-3 border-b">診斷結果</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {/* 這裡依照題號原始順序顯示，不強制由低至高排序，方便對卷 */}
+                                                {map.questions.map(qBase => {
+                                                    const q = stats.processedQStats.find(x => x.id === qBase.id);
+                                                    if (!q) return null;
+
+                                                    let actualLevel = q.pct >= 70 ? '淺' : q.pct >= 40 ? '中' : '深';
+                                                    let actualColor = q.pct >= 70 ? 'text-green-600' : q.pct >= 40 ? 'text-yellow-600' : 'text-red-600';
+                                                    let intendedLevel = q.originalLevel || '未設定';
+                                                    
+                                                    let diagnosis = '-';
+                                                    if (intendedLevel !== '未設定') {
+                                                        if (intendedLevel === actualLevel) diagnosis = '✅ 符合預期';
+                                                        else if (
+                                                            (intendedLevel === '淺' && (actualLevel === '中' || actualLevel === '深')) ||
+                                                            (intendedLevel === '中' && actualLevel === '深')
+                                                        ) {
+                                                            diagnosis = '⚠️ 比預期深 (殺手題)';
+                                                        } else {
+                                                            diagnosis = '⚠️ 比預期淺 (送分題)';
+                                                        }
+                                                    }
+
+                                                    return (
+                                                        <tr key={q.id} className="border-b hover:bg-indigo-50 transition">
+                                                            <td className="p-3 font-bold text-gray-700">{q.id}</td>
+                                                            <td className="p-3 text-gray-600 truncate">{q.desc}</td>
+                                                            <td className="p-3 text-gray-500 font-medium">{intendedLevel}</td>
+                                                            <td className="p-3 font-mono font-bold text-gray-700">{q.pct.toFixed(1)}%</td>
+                                                            <td className={`p-3 font-bold ${actualColor}`}>{actualLevel}</td>
+                                                            <td className={`p-3 font-bold ${diagnosis.includes('殺手題') ? 'text-red-600' : diagnosis.includes('符合預期') ? 'text-green-600' : 'text-blue-600'}`}>
+                                                                {diagnosis}
+                                                            </td>
+                                                        </tr>
+                                                    )
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             </div>
                         ) : (
                             <div className="card p-10 text-center text-gray-500 flex flex-col items-center">
                                 <Icon name="Inbox" size={48} className="text-gray-300 mb-4" />
                                 <p>目前 {QUIZ_MAPS[localQuiz]?.title} 尚未有任何學生成績紀錄。</p>
-                                <p className="text-sm mt-2">請先在「小測成績輸入」中輸入分數後再來檢視全班綜合分析。</p>
                             </div>
                         )}
                     </div>
                 );
             };
+
             
             const BackupView = () => {
                 const handleExportJSON = () => {
