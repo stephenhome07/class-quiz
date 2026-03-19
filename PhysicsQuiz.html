@@ -250,32 +250,64 @@
 
         };
 
-        const App = () => {
-            const [view, setView] = useState('students');
-            const [students, setStudents] = useState([]);
-            const [scores, setScores] = useState({});
-            const [selectedQuiz, setSelectedQuiz] = useState('CH02');
-            const [selectedStudentId, setSelectedStudentId] = useState('');
-            const [pasteData, setPasteData] = useState('');
+const App = () => {
+            // ★ 將這裡換成你剛剛複製的 Google Apps Script 網址 ★
+            const API_URL = 'https://script.google.com/macros/s/AKfycbz1DKuoBED9iaxYRzctOqfpZhLEtJJScjPyqujHWAPoZjHHpX_3z2T0iqtqob3am9WeuQ/exec';
 
-            // AI Prompt settings
-            const [aiLang, setAiLang] = useState('zh'); // zh, en
-            const [aiType, setAiType] = useState('Both'); // MC, LQ, Both
-            const [aiLevel, setAiLevel] = useState('LV3-4'); // LV2, LV3-4, LV5
-            const [aiMcCount, setAiMcCount] = useState(10);
-            const [aiLqCount, setAiLqCount] = useState(2);
+            const [view, setView] = React.useState('students');
+            const [students, setStudents] = React.useState([]);
+            const [scores, setScores] = React.useState({});
+            
+            // 新增：雲端連線狀態
+            const [isLoading, setIsLoading] = React.useState(true);
+            const [isSaving, setIsSaving] = React.useState(false);
 
-            useEffect(() => {
-                const savedStudents = localStorage.getItem('hkdse_quiz_students');
-                const savedScores = localStorage.getItem('hkdse_quiz_scores');
-                if (savedStudents) setStudents(JSON.parse(savedStudents));
-                if (savedScores) setScores(JSON.parse(savedScores));
+            // 初次載入時，從 Google 雲端讀取資料
+            React.useEffect(() => {
+                fetch(API_URL)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.students) setStudents(data.students);
+                        if (data.scores) setScores(data.scores);
+                        setIsLoading(false);
+                    })
+                    .catch(err => {
+                        console.error("讀取失敗:", err);
+                        alert("無法連線到雲端資料庫，請檢查網路。");
+                        setIsLoading(false);
+                    });
             }, []);
 
-            useEffect(() => {
-                localStorage.setItem('hkdse_quiz_students', JSON.stringify(students));
-                localStorage.setItem('hkdse_quiz_scores', JSON.stringify(scores));
-            }, [students, scores]);
+            // 新增：手動同步到雲端的函數
+            const syncToCloud = () => {
+                setIsSaving(true);
+                fetch(API_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ students: students, scores: scores })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    setIsSaving(false);
+                    if(data.status === 'success') {
+                        // 可以加入一個小提示或不加
+                    }
+                })
+                .catch(err => {
+                    console.error("存檔失敗:", err);
+                    alert("同步到雲端失敗！");
+                    setIsSaving(false);
+                });
+            };
+
+            // 當畫面還在載入時，顯示 Loading 畫面
+            if (isLoading) {
+                return (
+                    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
+                        <Icon name="Loader2" size={48} className="text-blue-500 animate-spin mb-4" />
+                        <h2 className="text-xl font-bold text-gray-700">正在從 Google 雲端讀取資料...</h2>
+                    </div>
+                );
+            };
 
             const handleImportStudents = () => {
                 const lines = pasteData.trim().split('\n');
@@ -301,7 +333,7 @@
                 }));
             };
 
-        const getStudentAnalysis = (studentId, quizId) => {
+            const getStudentAnalysis = (studentId, quizId) => {
                 // 新增：檢查該學生是否真的有這份小測的成績紀錄，若無則直接跳過
                 const studentScores = (scores[studentId] || {})[quizId];
                 if (!studentScores || Object.keys(studentScores).length === 0) return null;
@@ -1328,6 +1360,17 @@
                 <div className="w-64 bg-slate-800 text-white h-screen fixed left-0 top-0 flex flex-col z-10 shadow-lg">
                     <div className="p-6 border-b border-slate-700"><h1 className="text-lg font-bold">HKDSE Physics</h1><p className="text-xs text-slate-400 mt-1">Quiz Analyzer Pro</p></div>
                     <nav className="flex-1 p-4 space-y-2">
+                        <div className="p-4 bg-slate-900 border-b border-slate-700">
+                        <button 
+                            onClick={syncToCloud} 
+                            disabled={isSaving}
+                            className={`w-full py-3 rounded-lg font-bold flex justify-center items-center gap-2 transition shadow-lg ${isSaving ? 'bg-slate-600 text-slate-300 cursor-not-allowed' : 'bg-green-600 hover:bg-green-500 text-white'}`}
+                        >
+                            {isSaving ? <Icon name="RefreshCw" size={18} className="animate-spin" /> : <Icon name="CloudUpload" size={18} />}
+                            {isSaving ? '正在同步至雲端...' : '💾 儲存並同步至雲端'}
+                        </button>
+                        <p className="text-xs text-slate-400 mt-2 text-center">修改資料後請務必點擊同步</p>
+                        </div>
                         <button onClick={() => setView('students')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'students' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="Users" size={18} /> 學生管理</button>
                         <button onClick={() => setView('scores')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'scores' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="Edit3" size={18} /> 小測成績輸入</button>
                         <button onClick={() => setView('analysis')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'analysis' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="BarChart2" size={18} /> 弱點分析 & 補底</button>
