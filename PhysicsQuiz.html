@@ -262,9 +262,8 @@ const App = () => {
             const [isLoading, setIsLoading] = React.useState(true);
             const [isSaving, setIsSaving] = React.useState(false);
 
-            // 👇 新增：群組(屆別)管理邏輯 👇
-            // 自動從現有學生名單中抓取所有不重複的群組名稱 (若無則預設為 '2024-2027')
-            const allCohorts = ['所有學生', ...new Set(activeStudents.map(s => s.cohort || '2024-2027'))];
+           // 自動從現有學生名單中抓取所有不重複的群組名稱 (加入防護罩)
+            const allCohorts = ['所有學生', ...new Set((students || []).map(s => s.cohort || '2024-2027'))];
             
             // 從老師的瀏覽器記憶中讀取上次選的群組，預設為 '所有學生'
             const [currentCohort, setCurrentCohort] = React.useState(localStorage.getItem('saved_cohort') || '所有學生');
@@ -274,10 +273,10 @@ const App = () => {
                 localStorage.setItem('saved_cohort', currentCohort);
             }, [currentCohort]);
 
-            // ⚠️ 核心過濾器：依照選擇的群組，過濾出「當前作用中」的學生名單
+            // ⚠️ 核心過濾器：依照選擇的群組，過濾出「當前作用中」的學生名單 (加入防護罩)
             const activeStudents = currentCohort === '所有學生' 
-                ? students 
-                : students.filter(s => (s.cohort || '2024-2027') === currentCohort);
+                ? (students || [])
+                : (students || []).filter(s => (s.cohort || '2024-2027') === currentCohort);
     
             // 初次載入時，從 Google 雲端讀取資料 (防崩潰保護版)
             React.useEffect(() => {
