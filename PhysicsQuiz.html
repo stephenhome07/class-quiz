@@ -1365,28 +1365,80 @@ const App = () => {
             };
 
             
-            const BackupView = () => {
-                const handleExportJSON = () => {
-                    const dataObj = { students, scores };
-                    const blob = new Blob([JSON.stringify(dataObj)], { type: 'application/json' });
-                    const a = document.createElement('a');
-                    a.href = URL.createObjectURL(blob);
-                    a.download = `HKDSE_QuizData_Backup_${new Date().toISOString().slice(0,10)}.json`;
-                    a.click();
+             const BackupView = () => {
+                // 用來記錄準備合併進來的群組名稱
+                const [mergeCohort, setMergeCohort] = React.useState('2025-2028');
+                
+                const fileInputRef = React.useRef(null);
+                const mergeInputRef = React.useRef(null);
+
+                // 1. 下載目前雲端資料
+                const handleExport = () => {
+                    const dataStr = JSON.stringify({ students, scores });
+                    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+                    const exportFileDefaultName = `PhysicsQuiz_DB_Backup_${new Date().toISOString().split('T')[0]}.json`;
+                    const linkElement = document.createElement('a');
+                    linkElement.setAttribute('href', dataUri);
+                    linkElement.setAttribute('download', exportFileDefaultName);
+                    linkElement.click();
                 };
 
-                const handleImportJSON = (e) => {
+                // 2. 舊版還原 (覆蓋式)
+                const handleRestore = (e) => {
                     const file = e.target.files[0];
                     if (!file) return;
                     const reader = new FileReader();
                     reader.onload = (event) => {
                         try {
-                            const parsed = JSON.parse(event.target.result);
-                            if (parsed.students && parsed.scores) {
-                                setStudents(parsed.students); setScores(parsed.scores);
-                                alert("成功匯入並還原備份資料！");
-                            } else alert("備份檔案格式不正確！");
-                        } catch (err) { alert("讀取檔案失敗！"); }
+                            const data = JSON.parse(event.target.result);
+                            if (data.students && data.scores) {
+                                if(window.confirm('⚠️ 警告：這將會【完全覆蓋】目前系統內的所有資料！確定要還原嗎？')) {
+                                    setStudents(data.students);
+                                    setScores(data.scores);
+                                    alert('✅ 已讀取備份資料！請記得點擊「儲存並同步至雲端」。');
+                                }
+                            }
+                        } catch (error) {
+                            alert('檔案格式錯誤！');
+                        }
+                        e.target.value = null; // 清空選擇
+                    };
+                    reader.readAsText(file);
+                };
+
+                // 3. 🌟全新功能：無痛合併其他老師資料🌟
+                const handleMerge = (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        try {
+                            const data = JSON.parse(event.target.result);
+                            if (data.students && data.scores) {
+                                // A. 幫對方匯入的學生全部打上你設定的 Cohort (2025-2028)
+                                const importedStudents = data.students.map(s => ({
+                                    ...s,
+                                    cohort: mergeCohort
+                                }));
+
+                                // B. 找出不重複的學生 (過濾掉雲端已經有的人，防止重複匯入)
+                                const existingIds = new Set(students.map(s => s.id));
+                                const newStudentsOnly = importedStudents.filter(s => !existingIds.has(s.id));
+                                
+                                // C. 完美合併雙方的成績物件
+                                const mergedScores = { ...scores, ...data.scores };
+
+                                if(window.confirm(`準備將 ${newStudentsOnly.length} 位新學生加入至群組「${mergeCohort}」。\n這不會影響您現有 2024-2027 的資料！確定要合併嗎？`)) {
+                                    // 將新學生附加到現有名單後面
+                                    setStudents(prev => [...prev, ...newStudentsOnly]);
+                                    setScores(mergedScores);
+                                    alert('✅ 雙方資料合併成功！\n請務必點選左側「💾 儲存並同步至雲端」將最終結果上傳。');
+                                }
+                            }
+                        } catch (error) {
+                            alert('檔案格式錯誤！請確認這是否為系統匯出的 JSON 檔。');
+                        }
+                        e.target.value = null;
                     };
                     reader.readAsText(file);
                 };
@@ -1394,21 +1446,49 @@ const App = () => {
                 return (
                     <div className="p-6">
                         <h2 className="text-2xl font-bold mb-6 flex items-center gap-2"><Icon name="Database" /> 數據備份與還原</h2>
+                        
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="card p-6 flex flex-col items-center text-center">
-                                <div className="bg-blue-100 p-4 rounded-full text-blue-600 mb-4"><Icon name="UploadCloud" size={40}/></div>
-                                <h3 className="font-bold text-lg mb-2">匯出備份 (換電腦用)</h3>
-                                <p className="text-sm text-gray-500 mb-4">將所有學生物件與成績紀錄下載成一個 JSON 檔案。你可以將檔案儲存在 USB 或 Google Drive。</p>
-                                <button onClick={handleExportJSON} className="bg-blue-600 text-white px-6 py-2 rounded shadow">下載備份檔 (.json)</button>
+                            {/* 備份區塊 */}
+                            <div className="card p-6 bg-white border border-slate-200">
+                                <h3 className="font-bold text-lg mb-2 text-slate-800 flex items-center gap-2"><Icon name="Download" size={20}/> 備份目前資料</h3>
+                                <p className="text-sm text-slate-500 mb-4">將雲端上最新的學生名單與所有成績下載到電腦中，作為您的離線保險。</p>
+                                <button onClick={handleExport} className="w-full bg-slate-800 text-white py-2.5 rounded-lg hover:bg-slate-700 font-bold transition">
+                                    下載備份檔 (.json)
+                                </button>
                             </div>
-                            <div className="card p-6 flex flex-col items-center text-center">
-                                <div className="bg-orange-100 p-4 rounded-full text-orange-600 mb-4"><Icon name="DownloadCloud" size={40}/></div>
-                                <h3 className="font-bold text-lg mb-2">還原資料 (匯入)</h3>
-                                <p className="text-sm text-gray-500 mb-4">從另一部電腦下載的 JSON 檔案匯入此系統。(注意：這會覆蓋當前瀏覽器的紀錄)</p>
-                                <label className="bg-orange-500 text-white px-6 py-2 rounded shadow cursor-pointer hover:bg-orange-600">
-                                    選擇檔案並匯入
-                                    <input type="file" accept=".json" className="hidden" onChange={handleImportJSON} />
-                                </label>
+
+                            {/* 覆蓋還原區塊 */}
+                            <div className="card p-6 bg-white border border-red-100">
+                                <h3 className="font-bold text-lg mb-2 text-red-600 flex items-center gap-2"><Icon name="AlertTriangle" size={20}/> 完全還原 (將覆蓋現有資料)</h3>
+                                <p className="text-sm text-slate-500 mb-4">讀取先前的備份檔，<b className="text-red-500">這會完全洗掉並取代</b>系統內目前的所有資料。</p>
+                                <input type="file" accept=".json" ref={fileInputRef} onChange={handleRestore} className="hidden" />
+                                <button onClick={() => fileInputRef.current.click()} className="w-full bg-red-50 text-red-600 border border-red-200 py-2.5 rounded-lg hover:bg-red-100 font-bold transition">
+                                    選擇備份檔並覆蓋還原
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* 👇 新增：合併其他老師的離線資料區塊 👇 */}
+                        <div className="card p-6 mt-6 bg-green-50 border border-green-200 shadow-sm">
+                            <h3 className="font-bold text-lg mb-2 text-green-700 flex items-center gap-2"><Icon name="FilePlus" size={20}/> 合併其他老師的離線資料</h3>
+                            <p className="text-sm text-green-600 mb-4">若其他老師有離線版的備份檔，您可以使用此功能將他們的學生與成績<b>安全地附加</b>到系統中，且<b>不會覆蓋</b>您原本的資料！系統會自動為他們打上群組標籤。</p>
+                            
+                            <div className="flex flex-col md:flex-row items-center gap-4">
+                                <div className="flex items-center gap-2 bg-white p-2 rounded border border-green-300 w-full md:w-auto">
+                                    <label className="text-sm font-bold text-green-800 whitespace-nowrap">目標群組：</label>
+                                    <input 
+                                        type="text" 
+                                        value={mergeCohort} 
+                                        onChange={(e) => setMergeCohort(e.target.value)}
+                                        className="outline-none text-green-700 font-bold w-32 bg-transparent"
+                                        placeholder="例如: 2025-2028"
+                                    />
+                                </div>
+                                
+                                <input type="file" accept=".json" ref={mergeInputRef} onChange={handleMerge} className="hidden" />
+                                <button onClick={() => mergeInputRef.current.click()} className="w-full md:w-auto flex-1 bg-green-600 text-white py-2.5 px-4 rounded-lg hover:bg-green-700 font-bold transition flex justify-center items-center gap-2 shadow-md">
+                                    <Icon name="UploadCloud" size={18} /> 選擇對方的 JSON 檔進行合併
+                                </button>
                             </div>
                         </div>
                     </div>
