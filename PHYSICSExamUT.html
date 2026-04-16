@@ -390,47 +390,54 @@
                 const [defaultCount, setDefaultCount] = useState(10);
                 const [defaultDifficulty, setDefaultDifficulty] = useState('Medium');
 
-                // 獲取所有學生的弱點數據
+// 獲取所有學生的弱點數據 (修正 ReferenceError 版本)
                 const studentsAnalysis = useMemo(() => {
                     return students.map(student => {
-                        const trend = getStudentTrend(student.id);
-                        // 過濾試卷
+                        // 直接從全域的 examScores 抓取該學生的所有成績紀錄
+                        const studentRecords = examScores.filter(record => record.studentId === student.id);
+                        
+                        // 過濾試卷 (all 或特定試卷)
                         const filteredTrend = selectedExamId === 'all' 
-                            ? trend 
-                            : trend.filter(t => t.examId === selectedExamId);
+                            ? studentRecords 
+                            : studentRecords.filter(t => t.examId === selectedExamId);
 
                         if (filteredTrend.length === 0) return { ...student, weaknesses: [], avgScore: 0 };
 
                         // 匯總所有選中試卷的課題表現
                         const topicMap = {};
                         filteredTrend.forEach(report => {
-                            report.topics.forEach(topic => {
-                                if (!topicMap[topic.name]) {
-                                    topicMap[topic.name] = { name: topic.name, id: topic.id, score: 0, total: 0 };
-                                }
-                                topicMap[topic.name].score += topic.score;
-                                topicMap[topic.name].total += topic.total;
-                            });
+                            // 確保 report.topics 存在
+                            if (report.topics) {
+                                report.topics.forEach(topic => {
+                                    if (!topicMap[topic.name]) {
+                                        topicMap[topic.name] = { name: topic.name, id: topic.id || 'N/A', score: 0, total: 0 };
+                                    }
+                                    topicMap[topic.name].score += topic.score;
+                                    topicMap[topic.name].total += topic.total;
+                                });
+                            }
                         });
 
+                        // 計算弱點百分比並排序
                         const weaknesses = Object.values(topicMap)
                             .map(t => ({
                                 ...t,
-                                percentage: Math.round((t.score / t.total) * 100)
+                                percentage: t.total > 0 ? Math.round((t.score / t.total) * 100) : 0
                             }))
                             .sort((a, b) => a.percentage - b.percentage)
-                            .slice(0, 5); // 取前5個弱點
+                            .slice(0, 5); // 取前5個最弱的課題
 
-                        const totalScore = filteredTrend.reduce((acc, curr) => acc + curr.score, 0);
-                        const totalMax = filteredTrend.reduce((acc, curr) => acc + curr.total, 0);
+                        // 計算該生在選中試卷的總平均分
+                        const totalScore = filteredTrend.reduce((acc, curr) => acc + (curr.score || 0), 0);
+                        const totalMax = filteredTrend.reduce((acc, curr) => acc + (curr.total || 0), 0);
 
                         return {
                             ...student,
                             weaknesses,
-                            avgScore: Math.round((totalScore / totalMax) * 100)
+                            avgScore: totalMax > 0 ? Math.round((totalScore / totalMax) * 100) : 0
                         };
                     });
-                }, [selectedExamId, students]);
+                }, [selectedExamId, students, examScores]); // 加入 examScores 作為依賴
 
                 // 處理全選/取消全選
                 const toggleAllStudents = () => {
