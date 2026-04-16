@@ -145,7 +145,7 @@
                 />
             </div>
         );
-// 【終極防護版】GenerateView
+// 【極簡穩定版】GenerateView - 直接使用總分加總，保證不為 0
 const GenerateView = ({ students = [], exams = [], history = [], setHistory, analyzeExam }) => {
     const [selectedExamId, setSelectedExamId] = React.useState('all');
     const [selectedStudentIds, setSelectedStudentIds] = React.useState([]);
@@ -162,6 +162,7 @@ const GenerateView = ({ students = [], exams = [], history = [], setHistory, ana
             if (!students || !Array.isArray(students)) return [];
 
             return students.map(student => {
+                // 1. 直接調用 analyzeExam (跟 Dashboard 完全一樣的邏輯，絕對能抓到分數)
                 const studentTrend = (exams || [])
                     .map(exam => typeof analyzeExam === 'function' ? analyzeExam(exam, student.id) : null)
                     .filter(Boolean);
@@ -173,7 +174,11 @@ const GenerateView = ({ students = [], exams = [], history = [], setHistory, ana
                 if (filteredTrend.length === 0) return { ...student, weaknesses: [], avgScore: 0 };
 
                 const topicMap = {};
+                let totalScoreSum = 0;
+                let totalMaxSum = 0;
+
                 filteredTrend.forEach(report => {
+                    // 累加弱點課題
                     if (report && report.topics) {
                         Object.entries(report.topics).forEach(([topicId, topic]) => {
                             if (!topicMap[topic.name]) {
@@ -182,6 +187,13 @@ const GenerateView = ({ students = [], exams = [], history = [], setHistory, ana
                             topicMap[topic.name].score += (topic.score || 0);
                             topicMap[topic.name].total += (topic.max || 0); 
                         });
+                    }
+
+                    // 累加總分 (簡單粗暴，直接用 marksheet 上的分數)
+                    // 兼容兩種常見的屬性命名方式 (totalScore 或 score)
+                    if (report) {
+                        totalScoreSum += (report.totalScore !== undefined ? report.totalScore : (report.score || 0));
+                        totalMaxSum += (report.totalMax !== undefined ? report.totalMax : (report.max || 0));
                     }
                 });
 
@@ -193,69 +205,8 @@ const GenerateView = ({ students = [], exams = [], history = [], setHistory, ana
                     .filter(t => t.percentage < 40)
                     .sort((a, b) => a.percentage - b.percentage);
 
-                let sumWeightedAvg = 0;
-                let validExamCount = 0;
-                const targetExams = selectedExamId === 'all' ? exams : exams.filter(e => e.id === selectedExamId);
-
-                targetExams.forEach(exam => {
-                    if (!exam || !exam.data || !exam.mapData) return;
-                    
-                    // 【修復1】超級模糊匹配：遍歷整行，只要有任何一個值等於學生ID就抓出來 (無視欄位名稱)
-                    const studentRow = exam.data.find(row => 
-                        Object.values(row).some(val => String(val).trim() === String(student.id).trim())
-                    );
-                    
-                    if (studentRow) {
-                        let mcScore = 0, mcMax = 0, lqScore = 0, lqMax = 0;
-                        let totalScore = 0, totalMax = 0; // 備用總分
-
-                        exam.mapData.forEach(q => {
-                            const qId = q.Question_ID || q.questionId || q.id || '';
-                            if (!qId) return;
-
-                            // 【修復2】忽略題目ID的隱藏空白
-                            const actualKey = Object.keys(studentRow).find(key => String(key).trim() === String(qId).trim());
-                            const rawScore = actualKey ? studentRow[actualKey] : undefined;
-                            
-                            if (rawScore !== undefined && rawScore !== null && rawScore !== '') {
-                                const score = Number(rawScore) || 0;
-                                const max = Number(q.Full_Mark || q.FullMark || q.Max || 1) || 0;
-                                
-                                totalScore += score;
-                                totalMax += max;
-
-                                const qIdStr = String(qId).toUpperCase();
-                                if (qIdStr.includes('MC')) {
-                                    mcMax += max;
-                                    mcScore += score;
-                                } else {
-                                    lqMax += max;
-                                    lqScore += score;
-                                }
-                            }
-                        });
-
-                        const mcP = mcMax > 0 ? (mcScore / mcMax) : 0;
-                        const lqP = lqMax > 0 ? (lqScore / lqMax) : 0;
-                        
-                        let examWeightedAvg = 0;
-                        if (mcMax > 0 && lqMax > 0) {
-                            examWeightedAvg = (mcP * 35) + (lqP * 65);
-                        } else if (mcMax > 0) {
-                            examWeightedAvg = mcP * 100;
-                        } else if (lqMax > 0) {
-                            examWeightedAvg = lqP * 100;
-                        } else if (totalMax > 0) {
-                            // 【修復3】如果題目名稱沒有包含 MC，直接用總分計算，避免出現 0%
-                            examWeightedAvg = (totalScore / totalMax) * 100;
-                        }
-                        
-                        sumWeightedAvg += examWeightedAvg;
-                        validExamCount++;
-                    }
-                });
-
-                const avgScore = validExamCount > 0 ? Math.round(sumWeightedAvg / validExamCount) : 0;
+                // 2. 計算總分百分比
+                const avgScore = totalMaxSum > 0 ? Math.round((totalScoreSum / totalMaxSum) * 100) : 0;
 
                 return { ...student, weaknesses, avgScore };
             });
@@ -410,7 +361,7 @@ const GenerateView = ({ students = [], exams = [], history = [], setHistory, ana
                     <table className="w-full text-left border-collapse min-w-max">
                         <thead>
                             <tr className="bg-gray-800 text-white text-sm">
-                                <th className="px-4 py-3 sticky left-0 bg-gray-800 z-10 w-40 shadow-sm">學生 (MC 35% + LQ 65%)</th>
+                                <th className="px-4 py-3 sticky left-0 bg-gray-800 z-10 w-40 shadow-sm">學生 (總分百分比)</th>
                                 <th className="px-4 py-3 border-l border-gray-700">弱點課題 (得分 &lt; 40%)</th>
                             </tr>
                         </thead>
@@ -425,7 +376,7 @@ const GenerateView = ({ students = [], exams = [], history = [], setHistory, ana
                                             <td className="px-4 py-4 sticky left-0 bg-white border-r shadow-sm align-top">
                                                 <div className="font-bold text-gray-800">{student.label}</div>
                                                 <div className="text-xs mt-1 text-gray-500">
-                                                    加權平均: <span className={`font-bold ${student.avgScore < 50 ? 'text-red-500' : 'text-green-600'}`}>{student.avgScore}%</span>
+                                                    總分平均: <span className={`font-bold ${student.avgScore < 50 ? 'text-red-500' : 'text-green-600'}`}>{student.avgScore}%</span>
                                                 </div>
                                             </td>
                                             <td className="px-4 py-4 align-top">
