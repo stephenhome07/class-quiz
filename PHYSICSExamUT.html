@@ -409,7 +409,11 @@
                     localStorage.setItem('hkdse_prompt_settings', JSON.stringify(promptSettings));
                 }, [promptSettings]);
                 
-                const latestExamReport = studentTrend && studentTrend.length > 0 ? studentTrend[studentTrend.length - 1] : null;
+               // 新增一個 state 來記錄選中的試卷，預設為最新一份
+                const [selectedExamIndex, setSelectedExamIndex] = useState(exams.length > 0 ? exams.length - 1 : 0);
+
+                // 根據選中的 index 來獲取該次考試報告
+                const latestExamReport = studentTrend && studentTrend.length > 0 ? studentTrend[selectedExamIndex] : null;
 
                 useEffect(() => { setSelectedTopics([]); }, [selectedStudentId]);
 
@@ -528,7 +532,27 @@ Output Format:
                         {/* Left Column: Basic Settings */}
                         <div className="card p-6 flex flex-col h-full overflow-y-auto">
                             <h2 className="text-xl font-bold mb-4">1. 練習範圍</h2>
-                            <div className="mb-4 p-2 bg-blue-50 text-blue-800 rounded font-medium">{students.find(s => s.id === selectedStudentId)?.label}</div>
+                                <div className="flex gap-2 mb-4">
+                                    <div className="flex-1 p-2 bg-blue-50 text-blue-800 rounded font-medium truncate">
+                                        {students.find(s => s.id === selectedStudentId)?.label}
+                                    </div>
+                                    
+                                    {/* 新增的試卷下拉選單 */}
+                                    {studentTrend && studentTrend.length > 0 && (
+                                        <select 
+                                            className="p-2 border rounded-md text-sm bg-white" 
+                                            value={selectedExamIndex} 
+                                            onChange={e => {
+                                                setSelectedExamIndex(Number(e.target.value));
+                                                setSelectedTopics([]); // 切換試卷時清空已選課題
+                                            }}
+                                        >
+                                            {studentTrend.map((r, i) => (
+                                                <option key={i} value={i}>{r.examName}</option>
+                                            ))}
+                                        </select>
+                                    )}
+                                </div>
                             <div className="mb-4 flex-1 overflow-hidden flex flex-col">
                                 <div className="flex justify-between items-center mb-2"><label className="font-bold text-gray-700">選擇課題</label><button onClick={autoSelectWeak} className="text-xs bg-red-50 text-red-600 px-2 py-1 rounded border border-red-200">載入弱項</button></div>
                                 <div className="border rounded-md overflow-y-auto p-2 space-y-1 flex-1 bg-gray-50 custom-scrollbar">{sortedTopics.map(([id, t]) => (
