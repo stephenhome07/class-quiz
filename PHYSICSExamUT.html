@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PHYSICS EXAM UT V2.0</title>
+    <title>V2.1 PHYSICS EXAM UT </title>
     
     <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -145,17 +145,17 @@
                 />
             </div>
         );
-// 【終極解碼版】GenerateView - 破解 Class 與 ClassNumber 分離問題
+// 【智能 Prompt 版】GenerateView
 const GenerateView = ({ students = [], exams = [], history = [], setHistory }) => {
     const [selectedExamId, setSelectedExamId] = React.useState('all');
     const [selectedStudentIds, setSelectedStudentIds] = React.useState([]);
     const [showSettings, setShowSettings] = React.useState(true);
     
-    // Prompt 設定
+    // Prompt 設定 (已預設為 MC)
     const [defaultCount, setDefaultCount] = React.useState(10);
     const [defaultDifficulty, setDefaultDifficulty] = React.useState('Medium');
     const [language, setLanguage] = React.useState('繁體中文');
-    const [questionType, setQuestionType] = React.useState('Mix (MC + LQ)');
+    const [questionType, setQuestionType] = React.useState('MC (Multiple Choice)'); // 預設改為 MC
 
     const studentsAnalysis = React.useMemo(() => {
         try {
@@ -170,37 +170,27 @@ const GenerateView = ({ students = [], exams = [], history = [], setHistory }) =
 
                 targetExams.forEach(exam => {
                     if (!exam) return;
-                    
-                    // JSON 數據庫中叫 markSheetData，系統可能讀取為 data
                     const examData = exam.data || exam.markSheetData || [];
                     const mapData = exam.mapData || [];
 
-                    // 🎯 核心修復：手動拼接 Class 和 ClassNumber 或使用姓名找人
                     const studentRow = examData.find(row => {
                         if (!row) return false;
-                        
-                        // 方法 1: 拼接 Class 和 ClassNumber (例如 "S5A" + "26" => "S5A-26")
                         if (row.Class && row.ClassNumber) {
                             const combinedId = `${String(row.Class).trim()}-${String(row.ClassNumber).trim()}`;
                             if (combinedId === String(student.id).trim()) return true;
                         }
-                        
-                        // 方法 2: 姓名配對 (例如標籤 "S5A (26) 謝宇邦" 包含 "謝宇邦")
                         const sLabel = student.label || student.name || "";
                         if (row.Name && sLabel.includes(String(row.Name).trim())) return true;
-                        
-                        // 方法 3: 防呆傳統 ID 配對
                         if (row.ID === student.id || row.Student_ID === student.id) return true;
-                        
                         return false;
                     });
 
-                    // 如果成功找到該學生的成績
                     if (studentRow) {
                         mapData.forEach(q => {
                             const qId = q.Question_ID || q.questionId || q.id;
                             const topicName = q.Topic_Name || q.topic || '未分類課題';
                             const topicId = q.Topic_ID || '';
+                            const conceptDetail = q.Concept_Detail || ''; // 獲取題目概念
                             
                             if (!qId) return;
 
@@ -209,31 +199,34 @@ const GenerateView = ({ students = [], exams = [], history = [], setHistory }) =
                                 const score = Number(rawScore) || 0;
                                 const max = Number(q.Full_Mark || q.FullMark || q.Max || 1) || 0;
 
-                                // 累加總分 (簡單粗暴加總)
                                 totalScoreSum += score;
                                 totalMaxSum += max;
 
-                                // 累加課題分數
                                 if (!topicMap[topicName]) {
-                                    topicMap[topicName] = { name: topicName, id: topicId, score: 0, total: 0 };
+                                    // 新增 wrongDetails 集合來記錄失分概念
+                                    topicMap[topicName] = { name: topicName, id: topicId, score: 0, total: 0, wrongDetails: new Set() };
                                 }
                                 topicMap[topicName].score += score;
                                 topicMap[topicName].total += max;
+
+                                // 如果這題被扣分了，把 Concept Detail 記錄下來
+                                if (score < max && conceptDetail) {
+                                    topicMap[topicName].wrongDetails.add(conceptDetail);
+                                }
                             }
                         });
                     }
                 });
 
-                // 計算低於 40% 的弱點
                 const weaknesses = Object.values(topicMap)
                     .map(t => ({
                         ...t,
-                        percentage: t.total > 0 ? Math.round((t.score / t.total) * 100) : 0
+                        percentage: t.total > 0 ? Math.round((t.score / t.total) * 100) : 0,
+                        wrongDetails: Array.from(t.wrongDetails) // 轉成陣列以供 Prompt 使用
                     }))
                     .filter(t => t.percentage < 40)
                     .sort((a, b) => a.percentage - b.percentage);
 
-                // 計算總分百分比
                 const avgScore = totalMaxSum > 0 ? Math.round((totalScoreSum / totalMaxSum) * 100) : 0;
 
                 return { ...student, weaknesses, avgScore };
@@ -250,7 +243,22 @@ const GenerateView = ({ students = [], exams = [], history = [], setHistory }) =
     };
 
     const handleQuickGenerate = (student, topic) => {
-        const promptText = `你現在是一位專業的 HKDSE Physics 導師。\n請為學生「${student.label}」生成一份針對性練習。\n課題：${topic.id} ${topic.name}\n難度：${defaultDifficulty}\n題目類型：${questionType}\n題目數量：${defaultCount} 題\n\n要求：\n1. 題目必須符合 HKDSE Physics 課程標準及問法。\n2. 針對學生在此課題得分率僅為 ${topic.percentage}% 的弱點進行加強。\n3. 提供詳細的答案解釋 (Explanation) 及評分標準 (Marking Scheme)。\n4. 請以${language}輸出。`;
+        // 動態生成失分概念清單
+        const conceptStr = topic.wrongDetails && topic.wrongDetails.length > 0
+            ? `\n\n【學生具體失分盲點】\n這名學生在以下概念中失分較多，請務必針對這些盲點設計題目：\n- ${topic.wrongDetails.join('\n- ')}`
+            : '';
+
+        const promptText = `你現在是一位專業的 HKDSE Physics 導師。
+請為學生「${student.label}」生成一份針對性練習。
+課題：${topic.id} ${topic.name}
+難度：${defaultDifficulty}
+題目類型：${questionType}
+題目數量：${defaultCount} 題${conceptStr}
+
+要求：
+1. 題目必須符合 HKDSE Physics 課程標準及問法。
+2. 提供詳細的答案解釋 (Explanation) 及評分標準 (Marking Scheme)。
+3. 請以${language}輸出。`;
 
         navigator.clipboard.writeText(promptText);
         
@@ -272,35 +280,20 @@ const GenerateView = ({ students = [], exams = [], history = [], setHistory }) =
 
     const updateTopicStatus = (studentId, topicName, status) => {
         const record = history.find(h => h.studentId === studentId && h.topics === topicName);
-        if (record) {
-            setHistory(history.map(h => h.id === record.id ? { ...h, status } : h));
-        } else {
+        if (record) setHistory(history.map(h => h.id === record.id ? { ...h, status } : h));
+        else {
             const student = students.find(s => s.id === studentId);
-            const newHistory = {
-                id: Date.now(),
-                date: new Date().toISOString().split('T')[0],
-                studentId: studentId,
-                studentName: student?.label || studentId,
-                topics: topicName,
-                difficulty: defaultDifficulty,
-                count: defaultCount,
-                status: status,
-                score: '-',
-                maxScore: defaultCount
-            };
-            setHistory([newHistory, ...history]);
+            setHistory([{ id: Date.now(), date: new Date().toISOString().split('T')[0], studentId, studentName: student?.label || studentId, topics: topicName, difficulty: defaultDifficulty, count: defaultCount, status, score: '-', maxScore: defaultCount }, ...history]);
         }
     };
 
-    const sortedStudents = React.useMemo(() => {
-        return [...studentsAnalysis].sort((a, b) => a.avgScore - b.avgScore);
-    }, [studentsAnalysis]);
+    const sortedStudents = React.useMemo(() => [...studentsAnalysis].sort((a, b) => a.avgScore - b.avgScore), [studentsAnalysis]);
 
     return (
         <div className="p-6 max-w-7xl mx-auto">
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-2xl font-bold flex items-center gap-2">
-                   <i data-lucide="clipboard-check"></i> 練習管理與跟進
+                   <Icon name="ClipboardCheck" /> 練習管理與跟進
                 </h1>
                 <button onClick={() => setShowSettings(!showSettings)} className="px-3 py-2 bg-gray-200 rounded hover:bg-gray-300 text-sm">
                     {showSettings ? '隱藏設定' : '展開設定'}
@@ -358,15 +351,9 @@ const GenerateView = ({ students = [], exams = [], history = [], setHistory }) =
                     <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 border rounded bg-gray-50">
                         {sortedStudents.map(s => (
                             <label key={s.id} className={`flex items-center gap-1 px-2 py-1 rounded border cursor-pointer transition-colors ${selectedStudentIds.includes(s.id) ? 'bg-blue-100 border-blue-300' : 'bg-white hover:bg-gray-100'}`}>
-                                <input 
-                                    type="checkbox" checked={selectedStudentIds.includes(s.id)}
-                                    onChange={() => setSelectedStudentIds(prev => prev.includes(s.id) ? prev.filter(id => id !== s.id) : [...prev, s.id])}
-                                    className="hidden"
-                                />
+                                <input type="checkbox" checked={selectedStudentIds.includes(s.id)} onChange={() => setSelectedStudentIds(prev => prev.includes(s.id) ? prev.filter(id => id !== s.id) : [...prev, s.id])} className="hidden" />
                                 <span className="text-sm">{s.label}</span>
-                                <span className={`text-[10px] px-1.5 py-0.5 rounded ${s.avgScore < 50 ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-700'}`}>
-                                    {s.avgScore}%
-                                </span>
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded ${s.avgScore < 50 ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-700'}`}>{s.avgScore}%</span>
                             </label>
                         ))}
                     </div>
@@ -386,56 +373,40 @@ const GenerateView = ({ students = [], exams = [], history = [], setHistory }) =
                             {selectedStudentIds.length === 0 ? (
                                 <tr><td colSpan="2" className="px-4 py-10 text-center text-gray-400">請從上方選擇學生以生成分析報告</td></tr>
                             ) : (
-                                sortedStudents
-                                    .filter(s => selectedStudentIds.includes(s.id))
-                                    .map(student => (
-                                        <tr key={student.id} className="border-b hover:bg-gray-50/50 transition-colors">
-                                            <td className="px-4 py-4 sticky left-0 bg-white border-r shadow-sm align-top">
-                                                <div className="font-bold text-gray-800">{student.label}</div>
-                                                <div className="text-xs mt-1 text-gray-500">
-                                                    總分: <span className={`font-bold ${student.avgScore < 50 ? 'text-red-500' : 'text-green-600'}`}>{student.avgScore}%</span>
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-4 align-top">
-                                                <div className="flex flex-wrap gap-3">
-                                                    {student.weaknesses && student.weaknesses.length > 0 ? student.weaknesses.map(topic => {
-                                                        const historyRecord = history.find(h => h.studentId === student.id && h.topics === topic.name);
-                                                        const currentStatus = historyRecord ? historyRecord.status : 'pending';
+                                sortedStudents.filter(s => selectedStudentIds.includes(s.id)).map(student => (
+                                    <tr key={student.id} className="border-b hover:bg-gray-50/50 transition-colors">
+                                        <td className="px-4 py-4 sticky left-0 bg-white border-r shadow-sm align-top">
+                                            <div className="font-bold text-gray-800">{student.label}</div>
+                                            <div className="text-xs mt-1 text-gray-500">總分: <span className={`font-bold ${student.avgScore < 50 ? 'text-red-500' : 'text-green-600'}`}>{student.avgScore}%</span></div>
+                                        </td>
+                                        <td className="px-4 py-4 align-top">
+                                            <div className="flex flex-wrap gap-3">
+                                                {student.weaknesses && student.weaknesses.length > 0 ? student.weaknesses.map(topic => {
+                                                    const historyRecord = history.find(h => h.studentId === student.id && h.topics === topic.name);
+                                                    const currentStatus = historyRecord ? historyRecord.status : 'pending';
 
-                                                        return (
-                                                            <div key={topic.id} className="w-48 bg-white border border-red-200 rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow">
-                                                                <div onClick={() => handleQuickGenerate(student, topic)} className="cursor-pointer group mb-2">
-                                                                    <div className="text-[10px] text-blue-600 font-mono group-hover:underline">#{topic.id}</div>
-                                                                    <div className="text-sm font-bold leading-snug mb-2 group-hover:text-blue-700 h-10 overflow-hidden" title={topic.name}>{topic.name}</div>
-                                                                    <div className="flex items-center gap-2 mb-1">
-                                                                        <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                                                                            <div className="h-full bg-red-500" style={{ width: `${topic.percentage}%` }}></div>
-                                                                        </div>
-                                                                        <span className="text-[11px] font-bold text-red-600">{topic.percentage}%</span>
+                                                    return (
+                                                        <div key={topic.id} className="w-48 bg-white border border-red-200 rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow">
+                                                            <div onClick={() => handleQuickGenerate(student, topic)} className="cursor-pointer group mb-2">
+                                                                <div className="text-[10px] text-blue-600 font-mono group-hover:underline">#{topic.id}</div>
+                                                                <div className="text-sm font-bold leading-snug mb-2 group-hover:text-blue-700 h-10 overflow-hidden" title={topic.name}>{topic.name}</div>
+                                                                <div className="flex items-center gap-2 mb-1">
+                                                                    <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                                                                        <div className="h-full bg-red-500" style={{ width: `${topic.percentage}%` }}></div>
                                                                     </div>
+                                                                    <span className="text-[11px] font-bold text-red-600">{topic.percentage}%</span>
                                                                 </div>
-                                                                <select 
-                                                                    value={currentStatus}
-                                                                    onChange={(e) => updateTopicStatus(student.id, topic.name, e.target.value)}
-                                                                    className={`text-xs w-full p-1.5 rounded border outline-none cursor-pointer ${
-                                                                        currentStatus === 'graded' ? 'bg-green-50 text-green-700 border-green-200' : 
-                                                                        currentStatus === 'submitted' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 
-                                                                        'bg-gray-50 text-gray-600 border-gray-200'
-                                                                    }`}
-                                                                >
-                                                                    <option value="pending">未完成</option>
-                                                                    <option value="submitted">已提交</option>
-                                                                    <option value="graded">已評分</option>
-                                                                </select>
                                                             </div>
-                                                        );
-                                                    }) : (
-                                                        <div className="text-sm text-gray-400 py-2">🎉 該範圍內表現良好，無低於 40% 的課題</div>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))
+                                                            <select value={currentStatus} onChange={(e) => updateTopicStatus(student.id, topic.name, e.target.value)} className={`text-xs w-full p-1.5 rounded border outline-none cursor-pointer ${currentStatus === 'graded' ? 'bg-green-50 text-green-700 border-green-200' : currentStatus === 'submitted' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-gray-50 text-gray-600 border-gray-200'}`}>
+                                                                <option value="pending">未完成</option><option value="submitted">已提交</option><option value="graded">已評分</option>
+                                                            </select>
+                                                        </div>
+                                                    );
+                                                }) : <div className="text-sm text-gray-400 py-2">🎉 該範圍內表現良好，無低於 40% 的課題</div>}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))
                             )}
                         </tbody>
                     </table>
@@ -623,7 +594,146 @@ const GenerateView = ({ students = [], exams = [], history = [], setHistory }) =
                     </div>
                 );
             };
+            // 【全新版塊】進步與退步排行榜
+const ProgressBoard = ({ students = [], exams = [] }) => {
+    const progressData = React.useMemo(() => {
+        if (!students || exams.length < 2) return [];
 
+        // 確保試卷按時間順序排列 (如果上傳順序是時間順序)
+        const sortedExams = [...exams];
+
+        return students.map(student => {
+            const examScores = sortedExams.map(exam => {
+                const examData = exam.data || exam.markSheetData || [];
+                const mapData = exam.mapData || [];
+                
+                const studentRow = examData.find(row => {
+                    if (!row) return false;
+                    if (row.Class && row.ClassNumber) {
+                        const combinedId = `${String(row.Class).trim()}-${String(row.ClassNumber).trim()}`;
+                        if (combinedId === String(student.id).trim()) return true;
+                    }
+                    const sLabel = student.label || student.name || "";
+                    if (row.Name && sLabel.includes(String(row.Name).trim())) return true;
+                    if (row.ID === student.id || row.Student_ID === student.id) return true;
+                    return false;
+                });
+
+                if (!studentRow) return null;
+
+                let totalScore = 0;
+                let totalMax = 0;
+                mapData.forEach(q => {
+                    const qId = q.Question_ID || q.questionId || q.id;
+                    if (!qId) return;
+                    const rawScore = studentRow[qId];
+                    if (rawScore !== undefined && rawScore !== null && rawScore !== '') {
+                        totalScore += Number(rawScore) || 0;
+                        totalMax += Number(q.Full_Mark || q.FullMark || q.Max || 1) || 0;
+                    }
+                });
+
+                return totalMax > 0 ? Math.round((totalScore / totalMax) * 100) : null;
+            }).filter(score => score !== null);
+
+            // 必須至少參加過兩次考試才能對比
+            if (examScores.length < 2) return null;
+
+            // 比較最後兩次考試 (最近一次 vs 上一次)
+            const latestScore = examScores[examScores.length - 1];
+            const previousScore = examScores[examScores.length - 2];
+            const diff = latestScore - previousScore;
+
+            let category = '';
+            if (diff >= 10) category = 'significant_up';
+            else if (diff > 0) category = 'slight_up';
+            else if (diff === 0) category = 'stable';
+            else if (diff <= -10) category = 'severe_down';
+            else category = 'slight_down';
+
+            return { ...student, latestScore, previousScore, diff, category };
+        }).filter(Boolean);
+    }, [students, exams]);
+
+    if (exams.length < 2) {
+        return <div className="p-4 mb-6 bg-yellow-50 text-yellow-700 border border-yellow-200 rounded-lg text-sm">💡 溫馨提示：系統需要至少輸入兩次考試數據，才能生成「進步與退步分析」喔！</div>;
+    }
+
+    const groups = {
+        significant_up: progressData.filter(s => s.category === 'significant_up').sort((a,b)=>b.diff - a.diff),
+        slight_up: progressData.filter(s => s.category === 'slight_up').sort((a,b)=>b.diff - a.diff),
+        severe_down: progressData.filter(s => s.category === 'severe_down').sort((a,b)=>a.diff - b.diff),
+        slight_down: progressData.filter(s => s.category === 'slight_down').sort((a,b)=>a.diff - b.diff),
+    };
+
+    return (
+        <div className="bg-white p-6 rounded-lg shadow-sm border mb-8">
+            <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
+                📈 學生表現趨勢追蹤 <span className="text-sm font-normal text-gray-500">(比較最近兩次測驗)</span>
+            </h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* 左側：進步區 */}
+                <div className="space-y-4">
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                        <h3 className="font-bold text-green-800 mb-3 flex items-center gap-2">🌟 顯著進步 (+10% 或以上)</h3>
+                        <div className="space-y-2">
+                            {groups.significant_up.length > 0 ? groups.significant_up.map(s => (
+                                <div key={s.id} className="flex justify-between items-center bg-white p-2.5 rounded border border-green-100 shadow-sm">
+                                    <span className="font-medium text-gray-800">{s.label}</span>
+                                    <div className="text-right">
+                                        <span className="text-green-600 font-bold text-lg">+{s.diff}%</span>
+                                        <div className="text-[10px] text-gray-400">{s.previousScore}% ➔ {s.latestScore}%</div>
+                                    </div>
+                                </div>
+                            )) : <div className="text-sm text-gray-500 py-2">目前沒有學生在此區間</div>}
+                        </div>
+                    </div>
+
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                        <h3 className="font-bold text-emerald-800 mb-3 flex items-center gap-2">📈 輕微進步</h3>
+                        <div className="space-y-2 flex flex-wrap gap-2">
+                            {groups.slight_up.length > 0 ? groups.slight_up.map(s => (
+                                <span key={s.id} className="inline-flex items-center gap-1 bg-white px-2 py-1 rounded border border-emerald-100 text-sm">
+                                    {s.label} <span className="text-emerald-600 font-bold">+{s.diff}%</span>
+                                </span>
+                            )) : <span className="text-sm text-gray-500">無</span>}
+                        </div>
+                    </div>
+                </div>
+
+                {/* 右側：退步區 (需要跟進) */}
+                <div className="space-y-4">
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <h3 className="font-bold text-red-800 mb-3 flex items-center gap-2">🚨 嚴重退步 (-10% 或以上)</h3>
+                        <div className="space-y-2">
+                            {groups.severe_down.length > 0 ? groups.severe_down.map(s => (
+                                <div key={s.id} className="flex justify-between items-center bg-white p-2.5 rounded border border-red-100 shadow-sm">
+                                    <span className="font-medium text-gray-800">{s.label}</span>
+                                    <div className="text-right">
+                                        <span className="text-red-600 font-bold text-lg">{s.diff}%</span>
+                                        <div className="text-[10px] text-gray-400">{s.previousScore}% ➔ {s.latestScore}%</div>
+                                    </div>
+                                </div>
+                            )) : <div className="text-sm text-gray-500 py-2">太好了！目前沒有學生嚴重退步</div>}
+                        </div>
+                    </div>
+
+                    <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                        <h3 className="font-bold text-orange-800 mb-3 flex items-center gap-2">📉 輕微退步</h3>
+                        <div className="space-y-2 flex flex-wrap gap-2">
+                            {groups.slight_down.length > 0 ? groups.slight_down.map(s => (
+                                <span key={s.id} className="inline-flex items-center gap-1 bg-white px-2 py-1 rounded border border-orange-100 text-sm">
+                                    {s.label} <span className="text-orange-600 font-bold">{s.diff}%</span>
+                                </span>
+                            )) : <span className="text-sm text-gray-500">無</span>}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
             const DashboardView = () => {
                 const lineChartRef = useRef(null);
                 const barChartRef = useRef(null);
@@ -666,9 +776,13 @@ const GenerateView = ({ students = [], exams = [], history = [], setHistory }) =
                 return (
                     <div className="p-6 space-y-6">
                         <div className="flex justify-between items-center bg-white p-4 rounded-lg shadow-sm">
+                            
                             <h2 className="text-2xl font-bold text-gray-800">學生成績追蹤</h2>
                             <div className="flex gap-2"><Icon name="User" className="text-gray-500" /><select className="p-2 border rounded-md" value={selectedStudentId} onChange={(e) => setSelectedStudentId(e.target.value)}>{students.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select></div>
                         </div>
+                        
+                        <ProgressBoard students={students} exams={exams} />
+                        
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             <div className="card p-6"><canvas ref={lineChartRef} height="150"></canvas></div>
                             <div className="card p-6 flex flex-col">
