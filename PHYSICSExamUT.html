@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HKDSE Physics Performance Analyzer Pro (v1.5)</title>
+    <title>PHYSICS EXAM UT V2.0</title>
     
     <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -145,8 +145,8 @@
                 />
             </div>
         );
-// 【極簡穩定版】GenerateView - 直接使用總分加總，保證不為 0
-const GenerateView = ({ students = [], exams = [], history = [], setHistory, analyzeExam }) => {
+// 【終極解碼版】GenerateView - 破解 Class 與 ClassNumber 分離問題
+const GenerateView = ({ students = [], exams = [], history = [], setHistory }) => {
     const [selectedExamId, setSelectedExamId] = React.useState('all');
     const [selectedStudentIds, setSelectedStudentIds] = React.useState([]);
     const [showSettings, setShowSettings] = React.useState(true);
@@ -162,41 +162,69 @@ const GenerateView = ({ students = [], exams = [], history = [], setHistory, ana
             if (!students || !Array.isArray(students)) return [];
 
             return students.map(student => {
-                // 1. 直接調用 analyzeExam (跟 Dashboard 完全一樣的邏輯，絕對能抓到分數)
-                const studentTrend = (exams || [])
-                    .map(exam => typeof analyzeExam === 'function' ? analyzeExam(exam, student.id) : null)
-                    .filter(Boolean);
-
-                const filteredTrend = selectedExamId === 'all' 
-                    ? studentTrend 
-                    : studentTrend.filter(t => t.examId === selectedExamId);
-
-                if (filteredTrend.length === 0) return { ...student, weaknesses: [], avgScore: 0 };
-
-                const topicMap = {};
+                const targetExams = selectedExamId === 'all' ? exams : exams.filter(e => e.id === selectedExamId);
+                
                 let totalScoreSum = 0;
                 let totalMaxSum = 0;
+                const topicMap = {};
 
-                filteredTrend.forEach(report => {
-                    // 累加弱點課題
-                    if (report && report.topics) {
-                        Object.entries(report.topics).forEach(([topicId, topic]) => {
-                            if (!topicMap[topic.name]) {
-                                topicMap[topic.name] = { name: topic.name, id: topicId, score: 0, total: 0 };
+                targetExams.forEach(exam => {
+                    if (!exam) return;
+                    
+                    // JSON 數據庫中叫 markSheetData，系統可能讀取為 data
+                    const examData = exam.data || exam.markSheetData || [];
+                    const mapData = exam.mapData || [];
+
+                    // 🎯 核心修復：手動拼接 Class 和 ClassNumber 或使用姓名找人
+                    const studentRow = examData.find(row => {
+                        if (!row) return false;
+                        
+                        // 方法 1: 拼接 Class 和 ClassNumber (例如 "S5A" + "26" => "S5A-26")
+                        if (row.Class && row.ClassNumber) {
+                            const combinedId = `${String(row.Class).trim()}-${String(row.ClassNumber).trim()}`;
+                            if (combinedId === String(student.id).trim()) return true;
+                        }
+                        
+                        // 方法 2: 姓名配對 (例如標籤 "S5A (26) 謝宇邦" 包含 "謝宇邦")
+                        const sLabel = student.label || student.name || "";
+                        if (row.Name && sLabel.includes(String(row.Name).trim())) return true;
+                        
+                        // 方法 3: 防呆傳統 ID 配對
+                        if (row.ID === student.id || row.Student_ID === student.id) return true;
+                        
+                        return false;
+                    });
+
+                    // 如果成功找到該學生的成績
+                    if (studentRow) {
+                        mapData.forEach(q => {
+                            const qId = q.Question_ID || q.questionId || q.id;
+                            const topicName = q.Topic_Name || q.topic || '未分類課題';
+                            const topicId = q.Topic_ID || '';
+                            
+                            if (!qId) return;
+
+                            const rawScore = studentRow[qId];
+                            if (rawScore !== undefined && rawScore !== null && rawScore !== '') {
+                                const score = Number(rawScore) || 0;
+                                const max = Number(q.Full_Mark || q.FullMark || q.Max || 1) || 0;
+
+                                // 累加總分 (簡單粗暴加總)
+                                totalScoreSum += score;
+                                totalMaxSum += max;
+
+                                // 累加課題分數
+                                if (!topicMap[topicName]) {
+                                    topicMap[topicName] = { name: topicName, id: topicId, score: 0, total: 0 };
+                                }
+                                topicMap[topicName].score += score;
+                                topicMap[topicName].total += max;
                             }
-                            topicMap[topic.name].score += (topic.score || 0);
-                            topicMap[topic.name].total += (topic.max || 0); 
                         });
-                    }
-
-                    // 累加總分 (簡單粗暴，直接用 marksheet 上的分數)
-                    // 兼容兩種常見的屬性命名方式 (totalScore 或 score)
-                    if (report) {
-                        totalScoreSum += (report.totalScore !== undefined ? report.totalScore : (report.score || 0));
-                        totalMaxSum += (report.totalMax !== undefined ? report.totalMax : (report.max || 0));
                     }
                 });
 
+                // 計算低於 40% 的弱點
                 const weaknesses = Object.values(topicMap)
                     .map(t => ({
                         ...t,
@@ -205,7 +233,7 @@ const GenerateView = ({ students = [], exams = [], history = [], setHistory, ana
                     .filter(t => t.percentage < 40)
                     .sort((a, b) => a.percentage - b.percentage);
 
-                // 2. 計算總分百分比
+                // 計算總分百分比
                 const avgScore = totalMaxSum > 0 ? Math.round((totalScoreSum / totalMaxSum) * 100) : 0;
 
                 return { ...student, weaknesses, avgScore };
@@ -214,7 +242,7 @@ const GenerateView = ({ students = [], exams = [], history = [], setHistory, ana
             console.error("Analysis Error:", err);
             return [];
         }
-    }, [selectedExamId, students, exams, analyzeExam]);
+    }, [selectedExamId, students, exams]);
 
     const toggleAllStudents = () => {
         if (selectedStudentIds.length === students.length) setSelectedStudentIds([]);
@@ -222,18 +250,7 @@ const GenerateView = ({ students = [], exams = [], history = [], setHistory, ana
     };
 
     const handleQuickGenerate = (student, topic) => {
-        const promptText = `你現在是一位專業的 HKDSE Physics 導師。
-請為學生「${student.label}」生成一份針對性練習。
-課題：${topic.id} ${topic.name}
-難度：${defaultDifficulty}
-題目類型：${questionType}
-題目數量：${defaultCount} 題
-
-要求：
-1. 題目必須符合 HKDSE Physics 課程標準及問法。
-2. 針對學生在此課題得分率僅為 ${topic.percentage}% 的弱點進行加強。
-3. 提供詳細的答案解釋 (Explanation) 及評分標準 (Marking Scheme)。
-4. 請以${language}輸出。`;
+        const promptText = `你現在是一位專業的 HKDSE Physics 導師。\n請為學生「${student.label}」生成一份針對性練習。\n課題：${topic.id} ${topic.name}\n難度：${defaultDifficulty}\n題目類型：${questionType}\n題目數量：${defaultCount} 題\n\n要求：\n1. 題目必須符合 HKDSE Physics 課程標準及問法。\n2. 針對學生在此課題得分率僅為 ${topic.percentage}% 的弱點進行加強。\n3. 提供詳細的答案解釋 (Explanation) 及評分標準 (Marking Scheme)。\n4. 請以${language}輸出。`;
 
         navigator.clipboard.writeText(promptText);
         
@@ -283,7 +300,7 @@ const GenerateView = ({ students = [], exams = [], history = [], setHistory, ana
         <div className="p-6 max-w-7xl mx-auto">
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-2xl font-bold flex items-center gap-2">
-                   <Icon name="ClipboardCheck" /> 練習管理與跟進
+                   <i data-lucide="clipboard-check"></i> 練習管理與跟進
                 </h1>
                 <button onClick={() => setShowSettings(!showSettings)} className="px-3 py-2 bg-gray-200 rounded hover:bg-gray-300 text-sm">
                     {showSettings ? '隱藏設定' : '展開設定'}
@@ -376,7 +393,7 @@ const GenerateView = ({ students = [], exams = [], history = [], setHistory, ana
                                             <td className="px-4 py-4 sticky left-0 bg-white border-r shadow-sm align-top">
                                                 <div className="font-bold text-gray-800">{student.label}</div>
                                                 <div className="text-xs mt-1 text-gray-500">
-                                                    總分平均: <span className={`font-bold ${student.avgScore < 50 ? 'text-red-500' : 'text-green-600'}`}>{student.avgScore}%</span>
+                                                    總分: <span className={`font-bold ${student.avgScore < 50 ? 'text-red-500' : 'text-green-600'}`}>{student.avgScore}%</span>
                                                 </div>
                                             </td>
                                             <td className="px-4 py-4 align-top">
