@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>V2.2 PHYSICS EXAM UT </title>
+    <title>V2.3 PHYSICS EXAM UT </title>
     
     <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -145,20 +145,17 @@
                 />
             </div>
         );
-// 【升級記憶版】GenerateView - 加入 HKDSE 難度對應、預設最新試卷、學生記憶功能
+// 【細節優化版】GenerateView - 調整 40% 綠色標示 & 顯示具體分數比例 (得分/滿分)
 const GenerateView = ({ students = [], exams = [], history = [], setHistory }) => {
-    // 【修改 2】選擇試卷範圍，預設為最新的一份 (陣列的最後一個)
     const [selectedExamId, setSelectedExamId] = React.useState(() => {
         return exams && exams.length > 0 ? exams[exams.length - 1].id : 'all';
     });
     
-    // 【修改 3】選擇目標學生有記憶性 (使用 localStorage)
     const [selectedStudentIds, setSelectedStudentIds] = React.useState(() => {
         const saved = localStorage.getItem('generateView_selectedStudents');
         return saved ? JSON.parse(saved) : [];
     });
 
-    // 當 selectedStudentIds 改變時，自動存檔到瀏覽器記憶中
     React.useEffect(() => {
         localStorage.setItem('generateView_selectedStudents', JSON.stringify(selectedStudentIds));
     }, [selectedStudentIds]);
@@ -167,7 +164,7 @@ const GenerateView = ({ students = [], exams = [], history = [], setHistory }) =
     
     // Prompt 設定
     const [defaultCount, setDefaultCount] = React.useState(10);
-    const [defaultDifficulty, setDefaultDifficulty] = React.useState('Medium'); // 預設 Medium
+    const [defaultDifficulty, setDefaultDifficulty] = React.useState('Medium'); 
     const [language, setLanguage] = React.useState('繁體中文');
     const [questionType, setQuestionType] = React.useState('MC (Multiple Choice)');
 
@@ -236,8 +233,8 @@ const GenerateView = ({ students = [], exams = [], history = [], setHistory }) =
                         percentage: t.total > 0 ? Math.round((t.score / t.total) * 100) : 0,
                         wrongDetails: Array.from(t.wrongDetails) 
                     }))
-                    .filter(t => t.percentage < 40)
-                    .sort((a, b) => a.percentage - b.percentage);
+                    .filter(t => t.percentage < 40) // 只顯示低於 40% 的弱點課題
+                    .sort((a, b) => a.percentage - b.percentage); // 越低分越優先
 
                 const avgScore = totalMaxSum > 0 ? Math.round((totalScoreSum / totalMaxSum) * 100) : 0;
 
@@ -255,7 +252,6 @@ const GenerateView = ({ students = [], exams = [], history = [], setHistory }) =
     };
 
     const handleQuickGenerate = (student, topic) => {
-        // 【修改 1】難度對應 HKDSE 等級
         const difficultyMap = {
             'Easy': 'HKDSE 等級 2 (基礎)',
             'Medium': 'HKDSE 等級 3 (中等)',
@@ -287,7 +283,7 @@ const GenerateView = ({ students = [], exams = [], history = [], setHistory }) =
             studentId: student.id,
             studentName: student.label,
             topics: topic.name,
-            difficulty: mappedDifficulty, // 紀錄中也顯示 HKDSE 等級
+            difficulty: mappedDifficulty, 
             count: defaultCount,
             status: 'pending',
             score: '-',
@@ -372,7 +368,8 @@ const GenerateView = ({ students = [], exams = [], history = [], setHistory }) =
                             <label key={s.id} className={`flex items-center gap-1 px-2 py-1 rounded border cursor-pointer transition-colors ${selectedStudentIds.includes(s.id) ? 'bg-blue-100 border-blue-300' : 'bg-white hover:bg-gray-100'}`}>
                                 <input type="checkbox" checked={selectedStudentIds.includes(s.id)} onChange={() => setSelectedStudentIds(prev => prev.includes(s.id) ? prev.filter(id => id !== s.id) : [...prev, s.id])} className="hidden" />
                                 <span className="text-sm">{s.label}</span>
-                                <span className={`text-[10px] px-1.5 py-0.5 rounded ${s.avgScore < 50 ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-700'}`}>{s.avgScore}%</span>
+                                {/* 【修改 1】學生總分：40% 以下紅色，40% 或以上綠色 */}
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${s.avgScore < 40 ? 'bg-red-500 text-white' : 'bg-green-100 text-green-700'}`}>{s.avgScore}%</span>
                             </label>
                         ))}
                     </div>
@@ -396,7 +393,10 @@ const GenerateView = ({ students = [], exams = [], history = [], setHistory }) =
                                     <tr key={student.id} className="border-b hover:bg-gray-50/50 transition-colors">
                                         <td className="px-4 py-4 sticky left-0 bg-white border-r shadow-sm align-top">
                                             <div className="font-bold text-gray-800">{student.label}</div>
-                                            <div className="text-xs mt-1 text-gray-500">總分: <span className={`font-bold ${student.avgScore < 50 ? 'text-red-500' : 'text-green-600'}`}>{student.avgScore}%</span></div>
+                                            <div className="text-xs mt-1 text-gray-500">
+                                                {/* 【修改 1】表格內的總分字體：40% 以下紅色，40% 或以上綠色 */}
+                                                總分: <span className={`font-bold ${student.avgScore < 40 ? 'text-red-600' : 'text-green-600'}`}>{student.avgScore}%</span>
+                                            </div>
                                         </td>
                                         <td className="px-4 py-4 align-top">
                                             <div className="flex flex-wrap gap-3">
@@ -404,16 +404,22 @@ const GenerateView = ({ students = [], exams = [], history = [], setHistory }) =
                                                     const historyRecord = history.find(h => h.studentId === student.id && h.topics === topic.name);
                                                     const currentStatus = historyRecord ? historyRecord.status : 'pending';
 
+                                                    // 弱點的顏色判斷 (雖然被過濾出的一定是 < 40，但加上動態判斷可擴展)
+                                                    const isDanger = topic.percentage < 40;
+
                                                     return (
-                                                        <div key={topic.id} className="w-48 bg-white border border-red-200 rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow">
+                                                        <div key={topic.id} className={`w-52 bg-white border rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow ${isDanger ? 'border-red-200' : 'border-green-200'}`}>
                                                             <div onClick={() => handleQuickGenerate(student, topic)} className="cursor-pointer group mb-2">
                                                                 <div className="text-[10px] text-blue-600 font-mono group-hover:underline">#{topic.id}</div>
                                                                 <div className="text-sm font-bold leading-snug mb-2 group-hover:text-blue-700 h-10 overflow-hidden" title={topic.name}>{topic.name}</div>
                                                                 <div className="flex items-center gap-2 mb-1">
                                                                     <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                                                                        <div className="h-full bg-red-500" style={{ width: `${topic.percentage}%` }}></div>
+                                                                        <div className={`h-full ${isDanger ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${topic.percentage}%` }}></div>
                                                                     </div>
-                                                                    <span className="text-[11px] font-bold text-red-600">{topic.percentage}%</span>
+                                                                    {/* 【修改 2】顯示具體的 得分/滿分 比例 */}
+                                                                    <span className={`text-[11px] font-bold ${isDanger ? 'text-red-600' : 'text-green-600'}`}>
+                                                                        {topic.score}/{topic.total} ({topic.percentage}%)
+                                                                    </span>
                                                                 </div>
                                                             </div>
                                                             <select value={currentStatus} onChange={(e) => updateTopicStatus(student.id, topic.name, e.target.value)} className={`text-xs w-full p-1.5 rounded border outline-none cursor-pointer ${currentStatus === 'graded' ? 'bg-green-50 text-green-700 border-green-200' : currentStatus === 'submitted' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-gray-50 text-gray-600 border-gray-200'}`}>
