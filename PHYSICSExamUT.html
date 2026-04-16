@@ -409,11 +409,13 @@
                     localStorage.setItem('hkdse_prompt_settings', JSON.stringify(promptSettings));
                 }, [promptSettings]);
                 
-               // 新增一個 state 來記錄選中的試卷，預設為最新一份
+                // 新增一個 state 來記錄選中的試卷，預設為最新一份
                 const [selectedExamIndex, setSelectedExamIndex] = useState(exams.length > 0 ? exams.length - 1 : 0);
-
-                // 根據選中的 index 來獲取該次考試報告
-                const latestExamReport = studentTrend && studentTrend.length > 0 ? studentTrend[selectedExamIndex] : null;
+                
+                // 根據選中的 index 來獲取該次考試報告 (加入安全機制：如果該學生沒有這份試卷，自動切換為他擁有的最新一份)
+                const latestExamReport = studentTrend && studentTrend.length > 0 
+                    ? (studentTrend[selectedExamIndex] || studentTrend[studentTrend.length - 1]) 
+                    : null;
 
                 useEffect(() => { setSelectedTopics([]); }, [selectedStudentId]);
 
