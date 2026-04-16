@@ -384,246 +384,269 @@
             };
 
             const GenerateView = () => {
-                const [selectedTopics, setSelectedTopics] = useState([]);
-                const [difficulty, setDifficulty] = useState('Medium');
-                const [count, setCount] = useState(5);
-                const [isGenerating, setIsGenerating] = useState(false);
-                
-                // New Prompt Settings State (Persistent)
-                const [promptSettings, setPromptSettings] = useState({
-                    language: 'English',
-                    role: 'Experienced HKDSE Physics Marker',
-                    questionType: 'Mixed (MC + SQ)',
-                    weaknessFocusRatio: 20, // percentage
-                    customInstructions: 'Provide full marking scheme. Explain answers in Cantonese style.'
-                });
+                const [selectedExamId, setSelectedExamId] = useState('all');
+                const [selectedStudentIds, setSelectedStudentIds] = useState([]);
+                const [showSettings, setShowSettings] = useState(false);
+                const [defaultCount, setDefaultCount] = useState(10);
+                const [defaultDifficulty, setDefaultDifficulty] = useState('Medium');
 
-                // Load Settings
-                useEffect(() => {
-                    const savedSettings = localStorage.getItem('hkdse_prompt_settings');
-                    if (savedSettings) setPromptSettings(JSON.parse(savedSettings));
-                }, []);
+                // 獲取所有學生的弱點數據
+                const studentsAnalysis = useMemo(() => {
+                    return students.map(student => {
+                        const trend = getStudentTrend(student.id);
+                        // 過濾試卷
+                        const filteredTrend = selectedExamId === 'all' 
+                            ? trend 
+                            : trend.filter(t => t.examId === selectedExamId);
 
-                // Save Settings
-                useEffect(() => {
-                    localStorage.setItem('hkdse_prompt_settings', JSON.stringify(promptSettings));
-                }, [promptSettings]);
-                
-                // 新增一個 state 來記錄選中的試卷，預設為最新一份
-                const [selectedExamIndex, setSelectedExamIndex] = useState(exams.length > 0 ? exams.length - 1 : 0);
-                
-                // 根據選中的 index 來獲取該次考試報告 (加入安全機制：如果該學生沒有這份試卷，自動切換為他擁有的最新一份)
-                const latestExamReport = studentTrend && studentTrend.length > 0 
-                    ? (studentTrend[selectedExamIndex] || studentTrend[studentTrend.length - 1]) 
-                    : null;
+                        if (filteredTrend.length === 0) return { ...student, weaknesses: [], avgScore: 0 };
 
-                useEffect(() => { setSelectedTopics([]); }, [selectedStudentId]);
+                        // 匯總所有選中試卷的課題表現
+                        const topicMap = {};
+                        filteredTrend.forEach(report => {
+                            report.topics.forEach(topic => {
+                                if (!topicMap[topic.name]) {
+                                    topicMap[topic.name] = { name: topic.name, id: topic.id, score: 0, total: 0 };
+                                }
+                                topicMap[topic.name].score += topic.score;
+                                topicMap[topic.name].total += topic.total;
+                            });
+                        });
 
-                const toggleTopic = (id) => {
-                    if (selectedTopics.includes(id)) setSelectedTopics(selectedTopics.filter(t => t !== id));
-                    else setSelectedTopics([...selectedTopics, id]);
-                };
+                        const weaknesses = Object.values(topicMap)
+                            .map(t => ({
+                                ...t,
+                                percentage: Math.round((t.score / t.total) * 100)
+                            }))
+                            .sort((a, b) => a.percentage - b.percentage)
+                            .slice(0, 5); // 取前5個弱點
 
-                const autoSelectWeak = () => {
-                    if (latestExamReport) {
-                        const weakTopicNames = new Set(latestExamReport.weaknesses.map(w => w.topic));
-                        const weakTopicIds = Object.entries(latestExamReport.topics).filter(([id, t]) => weakTopicNames.has(t.name)).map(([id]) => id);
-                        setSelectedTopics(weakTopicIds);
-                        showModal({ title: '已載入', message: `已選取 ${weakTopicIds.length} 個弱項。`, type: 'info', onConfirm: closeModal });
+                        const totalScore = filteredTrend.reduce((acc, curr) => acc + curr.score, 0);
+                        const totalMax = filteredTrend.reduce((acc, curr) => acc + curr.total, 0);
+
+                        return {
+                            ...student,
+                            weaknesses,
+                            avgScore: Math.round((totalScore / totalMax) * 100)
+                        };
+                    });
+                }, [selectedExamId, students]);
+
+                // 處理全選/取消全選
+                const toggleAllStudents = () => {
+                    if (selectedStudentIds.length === students.length) {
+                        setSelectedStudentIds([]);
+                    } else {
+                        setSelectedStudentIds(students.map(s => s.id));
                     }
                 };
 
-                const handleGenerate = () => {
-                    try {
-                        if (!latestExamReport || selectedTopics.length === 0) {
-                             showModal({ title: '注意', message: '請選擇至少一個課題。', type: 'info', onConfirm: closeModal });
-                             return;
-                        }
+                // 生成 Prompt 的函數
+                const handleQuickGenerate = (student, topic) => {
+                    const prompt = `你現在是一位專業的 HKDSE Physics 導師。
+請為學生「${student.label}」生成一份針對性練習。
+課題：${topic.id} ${topic.name}
+難度：${defaultDifficulty}
+題目數量：${defaultCount} 題 (Multiple Choice)
 
-                        setIsGenerating(true);
+要求：
+1. 題目必須符合 HKDSE 課程標準及問法。
+2. 針對學生在此課題得分率僅為 ${topic.percentage}% 的弱點進行加強。
+3. 提供詳細的答案解釋 (Explanation)。
+4. 請以繁體中文輸出。`;
 
-                        const student = students.find(s => s.id === selectedStudentId);
-                        const targetTopics = Object.entries(latestExamReport.topics)
-                            .filter(([id]) => selectedTopics.includes(id))
-                            .map(([_, t]) => t);
-                        
-                        const topicNames = targetTopics.map(t => t.name);
-                        
-                        // Extract specific weaknesses (Concept Detail) for the selected topics
-                        const relevantWeaknesses = latestExamReport.weaknesses
-                            .filter(w => topicNames.some(tName => tName.includes(w.topic) || w.topic.includes(tName)));
-                        
-                        // Deduplicate based on concept text
-                        const uniqueWeaknesses = [...new Set(relevantWeaknesses.map(w => w.concept))];
+                    navigator.clipboard.writeText(prompt);
+                    
+                    // 自動加入到歷史紀錄
+                    const newHistory = {
+                        id: Date.now(),
+                        date: new Date().toISOString().split('T')[0],
+                        studentId: student.id,
+                        studentName: student.label,
+                        topics: topic.name,
+                        difficulty: defaultDifficulty,
+                        count: defaultCount,
+                        status: 'pending',
+                        score: '-',
+                        maxScore: defaultCount
+                    };
+                    setHistory([newHistory, ...history]);
+                    
+                    alert(`Prompt 已複製到剪貼簿！\n已自動為 ${student.label} 建立「未完成」練習紀錄。`);
+                };
 
-                        // Calculate number of targeted questions
-                        const targetedCount = Math.max(1, Math.ceil(count * (promptSettings.weaknessFocusRatio / 100)));
-
-                        const prompt = `Role: ${promptSettings.role}
-Language: ${promptSettings.language}
-Task: Generate ${count} HKDSE Physics practice questions.
-Difficulty: ${difficulty}
-Question Type: ${promptSettings.questionType}
-Selected Topics: ${topicNames.join(', ')}
-
-[CRITICAL REQUIREMENT - TARGETED REMEDIAL]
-The student has specific misconceptions/weaknesses in these areas:
-${uniqueWeaknesses.length > 0 ? uniqueWeaknesses.map(w => `- ${w}`).join('\n') : "(No specific weakness recorded for selected topics, focus on general practice)"}
-
-Constraint: You MUST ensure at least ${promptSettings.weaknessFocusRatio}% (approx. ${targetedCount} questions) explicitly address the misconceptions listed above to verify conceptual correction.
-
-Custom Instructions:
-${promptSettings.customInstructions}
-
-Output Format:
-1. Question
-2. Answer & Detailed Marking Scheme
-3. Concept Explanation (Why this is the answer)`;
-
-                        const newEntry = {
+                // 更新歷史紀錄狀態
+                const updateTopicStatus = (studentId, topicName, status) => {
+                    const record = history.find(h => h.studentId === studentId && h.topics === topicName);
+                    if (record) {
+                        setHistory(history.map(h => h.id === record.id ? { ...h, status } : h));
+                    } else {
+                        // 如果歷史中沒紀錄，手動建一個
+                        const student = students.find(s => s.id === studentId);
+                        const newHistory = {
                             id: Date.now(),
                             date: new Date().toISOString().split('T')[0],
-                            studentId: selectedStudentId,
-                            studentName: student.label,
-                            topics: topicNames.join(', '),
-                            difficulty,
-                            count,
-                            status: 'pending',
-                            score: '',
-                            maxScore: count
+                            studentId: studentId,
+                            studentName: student?.label || studentId,
+                            topics: topicName,
+                            difficulty: defaultDifficulty,
+                            count: defaultCount,
+                            status: status,
+                            score: '-',
+                            maxScore: defaultCount
                         };
-                        setHistory([newEntry, ...history]);
-                        
-                        setTimeout(() => {
-                            setIsGenerating(false);
-                            // Show the modal with the prompt content
-                            showModal({ 
-                                title: '生成成功', 
-                                type: 'success',
-                                content: (
-                                    <div className="flex flex-col h-full">
-                                        <p className="text-sm text-gray-500 mb-2">練習已記錄。請複製下方 Prompt 給 AI：</p>
-                                        <textarea 
-                                            className="w-full h-40 p-3 bg-gray-100 rounded text-xs font-mono border focus:ring-2 focus:ring-blue-500 outline-none resize-none"
-                                            readOnly
-                                            value={prompt}
-                                        />
-                                    </div>
-                                ),
-                                onConfirm: () => {
-                                    navigator.clipboard.writeText(prompt);
-                                    closeModal();
-                                    alert('已複製到剪貼簿！');
-                                },
-                                onCancel: closeModal
-                            });
-                        }, 500); 
-
-                    } catch (err) {
-                        setIsGenerating(false);
-                        console.error(err);
-                        showModal({ title: '錯誤', message: '生成過程中發生錯誤，請檢查數據。', type: 'danger', onConfirm: closeModal });
+                        setHistory([newHistory, ...history]);
                     }
                 };
 
-                if (!latestExamReport) return <div className="p-8 text-center text-gray-500">請先在數據庫加入考試資料。</div>;
-                const sortedTopics = Object.entries(latestExamReport.topics).sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true, sensitivity: 'base' }));
-
                 return (
-                    <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
-                        {/* Left Column: Basic Settings */}
-                        <div className="card p-6 flex flex-col h-full overflow-y-auto">
-                            <h2 className="text-xl font-bold mb-4">1. 練習範圍</h2>
-                                <div className="flex gap-2 mb-4">
-                                    <div className="flex-1 p-2 bg-blue-50 text-blue-800 rounded font-medium truncate">
-                                        {students.find(s => s.id === selectedStudentId)?.label}
-                                    </div>
-                                    
-                                    {/* 新增的試卷下拉選單 */}
-                                    {studentTrend && studentTrend.length > 0 && (
-                                        <select 
-                                            className="p-2 border rounded-md text-sm bg-white" 
-                                            value={selectedExamIndex} 
-                                            onChange={e => {
-                                                setSelectedExamIndex(Number(e.target.value));
-                                                setSelectedTopics([]); // 切換試卷時清空已選課題
-                                            }}
-                                        >
-                                            {studentTrend.map((r, i) => (
-                                                <option key={i} value={i}>{r.examName}</option>
-                                            ))}
-                                        </select>
-                                    )}
-                                </div>
-                            <div className="mb-4 flex-1 overflow-hidden flex flex-col">
-                                <div className="flex justify-between items-center mb-2"><label className="font-bold text-gray-700">選擇課題</label><button onClick={autoSelectWeak} className="text-xs bg-red-50 text-red-600 px-2 py-1 rounded border border-red-200">載入弱項</button></div>
-                                <div className="border rounded-md overflow-y-auto p-2 space-y-1 flex-1 bg-gray-50 custom-scrollbar">{sortedTopics.map(([id, t]) => (
-                                    <label key={id} className={`flex items-center gap-3 p-2 rounded hover:bg-white cursor-pointer ${selectedTopics.includes(id) ? 'bg-blue-50' : ''}`}><input type="checkbox" checked={selectedTopics.includes(id)} onChange={() => toggleTopic(id)} className="text-blue-600" /><div className="flex-1"><div className="text-xs font-bold text-gray-500">{id}</div><div className="text-sm">{t.name}</div></div><span className={`text-xs px-2 py-0.5 rounded ${t.percentage < 50 ? 'bg-red-100 text-red-800' : 'bg-gray-100'}`}>{t.percentage.toFixed(0)}%</span></label>
-                                ))}</div>
+                    <div className="p-6 max-w-7xl mx-auto">
+                        <div className="flex justify-between items-center mb-6">
+                            <h1 className="text-2xl font-bold flex items-center gap-2">
+                                <Icon name="ClipboardCheck" /> 練習管理與跟進
+                            </h1>
+                            <div className="flex gap-2">
+                                <button onClick={() => setShowSettings(!showSettings)} className="flex items-center gap-1 px-3 py-2 bg-gray-200 rounded hover:bg-gray-300">
+                                    <Icon name="Settings" size={18}/> 設定
+                                </button>
                             </div>
-                            <div className="grid grid-cols-2 gap-4 mt-4">
-                                <select value={difficulty} onChange={e => setDifficulty(e.target.value)} className="border p-2 rounded"><option value="High">High (拔尖)</option><option value="Medium">Medium (鞏固)</option><option value="Low">Low (補底)</option></select>
-                                <input type="number" value={count} onChange={e => setCount(e.target.value)} className="border p-2 rounded" min="1" max="20" placeholder="題數" />
-                            </div>
-                            <button onClick={handleGenerate} disabled={isGenerating} className={`mt-6 btn-primary py-3 rounded-lg font-bold flex justify-center items-center gap-2 ${isGenerating ? 'opacity-75 cursor-wait' : ''}`}>
-                                {isGenerating ? <><Icon name="Loader2" className="animate-spin"/> 生成中...</> : <><Icon name="Cpu" /> 生成 Prompt</>}
-                            </button>
                         </div>
-                        
-                        {/* Right Column: Advanced Settings (Persistent) */}
-                        <div className="card p-6 flex flex-col h-full bg-slate-50 border border-slate-200">
-                            <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-slate-800">
-                                <Icon name="Sliders" /> AI 提示詞進階設定
-                            </h2>
-                            <p className="text-xs text-gray-500 mb-4">此處設定會自動儲存 (Auto-save)，無需每次重複輸入。</p>
-                            
-                            <div className="space-y-4 overflow-y-auto flex-1 custom-scrollbar pr-2">
+
+                        {showSettings && (
+                            <div className="mb-6 p-4 bg-white rounded-lg shadow-sm border flex gap-4 items-end animate-in fade-in slide-in-from-top-2">
                                 <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-1">AI 角色 (Role)</label>
-                                    <input type="text" className="w-full p-2 border rounded text-sm" value={promptSettings.role} onChange={e => setPromptSettings({...promptSettings, role: e.target.value})} />
+                                    <label className="block text-xs font-medium text-gray-500 mb-1">預設題目數</label>
+                                    <input type="number" value={defaultCount} onChange={e => setDefaultCount(e.target.value)} className="border rounded px-2 py-1 w-20" />
                                 </div>
-                                
                                 <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-1">語言 (Language)</label>
-                                    <select className="w-full p-2 border rounded text-sm" value={promptSettings.language} onChange={e => setPromptSettings({...promptSettings, language: e.target.value})}>
-                                        <option value="English">English</option>
-                                        <option value="Traditional Chinese">繁體中文</option>
-                                        <option value="Bilingual (Eng/Chi)">中英對照</option>
+                                    <label className="block text-xs font-medium text-gray-500 mb-1">預設難度</label>
+                                    <select value={defaultDifficulty} onChange={e => setDefaultDifficulty(e.target.value)} className="border rounded px-2 py-1">
+                                        <option value="Low">Low</option>
+                                        <option value="Medium">Medium</option>
+                                        <option value="High">High</option>
                                     </select>
                                 </div>
+                            </div>
+                        )}
 
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-1">題型 (Type)</label>
-                                    <select className="w-full p-2 border rounded text-sm" value={promptSettings.questionType} onChange={e => setPromptSettings({...promptSettings, questionType: e.target.value})}>
-                                        <option value="Mixed (MC + SQ)">混合 (MC + 長題目)</option>
-                                        <option value="MC Only">純 MC</option>
-                                        <option value="Long Questions Only">純長題目</option>
-                                    </select>
-                                </div>
+                        {/* 1. 篩選區域 */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                            <div className="bg-white p-4 rounded-lg shadow-sm border">
+                                <label className="block font-bold mb-2">選擇試卷範圍</label>
+                                <select 
+                                    className="w-full p-2 border rounded"
+                                    value={selectedExamId}
+                                    onChange={e => setSelectedExamId(e.target.value)}
+                                >
+                                    <option value="all">所有試卷 (綜合分析)</option>
+                                    {exams.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                                </select>
+                            </div>
 
-                                <div>
-                                    <div className="flex justify-between items-center mb-1">
-                                        <label className="text-sm font-semibold text-gray-700">弱項針對比例 (Weakness Focus)</label>
-                                        <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">{promptSettings.weaknessFocusRatio}%</span>
-                                    </div>
-                                    <input 
-                                        type="range" min="0" max="100" step="10" 
-                                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                                        value={promptSettings.weaknessFocusRatio} 
-                                        onChange={e => setPromptSettings({...promptSettings, weaknessFocusRatio: Number(e.target.value)})} 
-                                    />
-                                    <p className="text-xs text-gray-500 mt-1">AI 將確保至少 {promptSettings.weaknessFocusRatio}% 的題目直接對應學生的 Concept Detail 弱點。</p>
+                            <div className="bg-white p-4 rounded-lg shadow-sm border md:col-span-2">
+                                <div className="flex justify-between items-center mb-2">
+                                    <label className="block font-bold">選擇目標學生 (成績較弱者)</label>
+                                    <button onClick={toggleAllStudents} className="text-sm text-blue-600 hover:underline">
+                                        {selectedStudentIds.length === students.length ? '取消全選' : '全選所有學生'}
+                                    </button>
                                 </div>
+                                <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 border rounded bg-gray-50">
+                                    {studentsAnalysis.sort((a,b)=>a.avgScore-b.avgScore).map(s => (
+                                        <label key={s.id} className={`flex items-center gap-1 px-2 py-1 rounded border cursor-pointer transition-colors ${selectedStudentIds.includes(s.id) ? 'bg-blue-100 border-blue-300' : 'bg-white hover:bg-gray-100'}`}>
+                                            <input 
+                                                type="checkbox" 
+                                                checked={selectedStudentIds.includes(s.id)}
+                                                onChange={() => {
+                                                    setSelectedStudentIds(prev => 
+                                                        prev.includes(s.id) ? prev.filter(id => id !== s.id) : [...prev, s.id]
+                                                    );
+                                                }}
+                                                className="hidden"
+                                            />
+                                            <span className="text-sm">{s.label}</span>
+                                            <span className={`text-[10px] px-1 rounded ${s.avgScore < 50 ? 'bg-red-200 text-red-700' : 'bg-gray-200'}`}>
+                                                {s.avgScore}%
+                                            </span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
 
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-1">自訂指令 (Custom Instructions)</label>
-                                    <textarea 
-                                        className="w-full p-2 border rounded text-sm h-32 resize-none" 
-                                        placeholder="例如: 解釋請用廣東話口語 / 必須包含 Marking Scheme..."
-                                        value={promptSettings.customInstructions} 
-                                        onChange={e => setPromptSettings({...promptSettings, customInstructions: e.target.value})} 
-                                    />
-                                </div>
+                        {/* 2. 管理大表 */}
+                        <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-gray-800 text-white text-sm">
+                                            <th className="px-4 py-3 sticky left-0 bg-gray-800 z-10 w-32">學生</th>
+                                            {[1, 2, 3, 4, 5].map(i => (
+                                                <th key={i} className="px-4 py-3 border-l border-gray-700">弱點課題 {i}</th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {selectedStudentIds.length === 0 ? (
+                                            <tr>
+                                                <td colSpan="6" className="px-4 py-10 text-center text-gray-400">請從上方選擇需要跟進的學生</td>
+                                            </tr>
+                                        ) : (
+                                            studentsAnalysis
+                                                .filter(s => selectedStudentIds.includes(s.id))
+                                                .map(student => (
+                                                    <tr key={student.id} className="border-b hover:bg-gray-50 transition-colors">
+                                                        <td className="px-4 py-4 font-bold sticky left-0 bg-white border-r shadow-[2px_0_5px_rgba(0,0,0,0.05)]">
+                                                            {student.label}
+                                                            <div className="text-[10px] text-gray-400 font-normal">總平均: {student.avgScore}%</div>
+                                                        </td>
+                                                        {[0, 1, 2, 3, 4].map(idx => {
+                                                            const topic = student.weaknesses[idx];
+                                                            if (!topic) return <td key={idx} className="px-4 py-4 bg-gray-50/50"></td>;
+                                                            
+                                                            // 檢查歷史狀態
+                                                            const historyRecord = history.find(h => h.studentId === student.id && h.topics === topic.name);
+                                                            const currentStatus = historyRecord ? historyRecord.status : 'pending';
+
+                                                            return (
+                                                                <td key={idx} className="px-4 py-4 border-l align-top">
+                                                                    <div 
+                                                                        onClick={() => handleQuickGenerate(student, topic)}
+                                                                        className="cursor-pointer group"
+                                                                    ) => {
+                                                                        <div className="text-[10px] text-blue-600 font-mono group-hover:underline">#{topic.id}</div>
+                                                                        <div className="text-sm font-medium leading-tight mb-1 group-hover:text-blue-700">{topic.name}</div>
+                                                                        <div className="flex items-center gap-2 mb-2">
+                                                                            <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                                                                                <div 
+                                                                                    className={`h-full ${topic.percentage < 40 ? 'bg-red-500' : 'bg-orange-400'}`} 
+                                                                                    style={{ width: `${topic.percentage}%` }}
+                                                                                ></div>
+                                                                            </div>
+                                                                            <span className="text-[10px] font-bold text-gray-500">{topic.percentage}%</span>
+                                                                        </div>
+                                                                    </div>
+                                                                    
+                                                                    <select 
+                                                                        value={currentStatus}
+                                                                        onChange={(e) => updateTopicStatus(student.id, topic.name, e.target.value)}
+                                                                        className={`text-[10px] w-full p-1 rounded border ${
+                                                                            currentStatus === 'graded' ? 'bg-green-100 text-green-700 border-green-200' : 
+                                                                            currentStatus === 'submitted' ? 'bg-yellow-100 text-yellow-700 border-yellow-200' : 
+                                                                            'bg-gray-100 text-gray-600 border-gray-200'
+                                                                        }`}
+                                                                    >
+                                                                        <option value="pending">未完成</option>
+                                                                        <option value="submitted">已提交</option>
+                                                                        <option value="graded">已評分</option>
+                                                                    </select>
+                                                                </td>
+                                                            );
+                                                        })}
+                                                    </tr>
+                                                ))
+                                        )}
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
