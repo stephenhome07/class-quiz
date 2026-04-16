@@ -145,7 +145,337 @@
                 />
             </div>
         );
+// 【終極防護版】GenerateView
+const GenerateView = ({ students = [], exams = [], history = [], setHistory, analyzeExam }) => {
+    const [selectedExamId, setSelectedExamId] = React.useState('all');
+    const [selectedStudentIds, setSelectedStudentIds] = React.useState([]);
+    const [showSettings, setShowSettings] = React.useState(true);
+    
+    // Prompt 設定
+    const [defaultCount, setDefaultCount] = React.useState(10);
+    const [defaultDifficulty, setDefaultDifficulty] = React.useState('Medium');
+    const [language, setLanguage] = React.useState('繁體中文');
+    const [questionType, setQuestionType] = React.useState('Mix (MC + LQ)');
 
+    const studentsAnalysis = React.useMemo(() => {
+        try {
+            if (!students || !Array.isArray(students)) return [];
+
+            return students.map(student => {
+                const studentTrend = (exams || [])
+                    .map(exam => typeof analyzeExam === 'function' ? analyzeExam(exam, student.id) : null)
+                    .filter(Boolean);
+
+                const filteredTrend = selectedExamId === 'all' 
+                    ? studentTrend 
+                    : studentTrend.filter(t => t.examId === selectedExamId);
+
+                if (filteredTrend.length === 0) return { ...student, weaknesses: [], avgScore: 0 };
+
+                const topicMap = {};
+                filteredTrend.forEach(report => {
+                    if (report && report.topics) {
+                        Object.entries(report.topics).forEach(([topicId, topic]) => {
+                            if (!topicMap[topic.name]) {
+                                topicMap[topic.name] = { name: topic.name, id: topicId, score: 0, total: 0 };
+                            }
+                            topicMap[topic.name].score += (topic.score || 0);
+                            topicMap[topic.name].total += (topic.max || 0); 
+                        });
+                    }
+                });
+
+                const weaknesses = Object.values(topicMap)
+                    .map(t => ({
+                        ...t,
+                        percentage: t.total > 0 ? Math.round((t.score / t.total) * 100) : 0
+                    }))
+                    .filter(t => t.percentage < 40)
+                    .sort((a, b) => a.percentage - b.percentage);
+
+                let sumWeightedAvg = 0;
+                let validExamCount = 0;
+                const targetExams = selectedExamId === 'all' ? exams : exams.filter(e => e.id === selectedExamId);
+
+                targetExams.forEach(exam => {
+                    if (!exam || !exam.data || !exam.mapData) return;
+                    
+                    // 【修復1】超級模糊匹配：遍歷整行，只要有任何一個值等於學生ID就抓出來 (無視欄位名稱)
+                    const studentRow = exam.data.find(row => 
+                        Object.values(row).some(val => String(val).trim() === String(student.id).trim())
+                    );
+                    
+                    if (studentRow) {
+                        let mcScore = 0, mcMax = 0, lqScore = 0, lqMax = 0;
+                        let totalScore = 0, totalMax = 0; // 備用總分
+
+                        exam.mapData.forEach(q => {
+                            const qId = q.Question_ID || q.questionId || q.id || '';
+                            if (!qId) return;
+
+                            // 【修復2】忽略題目ID的隱藏空白
+                            const actualKey = Object.keys(studentRow).find(key => String(key).trim() === String(qId).trim());
+                            const rawScore = actualKey ? studentRow[actualKey] : undefined;
+                            
+                            if (rawScore !== undefined && rawScore !== null && rawScore !== '') {
+                                const score = Number(rawScore) || 0;
+                                const max = Number(q.Full_Mark || q.FullMark || q.Max || 1) || 0;
+                                
+                                totalScore += score;
+                                totalMax += max;
+
+                                const qIdStr = String(qId).toUpperCase();
+                                if (qIdStr.includes('MC')) {
+                                    mcMax += max;
+                                    mcScore += score;
+                                } else {
+                                    lqMax += max;
+                                    lqScore += score;
+                                }
+                            }
+                        });
+
+                        const mcP = mcMax > 0 ? (mcScore / mcMax) : 0;
+                        const lqP = lqMax > 0 ? (lqScore / lqMax) : 0;
+                        
+                        let examWeightedAvg = 0;
+                        if (mcMax > 0 && lqMax > 0) {
+                            examWeightedAvg = (mcP * 35) + (lqP * 65);
+                        } else if (mcMax > 0) {
+                            examWeightedAvg = mcP * 100;
+                        } else if (lqMax > 0) {
+                            examWeightedAvg = lqP * 100;
+                        } else if (totalMax > 0) {
+                            // 【修復3】如果題目名稱沒有包含 MC，直接用總分計算，避免出現 0%
+                            examWeightedAvg = (totalScore / totalMax) * 100;
+                        }
+                        
+                        sumWeightedAvg += examWeightedAvg;
+                        validExamCount++;
+                    }
+                });
+
+                const avgScore = validExamCount > 0 ? Math.round(sumWeightedAvg / validExamCount) : 0;
+
+                return { ...student, weaknesses, avgScore };
+            });
+        } catch (err) {
+            console.error("Analysis Error:", err);
+            return [];
+        }
+    }, [selectedExamId, students, exams, analyzeExam]);
+
+    const toggleAllStudents = () => {
+        if (selectedStudentIds.length === students.length) setSelectedStudentIds([]);
+        else setSelectedStudentIds(students.map(s => s.id));
+    };
+
+    const handleQuickGenerate = (student, topic) => {
+        const promptText = `你現在是一位專業的 HKDSE Physics 導師。
+請為學生「${student.label}」生成一份針對性練習。
+課題：${topic.id} ${topic.name}
+難度：${defaultDifficulty}
+題目類型：${questionType}
+題目數量：${defaultCount} 題
+
+要求：
+1. 題目必須符合 HKDSE Physics 課程標準及問法。
+2. 針對學生在此課題得分率僅為 ${topic.percentage}% 的弱點進行加強。
+3. 提供詳細的答案解釋 (Explanation) 及評分標準 (Marking Scheme)。
+4. 請以${language}輸出。`;
+
+        navigator.clipboard.writeText(promptText);
+        
+        const newHistory = {
+            id: Date.now(),
+            date: new Date().toISOString().split('T')[0],
+            studentId: student.id,
+            studentName: student.label,
+            topics: topic.name,
+            difficulty: defaultDifficulty,
+            count: defaultCount,
+            status: 'pending',
+            score: '-',
+            maxScore: defaultCount
+        };
+        setHistory([newHistory, ...history]);
+        alert(`Prompt 已複製！\n已為 ${student.label} 建立跟進紀錄。`);
+    };
+
+    const updateTopicStatus = (studentId, topicName, status) => {
+        const record = history.find(h => h.studentId === studentId && h.topics === topicName);
+        if (record) {
+            setHistory(history.map(h => h.id === record.id ? { ...h, status } : h));
+        } else {
+            const student = students.find(s => s.id === studentId);
+            const newHistory = {
+                id: Date.now(),
+                date: new Date().toISOString().split('T')[0],
+                studentId: studentId,
+                studentName: student?.label || studentId,
+                topics: topicName,
+                difficulty: defaultDifficulty,
+                count: defaultCount,
+                status: status,
+                score: '-',
+                maxScore: defaultCount
+            };
+            setHistory([newHistory, ...history]);
+        }
+    };
+
+    const sortedStudents = React.useMemo(() => {
+        return [...studentsAnalysis].sort((a, b) => a.avgScore - b.avgScore);
+    }, [studentsAnalysis]);
+
+    return (
+        <div className="p-6 max-w-7xl mx-auto">
+            <div className="flex justify-between items-center mb-6">
+                <h1 className="text-2xl font-bold flex items-center gap-2">
+                   <Icon name="ClipboardCheck" /> 練習管理與跟進
+                </h1>
+                <button onClick={() => setShowSettings(!showSettings)} className="px-3 py-2 bg-gray-200 rounded hover:bg-gray-300 text-sm">
+                    {showSettings ? '隱藏設定' : '展開設定'}
+                </button>
+            </div>
+
+            {showSettings && (
+                <div className="mb-6 p-5 bg-white rounded-lg shadow-sm border border-blue-100 flex flex-wrap gap-6 items-end">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">語言</label>
+                        <select value={language} onChange={e => setLanguage(e.target.value)} className="border rounded-md px-3 py-2 w-32">
+                            <option value="繁體中文">繁體中文</option>
+                            <option value="English">English</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">題目類型</label>
+                        <select value={questionType} onChange={e => setQuestionType(e.target.value)} className="border rounded-md px-3 py-2 w-40">
+                            <option value="MC (Multiple Choice)">MC</option>
+                            <option value="LQ (Long Question)">LQ</option>
+                            <option value="Mix (MC + LQ)">Mix (MC + LQ)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">難度</label>
+                        <select value={defaultDifficulty} onChange={e => setDefaultDifficulty(e.target.value)} className="border rounded-md px-3 py-2 w-32">
+                            <option value="Low">Low</option>
+                            <option value="Medium">Medium</option>
+                            <option value="High">High</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">預設題目數</label>
+                        <input type="number" value={defaultCount} onChange={e => setDefaultCount(e.target.value)} className="border rounded-md px-3 py-2 w-24" />
+                    </div>
+                </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div className="bg-white p-4 rounded-lg shadow-sm border">
+                    <label className="block font-bold mb-2">1. 選擇試卷範圍</label>
+                    <select className="w-full p-2 border rounded" value={selectedExamId} onChange={e => setSelectedExamId(e.target.value)}>
+                        <option value="all">所有試卷 (綜合分析)</option>
+                        {exams.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                    </select>
+                </div>
+
+                <div className="bg-white p-4 rounded-lg shadow-sm border md:col-span-2">
+                    <div className="flex justify-between items-center mb-2">
+                        <label className="block font-bold">2. 選擇目標學生</label>
+                        <button onClick={toggleAllStudents} className="text-sm text-blue-600 hover:underline">
+                            {selectedStudentIds.length === (students?.length || 0) ? '取消全選' : '全選所有學生'}
+                        </button>
+                    </div>
+                    <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 border rounded bg-gray-50">
+                        {sortedStudents.map(s => (
+                            <label key={s.id} className={`flex items-center gap-1 px-2 py-1 rounded border cursor-pointer transition-colors ${selectedStudentIds.includes(s.id) ? 'bg-blue-100 border-blue-300' : 'bg-white hover:bg-gray-100'}`}>
+                                <input 
+                                    type="checkbox" checked={selectedStudentIds.includes(s.id)}
+                                    onChange={() => setSelectedStudentIds(prev => prev.includes(s.id) ? prev.filter(id => id !== s.id) : [...prev, s.id])}
+                                    className="hidden"
+                                />
+                                <span className="text-sm">{s.label}</span>
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded ${s.avgScore < 50 ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-700'}`}>
+                                    {s.avgScore}%
+                                </span>
+                            </label>
+                        ))}
+                    </div>
+                </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse min-w-max">
+                        <thead>
+                            <tr className="bg-gray-800 text-white text-sm">
+                                <th className="px-4 py-3 sticky left-0 bg-gray-800 z-10 w-40 shadow-sm">學生 (MC 35% + LQ 65%)</th>
+                                <th className="px-4 py-3 border-l border-gray-700">弱點課題 (得分 &lt; 40%)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {selectedStudentIds.length === 0 ? (
+                                <tr><td colSpan="2" className="px-4 py-10 text-center text-gray-400">請從上方選擇學生以生成分析報告</td></tr>
+                            ) : (
+                                sortedStudents
+                                    .filter(s => selectedStudentIds.includes(s.id))
+                                    .map(student => (
+                                        <tr key={student.id} className="border-b hover:bg-gray-50/50 transition-colors">
+                                            <td className="px-4 py-4 sticky left-0 bg-white border-r shadow-sm align-top">
+                                                <div className="font-bold text-gray-800">{student.label}</div>
+                                                <div className="text-xs mt-1 text-gray-500">
+                                                    加權平均: <span className={`font-bold ${student.avgScore < 50 ? 'text-red-500' : 'text-green-600'}`}>{student.avgScore}%</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-4 align-top">
+                                                <div className="flex flex-wrap gap-3">
+                                                    {student.weaknesses && student.weaknesses.length > 0 ? student.weaknesses.map(topic => {
+                                                        const historyRecord = history.find(h => h.studentId === student.id && h.topics === topic.name);
+                                                        const currentStatus = historyRecord ? historyRecord.status : 'pending';
+
+                                                        return (
+                                                            <div key={topic.id} className="w-48 bg-white border border-red-200 rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow">
+                                                                <div onClick={() => handleQuickGenerate(student, topic)} className="cursor-pointer group mb-2">
+                                                                    <div className="text-[10px] text-blue-600 font-mono group-hover:underline">#{topic.id}</div>
+                                                                    <div className="text-sm font-bold leading-snug mb-2 group-hover:text-blue-700 h-10 overflow-hidden" title={topic.name}>{topic.name}</div>
+                                                                    <div className="flex items-center gap-2 mb-1">
+                                                                        <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                                                                            <div className="h-full bg-red-500" style={{ width: `${topic.percentage}%` }}></div>
+                                                                        </div>
+                                                                        <span className="text-[11px] font-bold text-red-600">{topic.percentage}%</span>
+                                                                    </div>
+                                                                </div>
+                                                                <select 
+                                                                    value={currentStatus}
+                                                                    onChange={(e) => updateTopicStatus(student.id, topic.name, e.target.value)}
+                                                                    className={`text-xs w-full p-1.5 rounded border outline-none cursor-pointer ${
+                                                                        currentStatus === 'graded' ? 'bg-green-50 text-green-700 border-green-200' : 
+                                                                        currentStatus === 'submitted' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 
+                                                                        'bg-gray-50 text-gray-600 border-gray-200'
+                                                                    }`}
+                                                                >
+                                                                    <option value="pending">未完成</option>
+                                                                    <option value="submitted">已提交</option>
+                                                                    <option value="graded">已評分</option>
+                                                                </select>
+                                                            </div>
+                                                        );
+                                                    }) : (
+                                                        <div className="text-sm text-gray-400 py-2">🎉 該範圍內表現良好，無低於 40% 的課題</div>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    );
+};
         // --- Main App ---
         const App = () => {
             const [view, setView] = useState('upload'); 
@@ -383,331 +713,7 @@
                 );
             };
 
-// 【修正版】GenerateView - 增加防護機制防止空白頁
-const GenerateView = ({ students = [], exams = [], history = [], setHistory, analyzeExam }) => {
-    console.log("GenerateView Rendering..."); // 調試用
 
-    const [selectedExamId, setSelectedExamId] = React.useState('all');
-    const [selectedStudentIds, setSelectedStudentIds] = React.useState([]);
-    const [showSettings, setShowSettings] = React.useState(true);
-    
-    // Prompt 設定
-    const [defaultCount, setDefaultCount] = React.useState(10);
-    const [defaultDifficulty, setDefaultDifficulty] = React.useState('Medium');
-    const [language, setLanguage] = React.useState('繁體中文');
-    const [questionType, setQuestionType] = React.useState('Mix (MC + LQ)');
-
-    // 獲取所有學生的弱點數據 (增加安全檢查)
-    const studentsAnalysis = React.useMemo(() => {
-        try {
-            if (!students || !Array.isArray(students)) return [];
-
-            return students.map(student => {
-                // 1. 獲取課題表現 (安全調用 analyzeExam)
-                const studentTrend = (exams || [])
-                    .map(exam => typeof analyzeExam === 'function' ? analyzeExam(exam, student.id) : null)
-                    .filter(Boolean);
-
-                const filteredTrend = selectedExamId === 'all' 
-                    ? studentTrend 
-                    : studentTrend.filter(t => t.examId === selectedExamId);
-
-                if (filteredTrend.length === 0) return { ...student, weaknesses: [], avgScore: 0 };
-
-                // 匯總課題分數
-                const topicMap = {};
-                filteredTrend.forEach(report => {
-                    if (report && report.topics) {
-                        Object.entries(report.topics).forEach(([topicId, topic]) => {
-                            if (!topicMap[topic.name]) {
-                                topicMap[topic.name] = { name: topic.name, id: topicId, score: 0, total: 0 };
-                            }
-                            topicMap[topic.name].score += (topic.score || 0);
-                            topicMap[topic.name].total += (topic.max || 0); 
-                        });
-                    }
-                });
-
-                // 取出所有低於 40% 的弱點
-                const weaknesses = Object.values(topicMap)
-                    .map(t => ({
-                        ...t,
-                        percentage: t.total > 0 ? Math.round((t.score / t.total) * 100) : 0
-                    }))
-                    .filter(t => t.percentage < 40)
-                    .sort((a, b) => a.percentage - b.percentage);
-
-                // 2. 計算 MC 35% + LQ 65% 的總成績 (增加安全檢查)
-                let sumWeightedAvg = 0;
-                let validExamCount = 0;
-                const targetExams = selectedExamId === 'all' ? exams : exams.filter(e => e.id === selectedExamId);
-
-                targetExams.forEach(exam => {
-                    if (!exam || !exam.data || !exam.mapData) return;
-                    
-                    const studentRow = exam.data.find(row => 
-                        (row.Student_ID === student.id) || (row.studentId === student.id) || (row.ID === student.id)
-                    );
-                    
-                    if (studentRow) {
-                        let mcScore = 0, mcMax = 0, lqScore = 0, lqMax = 0;
-                        exam.mapData.forEach(q => {
-                            const qId = q.Question_ID || '';
-                            if (!qId) return;
-
-                            const max = Number(q.Full_Mark) || 0;
-                            const rawScore = studentRow[qId];
-                            
-                            if (rawScore !== undefined && rawScore !== null && rawScore !== '') {
-                                const score = Number(rawScore) || 0;
-                                if (qId.toUpperCase().includes('MC')) {
-                                    mcMax += max;
-                                    mcScore += score;
-                                } else {
-                                    lqMax += max;
-                                    lqScore += score;
-                                }
-                            }
-                        });
-
-                        const mcP = mcMax > 0 ? (mcScore / mcMax) : 0;
-                        const lqP = lqMax > 0 ? (lqScore / lqMax) : 0;
-                        
-                        let examWeightedAvg = 0;
-                        if (mcMax > 0 && lqMax > 0) {
-                            examWeightedAvg = (mcP * 35) + (lqP * 65);
-                        } else if (mcMax > 0) {
-                            examWeightedAvg = mcP * 100;
-                        } else if (lqMax > 0) {
-                            examWeightedAvg = lqP * 100;
-                        }
-                        sumWeightedAvg += examWeightedAvg;
-                        validExamCount++;
-                    }
-                });
-
-                const avgScore = validExamCount > 0 ? Math.round(sumWeightedAvg / validExamCount) : 0;
-
-                return { ...student, weaknesses, avgScore };
-            });
-        } catch (err) {
-            console.error("Error in studentsAnalysis calculation:", err);
-            return [];
-        }
-    }, [selectedExamId, students, exams, analyzeExam]);
-
-    const toggleAllStudents = () => {
-        if (selectedStudentIds.length === students.length) setSelectedStudentIds([]);
-        else setSelectedStudentIds(students.map(s => s.id));
-    };
-
-    const handleQuickGenerate = (student, topic) => {
-        const promptText = `你現在是一位專業的 HKDSE Physics 導師。
-請為學生「${student.label}」生成一份針對性練習。
-課題：${topic.id} ${topic.name}
-難度：${defaultDifficulty}
-題目類型：${questionType}
-題目數量：${defaultCount} 題
-
-要求：
-1. 題目必須符合 HKDSE Physics 課程標準及問法。
-2. 針對學生在此課題得分率僅為 ${topic.percentage}% 的弱點進行加強。
-3. 提供詳細的答案解釋 (Explanation) 及評分標準 (Marking Scheme)。
-4. 請以${language}輸出。`;
-
-        navigator.clipboard.writeText(promptText);
-        
-        const newHistory = {
-            id: Date.now(),
-            date: new Date().toISOString().split('T')[0],
-            studentId: student.id,
-            studentName: student.label,
-            topics: topic.name,
-            difficulty: defaultDifficulty,
-            count: defaultCount,
-            status: 'pending',
-            score: '-',
-            maxScore: defaultCount
-        };
-        setHistory([newHistory, ...history]);
-        alert(`Prompt 已複製！\n已為 ${student.label} 建立跟進紀錄。`);
-    };
-
-    const updateTopicStatus = (studentId, topicName, status) => {
-        const record = history.find(h => h.studentId === studentId && h.topics === topicName);
-        if (record) {
-            setHistory(history.map(h => h.id === record.id ? { ...h, status } : h));
-        } else {
-            const student = students.find(s => s.id === studentId);
-            const newHistory = {
-                id: Date.now(),
-                date: new Date().toISOString().split('T')[0],
-                studentId: studentId,
-                studentName: student?.label || studentId,
-                topics: topicName,
-                difficulty: defaultDifficulty,
-                count: defaultCount,
-                status: status,
-                score: '-',
-                maxScore: defaultCount
-            };
-            setHistory([newHistory, ...history]);
-        }
-    };
-
-    // 確保排序不會直接改動到 memo 的原數組 (使用 [...slice])
-    const sortedStudents = React.useMemo(() => {
-        return [...studentsAnalysis].sort((a, b) => a.avgScore - b.avgScore);
-    }, [studentsAnalysis]);
-
-    return (
-        <div className="p-6 max-w-7xl mx-auto">
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold flex items-center gap-2">
-                   <Icon name="ClipboardCheck" /> 練習管理與跟進
-                </h1>
-                <button onClick={() => setShowSettings(!showSettings)} className="px-3 py-2 bg-gray-200 rounded hover:bg-gray-300 text-sm">
-                    {showSettings ? '隱藏設定' : '展開設定'}
-                </button>
-            </div>
-
-            {showSettings && (
-                <div className="mb-6 p-5 bg-white rounded-lg shadow-sm border border-blue-100 flex flex-wrap gap-6 items-end">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">語言</label>
-                        <select value={language} onChange={e => setLanguage(e.target.value)} className="border rounded-md px-3 py-2 w-32">
-                            <option value="繁體中文">繁體中文</option>
-                            <option value="English">English</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">題目類型</label>
-                        <select value={questionType} onChange={e => setQuestionType(e.target.value)} className="border rounded-md px-3 py-2 w-40">
-                            <option value="MC (Multiple Choice)">MC</option>
-                            <option value="LQ (Long Question)">LQ</option>
-                            <option value="Mix (MC + LQ)">Mix (MC + LQ)</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">難度</label>
-                        <select value={defaultDifficulty} onChange={e => setDefaultDifficulty(e.target.value)} className="border rounded-md px-3 py-2 w-32">
-                            <option value="Low">Low</option>
-                            <option value="Medium">Medium</option>
-                            <option value="High">High</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">預設題目數</label>
-                        <input type="number" value={defaultCount} onChange={e => setDefaultCount(e.target.value)} className="border rounded-md px-3 py-2 w-24" />
-                    </div>
-                </div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div className="bg-white p-4 rounded-lg shadow-sm border">
-                    <label className="block font-bold mb-2">1. 選擇試卷範圍</label>
-                    <select className="w-full p-2 border rounded" value={selectedExamId} onChange={e => setSelectedExamId(e.target.value)}>
-                        <option value="all">所有試卷 (綜合分析)</option>
-                        {exams.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-                    </select>
-                </div>
-
-                <div className="bg-white p-4 rounded-lg shadow-sm border md:col-span-2">
-                    <div className="flex justify-between items-center mb-2">
-                        <label className="block font-bold">2. 選擇目標學生</label>
-                        <button onClick={toggleAllStudents} className="text-sm text-blue-600 hover:underline">
-                            {selectedStudentIds.length === (students?.length || 0) ? '取消全選' : '全選所有學生'}
-                        </button>
-                    </div>
-                    <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 border rounded bg-gray-50">
-                        {sortedStudents.map(s => (
-                            <label key={s.id} className={`flex items-center gap-1 px-2 py-1 rounded border cursor-pointer transition-colors ${selectedStudentIds.includes(s.id) ? 'bg-blue-100 border-blue-300' : 'bg-white hover:bg-gray-100'}`}>
-                                <input 
-                                    type="checkbox" checked={selectedStudentIds.includes(s.id)}
-                                    onChange={() => setSelectedStudentIds(prev => prev.includes(s.id) ? prev.filter(id => id !== s.id) : [...prev, s.id])}
-                                    className="hidden"
-                                />
-                                <span className="text-sm">{s.label}</span>
-                                <span className={`text-[10px] px-1.5 py-0.5 rounded ${s.avgScore < 50 ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-700'}`}>
-                                    {s.avgScore}%
-                                </span>
-                            </label>
-                        ))}
-                    </div>
-                </div>
-            </div>
-
-            <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse min-w-max">
-                        <thead>
-                            <tr className="bg-gray-800 text-white text-sm">
-                                <th className="px-4 py-3 sticky left-0 bg-gray-800 z-10 w-40 shadow-sm">學生 (MC 35% + LQ 65%)</th>
-                                <th className="px-4 py-3 border-l border-gray-700">弱點課題 (得分 &lt; 40%)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {selectedStudentIds.length === 0 ? (
-                                <tr><td colSpan="2" className="px-4 py-10 text-center text-gray-400">請從上方選擇學生以生成分析報告</td></tr>
-                            ) : (
-                                sortedStudents
-                                    .filter(s => selectedStudentIds.includes(s.id))
-                                    .map(student => (
-                                        <tr key={student.id} className="border-b hover:bg-gray-50/50 transition-colors">
-                                            <td className="px-4 py-4 sticky left-0 bg-white border-r shadow-sm align-top">
-                                                <div className="font-bold text-gray-800">{student.label}</div>
-                                                <div className="text-xs mt-1 text-gray-500">
-                                                    加權平均: <span className={`font-bold ${student.avgScore < 50 ? 'text-red-500' : 'text-green-600'}`}>{student.avgScore}%</span>
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-4 align-top">
-                                                <div className="flex flex-wrap gap-3">
-                                                    {student.weaknesses && student.weaknesses.length > 0 ? student.weaknesses.map(topic => {
-                                                        const historyRecord = history.find(h => h.studentId === student.id && h.topics === topic.name);
-                                                        const currentStatus = historyRecord ? historyRecord.status : 'pending';
-
-                                                        return (
-                                                            <div key={topic.id} className="w-48 bg-white border border-red-200 rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow">
-                                                                <div onClick={() => handleQuickGenerate(student, topic)} className="cursor-pointer group mb-2">
-                                                                    <div className="text-[10px] text-blue-600 font-mono group-hover:underline">#{topic.id}</div>
-                                                                    <div className="text-sm font-bold leading-snug mb-2 group-hover:text-blue-700 h-10 overflow-hidden" title={topic.name}>{topic.name}</div>
-                                                                    <div className="flex items-center gap-2 mb-1">
-                                                                        <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                                                                            <div className="h-full bg-red-500" style={{ width: `${topic.percentage}%` }}></div>
-                                                                        </div>
-                                                                        <span className="text-[11px] font-bold text-red-600">{topic.percentage}%</span>
-                                                                    </div>
-                                                                </div>
-                                                                <select 
-                                                                    value={currentStatus}
-                                                                    onChange={(e) => updateTopicStatus(student.id, topic.name, e.target.value)}
-                                                                    className={`text-xs w-full p-1.5 rounded border outline-none cursor-pointer ${
-                                                                        currentStatus === 'graded' ? 'bg-green-50 text-green-700 border-green-200' : 
-                                                                        currentStatus === 'submitted' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 
-                                                                        'bg-gray-50 text-gray-600 border-gray-200'
-                                                                    }`}
-                                                                >
-                                                                    <option value="pending">未完成</option>
-                                                                    <option value="submitted">已提交</option>
-                                                                    <option value="graded">已評分</option>
-                                                                </select>
-                                                            </div>
-                                                        );
-                                                    }) : (
-                                                        <div className="text-sm text-gray-400 py-2">🎉 該範圍內表現良好，無低於 40% 的課題</div>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    );
-};
 
             const HistoryView = () => {
                 const [filter, setFilter] = useState('all'); 
