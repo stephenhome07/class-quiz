@@ -145,7 +145,7 @@
                 />
             </div>
         );
-// 【功能完備版】GenerateView - 保留所有優化，新增刪除學生功能
+// 【多選綜合版】GenerateView - 支援勾選多個課題一鍵生成綜合練習
 const GenerateView = ({ students = [], setStudents, exams = [], history = [], setHistory }) => {
     const [selectedExamId, setSelectedExamId] = React.useState(() => {
         return exams && exams.length > 0 ? exams[exams.length - 1].id : 'all';
@@ -156,35 +156,31 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
         return saved ? JSON.parse(saved) : [];
     });
 
+    // 【新增】記錄每個學生被勾選的課題 { "studentId": [topic1, topic2] }
+    const [selectedBatchTopics, setSelectedBatchTopics] = React.useState({});
+
     React.useEffect(() => {
         localStorage.setItem('generateView_selectedStudents', JSON.stringify(selectedStudentIds));
     }, [selectedStudentIds]);
 
-    // 【新增】刪除學生的處理函數 - 確保持久化同步
     const handleDeleteStudent = (e, studentId, studentName) => {
-        e.preventDefault(); // 防止觸發 checkbox 勾選
-        e.stopPropagation(); // 防止事件向上傳遞
+        e.preventDefault(); 
+        e.stopPropagation(); 
         
         if (confirm(`確定要永久刪除學生「${studentName}」的記錄嗎？\n這將使該學生從名單中消失（已有的歷史跟進記錄會保留但無法再關聯）。`)) {
             const newStudents = students.filter(s => s.id !== studentId);
-            // 1. 更新 React 狀態
             setStudents(newStudents);
-            // 2. 更新 localStorage 使重新整理後依然生效
             localStorage.setItem('hkdse_students', JSON.stringify(newStudents));
-            // 3. 從當前已選取名單中移除
             setSelectedStudentIds(prev => prev.filter(id => id !== studentId));
         }
     };
 
     const [showSettings, setShowSettings] = React.useState(true);
-    
-    // Prompt 設定 (保留原樣)
     const [defaultCount, setDefaultCount] = React.useState(10);
     const [defaultDifficulty, setDefaultDifficulty] = React.useState('Medium'); 
     const [language, setLanguage] = React.useState('繁體中文');
     const [questionType, setQuestionType] = React.useState('MC (Multiple Choice)');
 
-    // 學生分析邏輯 (保留原樣，未改動任何計算細節)
     const studentsAnalysis = React.useMemo(() => {
         try {
             if (!students || !Array.isArray(students)) return [];
@@ -240,8 +236,8 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
                         percentage: t.total > 0 ? Math.round((t.score / t.total) * 100) : 0,
                         wrongDetails: Array.from(t.wrongDetails) 
                     }))
-                    .filter(t => t.percentage < 40)
-                    .sort((a, b) => a.percentage - b.percentage);
+                    .filter(t => t.percentage < 40) 
+                    .sort((a, b) => a.percentage - b.percentage); 
 
                 const avgScore = totalMaxSum > 0 ? Math.round((totalScoreSum / totalMaxSum) * 100) : 0;
                 return { ...student, weaknesses, avgScore };
@@ -257,13 +253,14 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
         else setSelectedStudentIds(students.map(s => s.id));
     };
 
-    // Prompt 生成邏輯 (保留原樣)
+    const difficultyMap = {
+        'Easy': 'HKDSE 等級 2 (基礎)',
+        'Medium': 'HKDSE 等級 3 (中等)',
+        'Hard': 'HKDSE 等級 4 或以上 (進階)'
+    };
+
+    // 單一課題生成 (保留原功能)
     const handleQuickGenerate = (student, topic) => {
-        const difficultyMap = {
-            'Easy': 'HKDSE 等級 2 (基礎)',
-            'Medium': 'HKDSE 等級 3 (中等)',
-            'Hard': 'HKDSE 等級 4 或以上 (進階)'
-        };
         const mappedDifficulty = difficultyMap[defaultDifficulty] || defaultDifficulty;
         const conceptStr = topic.wrongDetails && topic.wrongDetails.length > 0
             ? `\n\n【學生具體失分盲點】\n這名學生在以下概念中失分較多，請務必針對這些盲點設計題目：\n- ${topic.wrongDetails.join('\n- ')}`
@@ -272,9 +269,55 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
         const promptText = `你現在是一位專業的 HKDSE Physics 導師。\n請為學生「${student.label}」生成一份針對性練習。\n課題：${topic.id} ${topic.name}\n難度要求：${mappedDifficulty}\n題目類型：${questionType}\n題目數量：${defaultCount} 題${conceptStr}\n\n要求：\n1. 題目必須符合 HKDSE Physics 課程標準及問法。\n2. 提供詳細的答案解釋 (Explanation) 及評分標準 (Marking Scheme)。\n3. 請以${language}輸出。`;
 
         navigator.clipboard.writeText(promptText);
+        
         const newHistory = { id: Date.now(), date: new Date().toISOString().split('T')[0], studentId: student.id, studentName: student.label, topics: topic.name, difficulty: mappedDifficulty, count: defaultCount, status: 'pending', score: '-', maxScore: defaultCount };
         setHistory([newHistory, ...history]);
         alert(`Prompt 已複製！\n難度設定為：${mappedDifficulty}\n已為 ${student.label} 建立跟進紀錄。`);
+    };
+
+    // 【新增】綜合課題生成 (多選)
+    const handleBatchGenerate = (student, topics) => {
+        const mappedDifficulty = difficultyMap[defaultDifficulty] || defaultDifficulty;
+        
+        // 整理所有選中的課題名稱與分數
+        const topicsListStr = topics.map((t, idx) => `${idx + 1}. ${t.name} (得分率: ${t.percentage}%)`).join('\n');
+        
+        // 分類整理各個課題的錯題盲點
+        let conceptStr = '';
+        const topicsWithDetails = topics.filter(t => t.wrongDetails && t.wrongDetails.length > 0);
+        if (topicsWithDetails.length > 0) {
+            conceptStr = `\n\n【學生具體失分盲點】\n這名學生在以下概念中失分較多，請務必針對這些盲點設計題目：`;
+            topicsWithDetails.forEach(t => {
+                conceptStr += `\n\n[課題：${t.name}]\n- ${t.wrongDetails.join('\n- ')}`;
+            });
+        }
+
+        const promptText = `你現在是一位專業的 HKDSE Physics 導師。\n請為學生「${student.label}」生成一份「綜合針對性練習」。\n\n綜合課題範圍：\n${topicsListStr}\n\n難度要求：${mappedDifficulty}\n題目類型：${questionType}\n總題目數量：${defaultCount} 題${conceptStr}\n\n要求：\n1. 題目必須符合 HKDSE Physics 課程標準及問法，並合理分配各課題的題目比例。\n2. 提供詳細的答案解釋 (Explanation) 及評分標準 (Marking Scheme)。\n3. 請以${language}輸出。`;
+
+        navigator.clipboard.writeText(promptText);
+        
+        // 將多個課題名稱串接起來存入紀錄
+        const combinedTopicNames = topics.map(t => t.name).join(' + ');
+        const newHistory = { id: Date.now(), date: new Date().toISOString().split('T')[0], studentId: student.id, studentName: student.label, topics: combinedTopicNames, difficulty: mappedDifficulty, count: defaultCount, status: 'pending', score: '-', maxScore: defaultCount };
+        setHistory([newHistory, ...history]);
+        
+        alert(`綜合 Prompt 已複製！\n共涵蓋 ${topics.length} 個課題。\n已為 ${student.label} 建立跟進紀錄。`);
+        
+        // 生成後自動清空該學生的勾選狀態
+        setSelectedBatchTopics(prev => ({ ...prev, [student.id]: [] }));
+    };
+
+    // 【新增】切換多選狀態
+    const toggleBatchTopic = (studentId, topic) => {
+        setSelectedBatchTopics(prev => {
+            const current = prev[studentId] || [];
+            const exists = current.find(t => t.id === topic.id);
+            if (exists) {
+                return { ...prev, [studentId]: current.filter(t => t.id !== topic.id) };
+            } else {
+                return { ...prev, [studentId]: [...current, topic] };
+            }
+        });
     };
 
     const updateTopicStatus = (studentId, topicName, status) => {
@@ -291,33 +334,63 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
     return (
         <div className="p-6 max-w-7xl mx-auto">
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold flex items-center gap-2"><i data-lucide="clipboard-check"></i> 練習管理與跟進</h1>
-                <button onClick={() => setShowSettings(!showSettings)} className="px-3 py-2 bg-gray-200 rounded hover:bg-gray-300 text-sm">{showSettings ? '隱藏設定' : '展開設定'}</button>
+                <h1 className="text-2xl font-bold flex items-center gap-2">
+                   <i data-lucide="clipboard-check"></i> 練習管理與跟進
+                </h1>
+                <button onClick={() => setShowSettings(!showSettings)} className="px-3 py-2 bg-gray-200 rounded hover:bg-gray-300 text-sm">
+                    {showSettings ? '隱藏設定' : '展開設定'}
+                </button>
             </div>
 
-            {/* 設定區域 (保留原樣) */}
             {showSettings && (
                 <div className="mb-6 p-5 bg-white rounded-lg shadow-sm border border-blue-100 flex flex-wrap gap-6 items-end">
-                    <div><label className="block text-sm font-medium text-gray-700 mb-1">語言</label><select value={language} onChange={e => setLanguage(e.target.value)} className="border rounded-md px-3 py-2 w-32"><option value="繁體中文">繁體中文</option><option value="English">English</option></select></div>
-                    <div><label className="block text-sm font-medium text-gray-700 mb-1">題目類型</label><select value={questionType} onChange={e => setQuestionType(e.target.value)} className="border rounded-md px-3 py-2 w-40"><option value="MC (Multiple Choice)">MC</option><option value="LQ (Long Question)">LQ</option><option value="Mix (MC + LQ)">Mix (MC + LQ)</option></select></div>
-                    <div><label className="block text-sm font-medium text-gray-700 mb-1">難度</label><select value={defaultDifficulty} onChange={e => setDefaultDifficulty(e.target.value)} className="border rounded-md px-3 py-2 w-48"><option value="Easy">Easy (HKDSE 等級 2)</option><option value="Medium">Medium (HKDSE 等級 3)</option><option value="Hard">Hard (HKDSE 等級 4+)</option></select></div>
-                    <div><label className="block text-sm font-medium text-gray-700 mb-1">預設題目數</label><input type="number" value={defaultCount} onChange={e => setDefaultCount(e.target.value)} className="border rounded-md px-3 py-2 w-24" /></div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">語言</label>
+                        <select value={language} onChange={e => setLanguage(e.target.value)} className="border rounded-md px-3 py-2 w-32">
+                            <option value="繁體中文">繁體中文</option>
+                            <option value="English">English</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">題目類型</label>
+                        <select value={questionType} onChange={e => setQuestionType(e.target.value)} className="border rounded-md px-3 py-2 w-40">
+                            <option value="MC (Multiple Choice)">MC</option>
+                            <option value="LQ (Long Question)">LQ</option>
+                            <option value="Mix (MC + LQ)">Mix (MC + LQ)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">難度</label>
+                        <select value={defaultDifficulty} onChange={e => setDefaultDifficulty(e.target.value)} className="border rounded-md px-3 py-2 w-48">
+                            <option value="Easy">Easy (HKDSE 等級 2)</option>
+                            <option value="Medium">Medium (HKDSE 等級 3)</option>
+                            <option value="Hard">Hard (HKDSE 等級 4+)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">預設題目數</label>
+                        <input type="number" value={defaultCount} onChange={e => setDefaultCount(e.target.value)} className="border rounded-md px-3 py-2 w-24" />
+                    </div>
                 </div>
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <div className="bg-white p-4 rounded-lg shadow-sm border">
                     <label className="block font-bold mb-2">1. 選擇試卷範圍</label>
-                    <select className="w-full p-2 border rounded" value={selectedExamId} onChange={e => setSelectedExamId(e.target.value)}><option value="all">所有試卷 (綜合分析)</option>{exams.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}</select>
+                    <select className="w-full p-2 border rounded" value={selectedExamId} onChange={e => setSelectedExamId(e.target.value)}>
+                        <option value="all">所有試卷 (綜合分析)</option>
+                        {exams.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                    </select>
                 </div>
 
                 <div className="bg-white p-4 rounded-lg shadow-sm border md:col-span-2">
                     <div className="flex justify-between items-center mb-2">
                         <label className="block font-bold">2. 選擇目標學生</label>
-                        <button onClick={toggleAllStudents} className="text-sm text-blue-600 hover:underline">{selectedStudentIds.length === (students?.length || 0) ? '取消全選' : '全選所有學生'}</button>
+                        <button onClick={toggleAllStudents} className="text-sm text-blue-600 hover:underline">
+                            {selectedStudentIds.length === (students?.length || 0) ? '取消全選' : '全選所有學生'}
+                        </button>
                     </div>
-                    {/* 【修改】學生選擇區塊：添加滑動手感並注入刪除按鈕 */}
-                    <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-2 border rounded bg-gray-50">
+                    <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 border rounded bg-gray-50">
                         {sortedStudents.map(s => (
                             <div key={s.id} className="group relative">
                                 <label className={`flex items-center gap-1 pl-2 pr-6 py-1 rounded border cursor-pointer transition-colors ${selectedStudentIds.includes(s.id) ? 'bg-blue-100 border-blue-300' : 'bg-white hover:bg-gray-100'}`}>
@@ -325,7 +398,6 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
                                     <span className="text-sm">{s.label}</span>
                                     <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${s.avgScore < 40 ? 'bg-red-500 text-white' : 'bg-green-100 text-green-700'}`}>{s.avgScore}%</span>
                                     
-                                    {/* 【新增】小叉叉按鈕：僅在滑鼠移入 (group-hover) 時顯示 */}
                                     <button 
                                         onClick={(e) => handleDeleteStudent(e, s.id, s.label)}
                                         className="absolute right-1 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center rounded-full bg-gray-200 text-gray-500 hover:bg-red-500 hover:text-white opacity-0 group-hover:opacity-100 transition-all text-[10px]"
@@ -338,32 +410,88 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
                 </div>
             </div>
 
-            {/* 分析表格 (完全保留原樣) */}
             <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse min-w-max">
-                        <thead><tr className="bg-gray-800 text-white text-sm"><th className="px-4 py-3 sticky left-0 bg-gray-800 z-10 w-40 shadow-sm">學生 (總分百分比)</th><th className="px-4 py-3 border-l border-gray-700">弱點課題 (得分 &lt; 40%)</th></tr></thead>
+                        <thead>
+                            <tr className="bg-gray-800 text-white text-sm">
+                                <th className="px-4 py-3 sticky left-0 bg-gray-800 z-10 w-40 shadow-sm">學生 (總分百分比)</th>
+                                <th className="px-4 py-3 border-l border-gray-700">弱點課題 (得分 &lt; 40%)</th>
+                            </tr>
+                        </thead>
                         <tbody>
                             {selectedStudentIds.length === 0 ? (
                                 <tr><td colSpan="2" className="px-4 py-10 text-center text-gray-400">請從上方選擇學生以生成分析報告</td></tr>
                             ) : (
-                                sortedStudents.filter(s => selectedStudentIds.includes(s.id)).map(student => (
-                                    <tr key={student.id} className="border-b hover:bg-gray-50/50 transition-colors">
-                                        <td className="px-4 py-4 sticky left-0 bg-white border-r shadow-sm align-top"><div className="font-bold text-gray-800">{student.label}</div><div className="text-xs mt-1 text-gray-500">總分: <span className={`font-bold ${student.avgScore < 40 ? 'text-red-600' : 'text-green-600'}`}>{student.avgScore}%</span></div></td>
-                                        <td className="px-4 py-4 align-top"><div className="flex flex-wrap gap-3">
-                                            {student.weaknesses && student.weaknesses.length > 0 ? student.weaknesses.map(topic => {
-                                                const historyRecord = history.find(h => h.studentId === student.id && h.topics === topic.name);
-                                                const currentStatus = historyRecord ? historyRecord.status : 'pending';
-                                                return (
-                                                    <div key={topic.id} className={`w-52 bg-white border rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow ${topic.percentage < 40 ? 'border-red-200' : 'border-green-200'}`}>
-                                                        <div onClick={() => handleQuickGenerate(student, topic)} className="cursor-pointer group mb-2"><div className="text-[10px] text-blue-600 font-mono group-hover:underline">#{topic.id}</div><div className="text-sm font-bold leading-snug mb-2 group-hover:text-blue-700 h-10 overflow-hidden" title={topic.name}>{topic.name}</div><div className="flex items-center gap-2 mb-1"><div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden"><div className={`h-full ${topic.percentage < 40 ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${topic.percentage}%` }}></div></div><span className={`text-[11px] font-bold ${topic.percentage < 40 ? 'text-red-600' : 'text-green-600'}`}>{topic.score}/{topic.total} ({topic.percentage}%)</span></div></div>
-                                                        <select value={currentStatus} onChange={(e) => updateTopicStatus(student.id, topic.name, e.target.value)} className={`text-xs w-full p-1.5 rounded border outline-none cursor-pointer ${currentStatus === 'graded' ? 'bg-green-50 text-green-700 border-green-200' : currentStatus === 'submitted' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-gray-50 text-gray-600 border-gray-200'}`}><option value="pending">未完成</option><option value="submitted">已提交</option><option value="graded">已評分</option></select>
-                                                    </div>
-                                                );
-                                            }) : <div className="text-sm text-gray-400 py-2">🎉 該範圍內表現良好，無低於 40% 的課題</div>}
-                                        </div></td>
-                                    </tr>
-                                ))
+                                sortedStudents.filter(s => selectedStudentIds.includes(s.id)).map(student => {
+                                    // 獲取該學生目前被勾選的多個課題
+                                    const studentSelectedTopics = selectedBatchTopics[student.id] || [];
+
+                                    return (
+                                        <tr key={student.id} className="border-b hover:bg-gray-50/50 transition-colors">
+                                            <td className="px-4 py-4 sticky left-0 bg-white border-r shadow-sm align-top">
+                                                <div className="font-bold text-gray-800">{student.label}</div>
+                                                <div className="text-xs mt-1 text-gray-500">
+                                                    總分: <span className={`font-bold ${student.avgScore < 40 ? 'text-red-600' : 'text-green-600'}`}>{student.avgScore}%</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-4 align-top">
+                                                <div className="flex flex-wrap gap-3 items-stretch">
+                                                    {student.weaknesses && student.weaknesses.length > 0 ? student.weaknesses.map(topic => {
+                                                        const historyRecord = history.find(h => h.studentId === student.id && h.topics === topic.name);
+                                                        const currentStatus = historyRecord ? historyRecord.status : 'pending';
+                                                        const isDanger = topic.percentage < 40;
+                                                        
+                                                        // 判斷此課題是否被勾選 (多選狀態)
+                                                        const isSelectedForBatch = !!studentSelectedTopics.find(t => t.id === topic.id);
+
+                                                        return (
+                                                            <div key={topic.id} className={`relative w-52 bg-white border rounded-lg p-3 shadow-sm hover:shadow-md transition-all ${isDanger ? 'border-red-200' : 'border-green-200'} ${isSelectedForBatch ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}>
+                                                                
+                                                                {/* 【新增】多選用 Checkbox */}
+                                                                <input 
+                                                                    type="checkbox" 
+                                                                    className="absolute top-3 right-3 w-4 h-4 cursor-pointer accent-blue-600"
+                                                                    checked={isSelectedForBatch}
+                                                                    onChange={() => toggleBatchTopic(student.id, topic)}
+                                                                    title="打勾以生成綜合練習"
+                                                                />
+
+                                                                <div onClick={() => handleQuickGenerate(student, topic)} className="cursor-pointer group mb-2 pr-6">
+                                                                    <div className="text-[10px] text-blue-600 font-mono group-hover:underline">#{topic.id}</div>
+                                                                    <div className="text-sm font-bold leading-snug mb-2 group-hover:text-blue-700 h-10 overflow-hidden" title={topic.name}>{topic.name}</div>
+                                                                    <div className="flex items-center gap-2 mb-1">
+                                                                        <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                                                                            <div className={`h-full ${isDanger ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${topic.percentage}%` }}></div>
+                                                                        </div>
+                                                                        <span className={`text-[11px] font-bold ${isDanger ? 'text-red-600' : 'text-green-600'}`}>
+                                                                            {topic.score}/{topic.total} ({topic.percentage}%)
+                                                                       </span>
+                                                                    </div>
+                                                                </div>
+                                                                <select value={currentStatus} onChange={(e) => updateTopicStatus(student.id, topic.name, e.target.value)} className={`text-xs w-full p-1.5 rounded border outline-none cursor-pointer ${currentStatus === 'graded' ? 'bg-green-50 text-green-700 border-green-200' : currentStatus === 'submitted' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-gray-50 text-gray-600 border-gray-200'}`}>
+                                                                    <option value="pending">未完成</option><option value="submitted">已提交</option><option value="graded">已評分</option>
+                                                                </select>
+                                                            </div>
+                                                        );
+                                                    }) : <div className="text-sm text-gray-400 py-2">🎉 該範圍內表現良好，無低於 40% 的課題</div>}
+
+                                                    {/* 【新增】如果勾選了 2 個或以上的課題，顯示「綜合生成按鈕」 */}
+                                                    {studentSelectedTopics.length > 1 && (
+                                                        <div className="flex items-center justify-center w-40 bg-blue-50 border border-blue-200 border-dashed rounded-lg p-3 shadow-sm hover:bg-blue-100 transition-colors cursor-pointer" onClick={() => handleBatchGenerate(student, studentSelectedTopics)}>
+                                                            <div className="flex flex-col items-center gap-1 text-blue-600">
+                                                                <span className="text-2xl mb-1">📋</span>
+                                                                <span className="font-bold text-sm">生成綜合練習</span>
+                                                                <span className="text-xs font-normal text-blue-500">已選 {studentSelectedTopics.length} 個</span>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })
                             )}
                         </tbody>
                     </table>
@@ -372,6 +500,7 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
         </div>
     );
 };
+        
         // --- Main App ---
         const App = () => {
             const [view, setView] = useState('upload'); 
