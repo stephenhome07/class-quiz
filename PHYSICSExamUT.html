@@ -145,7 +145,7 @@
                 />
             </div>
         );
-// 【多選綜合 + 永久刪除 + 版面優化 + 按 Topic ID 排序版】GenerateView
+// 【獨立試卷狀態 + 頑固弱點警示版】GenerateView
 const GenerateView = ({ students = [], setStudents, exams = [], history = [], setHistory }) => {
     const [selectedExamId, setSelectedExamId] = React.useState(() => {
         return exams && exams.length > 0 ? exams[exams.length - 1].id : 'all';
@@ -243,8 +243,6 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
                         wrongDetails: Array.from(t.wrongDetails) 
                     }))
                     .filter(t => t.percentage < 40) 
-                    // 【修改這裡】原本是按分數排：.sort((a, b) => a.percentage - b.percentage);
-                    // 現在改為按 Topic ID 自然排序，確保 1.2 會排在 1.10 前面
                     .sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true, sensitivity: 'base' })); 
 
                 const avgScore = totalMaxSum > 0 ? Math.round((totalScoreSum / totalMaxSum) * 100) : 0;
@@ -278,23 +276,21 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
 
         navigator.clipboard.writeText(promptText);
         
-        const newHistory = { id: Date.now(), date: new Date().toISOString().split('T')[0], studentId: student.id, studentName: student.label, topics: topic.name, difficulty: mappedDifficulty, count: defaultCount, status: 'pending', score: '-', maxScore: defaultCount };
+        // 【修改】生成時儲存 examId，綁定試卷
+        const newHistory = { id: Date.now(), date: new Date().toISOString().split('T')[0], studentId: student.id, studentName: student.label, topics: topic.name, difficulty: mappedDifficulty, count: defaultCount, status: 'pending', score: '-', maxScore: defaultCount, examId: selectedExamId };
         setHistory([newHistory, ...history]);
         alert(`Prompt 已複製！\n難度設定為：${mappedDifficulty}\n已為 ${student.label} 建立跟進紀錄。`);
     };
 
     const handleBatchGenerate = (student, topics) => {
         const mappedDifficulty = difficultyMap[defaultDifficulty] || defaultDifficulty;
-        
         const topicsListStr = topics.map((t, idx) => `${idx + 1}. [${t.id}] ${t.name} (得分率: ${t.percentage}%)`).join('\n');
         
         let conceptStr = '';
         const topicsWithDetails = topics.filter(t => t.wrongDetails && t.wrongDetails.length > 0);
         if (topicsWithDetails.length > 0) {
             conceptStr = `\n\n【學生具體失分盲點】\n這名學生在以下概念中失分較多，請務必針對這些盲點設計題目：`;
-            topicsWithDetails.forEach(t => {
-                conceptStr += `\n\n[課題：${t.name}]\n- ${t.wrongDetails.join('\n- ')}`;
-            });
+            topicsWithDetails.forEach(t => { conceptStr += `\n\n[課題：${t.name}]\n- ${t.wrongDetails.join('\n- ')}`; });
         }
 
         const promptText = `你現在是一位專業的 HKDSE Physics 導師。\n請為學生「${student.label}」生成一份「綜合針對性練習」。\n\n綜合課題範圍：\n${topicsListStr}\n\n難度要求：${mappedDifficulty}\n題目類型：${questionType}\n總題目數量：${defaultCount} 題${conceptStr}\n\n要求：\n1. 題目必須符合 HKDSE Physics 課程標準及問法，並合理分配各課題的題目比例。\n2. 提供詳細的答案解釋 (Explanation) 及評分標準 (Marking Scheme)。\n3. 請以${language}輸出。`;
@@ -302,11 +298,11 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
         navigator.clipboard.writeText(promptText);
         
         const combinedTopicNames = topics.map(t => t.name).join(' + ');
-        const newHistory = { id: Date.now(), date: new Date().toISOString().split('T')[0], studentId: student.id, studentName: student.label, topics: combinedTopicNames, difficulty: mappedDifficulty, count: defaultCount, status: 'pending', score: '-', maxScore: defaultCount };
+        // 【修改】生成時儲存 examId，綁定試卷
+        const newHistory = { id: Date.now(), date: new Date().toISOString().split('T')[0], studentId: student.id, studentName: student.label, topics: combinedTopicNames, difficulty: mappedDifficulty, count: defaultCount, status: 'pending', score: '-', maxScore: defaultCount, examId: selectedExamId };
         setHistory([newHistory, ...history]);
         
         alert(`綜合 Prompt 已複製！\n共涵蓋 ${topics.length} 個課題。\n已為 ${student.label} 建立跟進紀錄。`);
-        
         setSelectedBatchTopics(prev => ({ ...prev, [student.id]: [] }));
     };
 
@@ -314,20 +310,25 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
         setSelectedBatchTopics(prev => {
             const current = prev[studentId] || [];
             const exists = current.find(t => t.id === topic.id);
-            if (exists) {
-                return { ...prev, [studentId]: current.filter(t => t.id !== topic.id) };
-            } else {
-                return { ...prev, [studentId]: [...current, topic] };
-            }
+            if (exists) return { ...prev, [studentId]: current.filter(t => t.id !== topic.id) };
+            else return { ...prev, [studentId]: [...current, topic] };
         });
     };
 
     const updateTopicStatus = (studentId, topicName, status) => {
-        const record = history.find(h => h.studentId === studentId && h.topics === topicName);
-        if (record) setHistory(history.map(h => h.id === record.id ? { ...h, status } : h));
-        else {
+        // 【修改】更新狀態時，只尋找該單一試卷的紀錄
+        let record;
+        if (selectedExamId === 'all') {
+            record = history.find(h => h.studentId === studentId && h.topics.includes(topicName));
+        } else {
+            record = history.find(h => h.studentId === studentId && h.topics.includes(topicName) && h.examId === selectedExamId);
+        }
+
+        if (record) {
+            setHistory(history.map(h => h.id === record.id ? { ...h, status } : h));
+        } else {
             const student = students.find(s => s.id === studentId);
-            setHistory([{ id: Date.now(), date: new Date().toISOString().split('T')[0], studentId, studentName: student?.label || studentId, topics: topicName, difficulty: defaultDifficulty, count: defaultCount, status, score: '-', maxScore: defaultCount }, ...history]);
+            setHistory([{ id: Date.now(), date: new Date().toISOString().split('T')[0], studentId, studentName: student?.label || studentId, topics: topicName, difficulty: defaultDifficulty, count: defaultCount, status, score: '-', maxScore: defaultCount, examId: selectedExamId }, ...history]);
         }
     };
 
@@ -444,8 +445,18 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
                                                 
                                                 <div className="flex flex-wrap gap-3 items-stretch">
                                                     {student.weaknesses && student.weaknesses.length > 0 ? student.weaknesses.map(topic => {
-                                                        const historyRecord = history.find(h => h.studentId === student.id && h.topics === topic.name);
-                                                        const currentStatus = historyRecord ? historyRecord.status : 'pending';
+                                                        // 【修改】抓取狀態時，只看當前選擇的這份試卷
+                                                        let currentRecord;
+                                                        if (selectedExamId === 'all') {
+                                                            currentRecord = history.find(h => h.studentId === student.id && h.topics.includes(topic.name));
+                                                        } else {
+                                                            currentRecord = history.find(h => h.studentId === student.id && h.topics.includes(topic.name) && h.examId === selectedExamId);
+                                                        }
+                                                        const currentStatus = currentRecord ? currentRecord.status : 'pending';
+                                                        
+                                                        // 【新增】判斷是否為「頑固弱點」(在其他試卷/過去已經被跟進過)
+                                                        const isStubborn = selectedExamId !== 'all' && history.some(h => h.studentId === student.id && h.topics.includes(topic.name) && h.examId !== selectedExamId);
+
                                                         const isDanger = topic.percentage < 40;
                                                         const isSelectedForBatch = !!studentSelectedTopics.find(t => t.id === topic.id);
 
@@ -459,7 +470,16 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
                                                                     title="打勾以生成綜合練習"
                                                                 />
                                                                 <div onClick={() => handleQuickGenerate(student, topic)} className="cursor-pointer group mb-2 pr-6">
-                                                                    <div className="text-[10px] text-blue-600 font-mono group-hover:underline">#{topic.id}</div>
+                                                                    <div className="flex justify-between items-start">
+                                                                        <div className="text-[10px] text-blue-600 font-mono group-hover:underline">#{topic.id}</div>
+                                                                        {/* 【新增】頑固弱點警告符號 */}
+                                                                        {isStubborn && (
+                                                                            <span 
+                                                                                title="這位同學之前已經針對這個弱點補底過、你也改過他的卷子了，但他這次這個課題還是考砸了喔！" 
+                                                                                className="text-orange-500 cursor-help"
+                                                                            >⚠️</span>
+                                                                        )}
+                                                                    </div>
                                                                     <div className="text-sm font-bold leading-snug mb-2 group-hover:text-blue-700 h-10 overflow-hidden" title={topic.name}>{topic.name}</div>
                                                                     <div className="flex items-center gap-2 mb-1">
                                                                         <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
