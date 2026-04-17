@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>V2.6 PHYSICS EXAM UT </title>
+    <title>V2.7 PHYSICS EXAM UT </title>
     
     <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -145,7 +145,7 @@
                 />
             </div>
         );
-// 【多選綜合 + 永久刪除 + 版面優化版】GenerateView
+// 【多選綜合 + 永久刪除 + 版面優化 + 按 Topic ID 排序版】GenerateView
 const GenerateView = ({ students = [], setStudents, exams = [], history = [], setHistory }) => {
     const [selectedExamId, setSelectedExamId] = React.useState(() => {
         return exams && exams.length > 0 ? exams[exams.length - 1].id : 'all';
@@ -156,7 +156,6 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
         return saved ? JSON.parse(saved) : [];
     });
 
-    // 【新增】記錄被永久隱藏/刪除的學生 ID
     const [deletedStudentIds, setDeletedStudentIds] = React.useState(() => {
         const saved = localStorage.getItem('hkdse_deleted_students_v2');
         return saved ? JSON.parse(saved) : [];
@@ -168,7 +167,6 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
         localStorage.setItem('generateView_selectedStudents', JSON.stringify(selectedStudentIds));
     }, [selectedStudentIds]);
 
-    // 【新增】保存刪除名單到 LocalStorage
     React.useEffect(() => {
         localStorage.setItem('hkdse_deleted_students_v2', JSON.stringify(deletedStudentIds));
     }, [deletedStudentIds]);
@@ -178,9 +176,7 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
         e.stopPropagation(); 
         
         if (confirm(`確定要永久刪除學生「${studentName}」的記錄嗎？\n這將使該學生從名單中消失（重新整理也不會再出現）。`)) {
-            // 將學生加入黑名單，徹底隱藏
             setDeletedStudentIds(prev => [...prev, studentId]);
-            // 從勾選名單中移除
             setSelectedStudentIds(prev => prev.filter(id => id !== studentId));
         }
     };
@@ -247,7 +243,9 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
                         wrongDetails: Array.from(t.wrongDetails) 
                     }))
                     .filter(t => t.percentage < 40) 
-                    .sort((a, b) => a.percentage - b.percentage); 
+                    // 【修改這裡】原本是按分數排：.sort((a, b) => a.percentage - b.percentage);
+                    // 現在改為按 Topic ID 自然排序，確保 1.2 會排在 1.10 前面
+                    .sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true, sensitivity: 'base' })); 
 
                 const avgScore = totalMaxSum > 0 ? Math.round((totalScoreSum / totalMaxSum) * 100) : 0;
                 return { ...student, weaknesses, avgScore };
@@ -259,7 +257,6 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
     }, [selectedExamId, students, exams]);
 
     const toggleAllStudents = () => {
-        // 過濾掉被刪除的學生
         const availableStudents = students.filter(s => !deletedStudentIds.includes(s.id));
         if (selectedStudentIds.length === availableStudents.length) setSelectedStudentIds([]);
         else setSelectedStudentIds(availableStudents.map(s => s.id));
@@ -289,7 +286,7 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
     const handleBatchGenerate = (student, topics) => {
         const mappedDifficulty = difficultyMap[defaultDifficulty] || defaultDifficulty;
         
-        const topicsListStr = topics.map((t, idx) => `${idx + 1}. ${t.name} (得分率: ${t.percentage}%)`).join('\n');
+        const topicsListStr = topics.map((t, idx) => `${idx + 1}. [${t.id}] ${t.name} (得分率: ${t.percentage}%)`).join('\n');
         
         let conceptStr = '';
         const topicsWithDetails = topics.filter(t => t.wrongDetails && t.wrongDetails.length > 0);
@@ -334,7 +331,6 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
         }
     };
 
-    // 【修改】過濾掉已經被刪除（在黑名單中）的學生
     const sortedStudents = React.useMemo(() => {
         return [...studentsAnalysis]
             .filter(s => !deletedStudentIds.includes(s.id))
@@ -446,7 +442,6 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
                                             </td>
                                             <td className="px-4 py-4 align-top">
                                                 
-                                                {/* 課題卡片區 */}
                                                 <div className="flex flex-wrap gap-3 items-stretch">
                                                     {student.weaknesses && student.weaknesses.length > 0 ? student.weaknesses.map(topic => {
                                                         const historyRecord = history.find(h => h.studentId === student.id && h.topics === topic.name);
@@ -483,7 +478,6 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
                                                     }) : <div className="text-sm text-gray-400 py-2">🎉 該範圍內表現良好，無低於 40% 的課題</div>}
                                                 </div>
 
-                                                {/* 【修改】綜合生成按鈕移到下方獨立佔位，不再跟著卡片水平排列 */}
                                                 {studentSelectedTopics.length > 1 && (
                                                     <div 
                                                         className="mt-4 w-full max-w-md flex items-center justify-center bg-blue-50 border border-blue-400 border-dashed rounded-lg py-3 px-4 shadow-sm hover:bg-blue-100 transition-colors cursor-pointer" 
