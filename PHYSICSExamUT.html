@@ -145,7 +145,7 @@
                 />
             </div>
         );
-// 【獨立試卷狀態 + 頑固弱點警示版】GenerateView
+// 【弱點跟進進度條 + 簡化狀態版】GenerateView
 const GenerateView = ({ students = [], setStudents, exams = [], history = [], setHistory }) => {
     const [selectedExamId, setSelectedExamId] = React.useState(() => {
         return exams && exams.length > 0 ? exams[exams.length - 1].id : 'all';
@@ -276,7 +276,6 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
 
         navigator.clipboard.writeText(promptText);
         
-        // 【修改】生成時儲存 examId，綁定試卷
         const newHistory = { id: Date.now(), date: new Date().toISOString().split('T')[0], studentId: student.id, studentName: student.label, topics: topic.name, difficulty: mappedDifficulty, count: defaultCount, status: 'pending', score: '-', maxScore: defaultCount, examId: selectedExamId };
         setHistory([newHistory, ...history]);
         alert(`Prompt 已複製！\n難度設定為：${mappedDifficulty}\n已為 ${student.label} 建立跟進紀錄。`);
@@ -298,7 +297,6 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
         navigator.clipboard.writeText(promptText);
         
         const combinedTopicNames = topics.map(t => t.name).join(' + ');
-        // 【修改】生成時儲存 examId，綁定試卷
         const newHistory = { id: Date.now(), date: new Date().toISOString().split('T')[0], studentId: student.id, studentName: student.label, topics: combinedTopicNames, difficulty: mappedDifficulty, count: defaultCount, status: 'pending', score: '-', maxScore: defaultCount, examId: selectedExamId };
         setHistory([newHistory, ...history]);
         
@@ -316,7 +314,6 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
     };
 
     const updateTopicStatus = (studentId, topicName, status) => {
-        // 【修改】更新狀態時，只尋找該單一試卷的紀錄
         let record;
         if (selectedExamId === 'all') {
             record = history.find(h => h.studentId === studentId && h.topics.includes(topicName));
@@ -422,7 +419,7 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
                     <table className="w-full text-left border-collapse min-w-max">
                         <thead>
                             <tr className="bg-gray-800 text-white text-sm">
-                                <th className="px-4 py-3 sticky left-0 bg-gray-800 z-10 w-40 shadow-sm">學生 (總分百分比)</th>
+                                <th className="px-4 py-3 sticky left-0 bg-gray-800 z-10 w-44 shadow-sm">學生 (總分及進度)</th>
                                 <th className="px-4 py-3 border-l border-gray-700">弱點課題 (得分 &lt; 40%)</th>
                             </tr>
                         </thead>
@@ -433,6 +430,26 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
                                 sortedStudents.filter(s => selectedStudentIds.includes(s.id)).map(student => {
                                     const studentSelectedTopics = selectedBatchTopics[student.id] || [];
 
+                                    // 【新增】計算弱點完成進度
+                                    const totalWeaknesses = student.weaknesses ? student.weaknesses.length : 0;
+                                    let completedWeaknesses = 0;
+
+                                    if (totalWeaknesses > 0) {
+                                        student.weaknesses.forEach(topic => {
+                                            let currentRecord;
+                                            if (selectedExamId === 'all') {
+                                                currentRecord = history.find(h => h.studentId === student.id && h.topics.includes(topic.name));
+                                            } else {
+                                                currentRecord = history.find(h => h.studentId === student.id && h.topics.includes(topic.name) && h.examId === selectedExamId);
+                                            }
+                                            if (currentRecord && currentRecord.status === 'graded') {
+                                                completedWeaknesses++;
+                                            }
+                                        });
+                                    }
+
+                                    const progressPercentage = totalWeaknesses > 0 ? Math.round((completedWeaknesses / totalWeaknesses) * 100) : 0;
+
                                     return (
                                         <tr key={student.id} className="border-b hover:bg-gray-50/50 transition-colors">
                                             <td className="px-4 py-4 sticky left-0 bg-white border-r shadow-sm align-top">
@@ -440,12 +457,28 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
                                                 <div className="text-xs mt-1 text-gray-500">
                                                     總分: <span className={`font-bold ${student.avgScore < 40 ? 'text-red-600' : 'text-green-600'}`}>{student.avgScore}%</span>
                                                 </div>
+                                                
+                                                {/* 【新增】弱點跟進進度條UI */}
+                                                {totalWeaknesses > 0 && (
+                                                    <div className="mt-4 pt-3 border-t border-gray-100">
+                                                        <div className="text-[11px] text-gray-500 mb-1 flex justify-between items-end">
+                                                            <span>弱點補底進度:</span>
+                                                            <span className="font-bold text-gray-700">{completedWeaknesses} / {totalWeaknesses}</span>
+                                                        </div>
+                                                        <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                                                            <div 
+                                                                className={`h-full transition-all duration-500 ${progressPercentage === 100 ? 'bg-green-500' : progressPercentage > 0 ? 'bg-blue-500' : 'bg-transparent'}`} 
+                                                                style={{ width: `${progressPercentage}%` }}
+                                                            ></div>
+                                                        </div>
+                                                        <div className="text-[10px] text-right mt-1 font-semibold text-gray-400">{progressPercentage}% 完成</div>
+                                                    </div>
+                                                )}
                                             </td>
                                             <td className="px-4 py-4 align-top">
                                                 
                                                 <div className="flex flex-wrap gap-3 items-stretch">
                                                     {student.weaknesses && student.weaknesses.length > 0 ? student.weaknesses.map(topic => {
-                                                        // 【修改】抓取狀態時，只看當前選擇的這份試卷
                                                         let currentRecord;
                                                         if (selectedExamId === 'all') {
                                                             currentRecord = history.find(h => h.studentId === student.id && h.topics.includes(topic.name));
@@ -454,9 +487,7 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
                                                         }
                                                         const currentStatus = currentRecord ? currentRecord.status : 'pending';
                                                         
-                                                        // 【新增】判斷是否為「頑固弱點」(在其他試卷/過去已經被跟進過)
                                                         const isStubborn = selectedExamId !== 'all' && history.some(h => h.studentId === student.id && h.topics.includes(topic.name) && h.examId !== selectedExamId);
-
                                                         const isDanger = topic.percentage < 40;
                                                         const isSelectedForBatch = !!studentSelectedTopics.find(t => t.id === topic.id);
 
@@ -472,7 +503,6 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
                                                                 <div onClick={() => handleQuickGenerate(student, topic)} className="cursor-pointer group mb-2 pr-6">
                                                                     <div className="flex justify-between items-start">
                                                                         <div className="text-[10px] text-blue-600 font-mono group-hover:underline">#{topic.id}</div>
-                                                                        {/* 【新增】頑固弱點警告符號 */}
                                                                         {isStubborn && (
                                                                             <span 
                                                                                 title="這位同學之前已經針對這個弱點補底過、你也改過他的卷子了，但他這次這個課題還是考砸了喔！" 
@@ -490,8 +520,15 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
                                                                        </span>
                                                                     </div>
                                                                 </div>
-                                                                <select value={currentStatus} onChange={(e) => updateTopicStatus(student.id, topic.name, e.target.value)} className={`text-xs w-full p-1.5 rounded border outline-none cursor-pointer ${currentStatus === 'graded' ? 'bg-green-50 text-green-700 border-green-200' : currentStatus === 'submitted' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-gray-50 text-gray-600 border-gray-200'}`}>
-                                                                    <option value="pending">未完成</option><option value="submitted">已提交</option><option value="graded">已評分</option>
+                                                                
+                                                                {/* 【修改】簡化狀態選單：只保留「未完成」和「已評分 (已完成)」 */}
+                                                                <select 
+                                                                    value={currentStatus} 
+                                                                    onChange={(e) => updateTopicStatus(student.id, topic.name, e.target.value)} 
+                                                                    className={`text-xs w-full p-1.5 rounded border outline-none cursor-pointer ${currentStatus === 'graded' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-600 border-gray-200'}`}
+                                                                >
+                                                                    <option value="pending">未完成</option>
+                                                                    <option value="graded">已評分 (已完成)</option>
                                                                 </select>
                                                             </div>
                                                         );
