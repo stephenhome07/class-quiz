@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>V2.5 PHYSICS EXAM UT </title>
+    <title>V2.6 PHYSICS EXAM UT </title>
     
     <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -145,7 +145,7 @@
                 />
             </div>
         );
-// 【多選綜合版】GenerateView - 支援勾選多個課題一鍵生成綜合練習
+// 【多選綜合 + 永久刪除 + 版面優化版】GenerateView
 const GenerateView = ({ students = [], setStudents, exams = [], history = [], setHistory }) => {
     const [selectedExamId, setSelectedExamId] = React.useState(() => {
         return exams && exams.length > 0 ? exams[exams.length - 1].id : 'all';
@@ -156,21 +156,31 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
         return saved ? JSON.parse(saved) : [];
     });
 
-    // 【新增】記錄每個學生被勾選的課題 { "studentId": [topic1, topic2] }
+    // 【新增】記錄被永久隱藏/刪除的學生 ID
+    const [deletedStudentIds, setDeletedStudentIds] = React.useState(() => {
+        const saved = localStorage.getItem('hkdse_deleted_students_v2');
+        return saved ? JSON.parse(saved) : [];
+    });
+
     const [selectedBatchTopics, setSelectedBatchTopics] = React.useState({});
 
     React.useEffect(() => {
         localStorage.setItem('generateView_selectedStudents', JSON.stringify(selectedStudentIds));
     }, [selectedStudentIds]);
 
+    // 【新增】保存刪除名單到 LocalStorage
+    React.useEffect(() => {
+        localStorage.setItem('hkdse_deleted_students_v2', JSON.stringify(deletedStudentIds));
+    }, [deletedStudentIds]);
+
     const handleDeleteStudent = (e, studentId, studentName) => {
         e.preventDefault(); 
         e.stopPropagation(); 
         
-        if (confirm(`確定要永久刪除學生「${studentName}」的記錄嗎？\n這將使該學生從名單中消失（已有的歷史跟進記錄會保留但無法再關聯）。`)) {
-            const newStudents = students.filter(s => s.id !== studentId);
-            setStudents(newStudents);
-            localStorage.setItem('hkdse_students', JSON.stringify(newStudents));
+        if (confirm(`確定要永久刪除學生「${studentName}」的記錄嗎？\n這將使該學生從名單中消失（重新整理也不會再出現）。`)) {
+            // 將學生加入黑名單，徹底隱藏
+            setDeletedStudentIds(prev => [...prev, studentId]);
+            // 從勾選名單中移除
             setSelectedStudentIds(prev => prev.filter(id => id !== studentId));
         }
     };
@@ -249,8 +259,10 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
     }, [selectedExamId, students, exams]);
 
     const toggleAllStudents = () => {
-        if (selectedStudentIds.length === students.length) setSelectedStudentIds([]);
-        else setSelectedStudentIds(students.map(s => s.id));
+        // 過濾掉被刪除的學生
+        const availableStudents = students.filter(s => !deletedStudentIds.includes(s.id));
+        if (selectedStudentIds.length === availableStudents.length) setSelectedStudentIds([]);
+        else setSelectedStudentIds(availableStudents.map(s => s.id));
     };
 
     const difficultyMap = {
@@ -259,7 +271,6 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
         'Hard': 'HKDSE 等級 4 或以上 (進階)'
     };
 
-    // 單一課題生成 (保留原功能)
     const handleQuickGenerate = (student, topic) => {
         const mappedDifficulty = difficultyMap[defaultDifficulty] || defaultDifficulty;
         const conceptStr = topic.wrongDetails && topic.wrongDetails.length > 0
@@ -275,14 +286,11 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
         alert(`Prompt 已複製！\n難度設定為：${mappedDifficulty}\n已為 ${student.label} 建立跟進紀錄。`);
     };
 
-    // 【新增】綜合課題生成 (多選)
     const handleBatchGenerate = (student, topics) => {
         const mappedDifficulty = difficultyMap[defaultDifficulty] || defaultDifficulty;
         
-        // 整理所有選中的課題名稱與分數
         const topicsListStr = topics.map((t, idx) => `${idx + 1}. ${t.name} (得分率: ${t.percentage}%)`).join('\n');
         
-        // 分類整理各個課題的錯題盲點
         let conceptStr = '';
         const topicsWithDetails = topics.filter(t => t.wrongDetails && t.wrongDetails.length > 0);
         if (topicsWithDetails.length > 0) {
@@ -296,18 +304,15 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
 
         navigator.clipboard.writeText(promptText);
         
-        // 將多個課題名稱串接起來存入紀錄
         const combinedTopicNames = topics.map(t => t.name).join(' + ');
         const newHistory = { id: Date.now(), date: new Date().toISOString().split('T')[0], studentId: student.id, studentName: student.label, topics: combinedTopicNames, difficulty: mappedDifficulty, count: defaultCount, status: 'pending', score: '-', maxScore: defaultCount };
         setHistory([newHistory, ...history]);
         
         alert(`綜合 Prompt 已複製！\n共涵蓋 ${topics.length} 個課題。\n已為 ${student.label} 建立跟進紀錄。`);
         
-        // 生成後自動清空該學生的勾選狀態
         setSelectedBatchTopics(prev => ({ ...prev, [student.id]: [] }));
     };
 
-    // 【新增】切換多選狀態
     const toggleBatchTopic = (studentId, topic) => {
         setSelectedBatchTopics(prev => {
             const current = prev[studentId] || [];
@@ -329,7 +334,12 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
         }
     };
 
-    const sortedStudents = React.useMemo(() => [...studentsAnalysis].sort((a, b) => a.avgScore - b.avgScore), [studentsAnalysis]);
+    // 【修改】過濾掉已經被刪除（在黑名單中）的學生
+    const sortedStudents = React.useMemo(() => {
+        return [...studentsAnalysis]
+            .filter(s => !deletedStudentIds.includes(s.id))
+            .sort((a, b) => a.avgScore - b.avgScore);
+    }, [studentsAnalysis, deletedStudentIds]);
 
     return (
         <div className="p-6 max-w-7xl mx-auto">
@@ -387,7 +397,7 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
                     <div className="flex justify-between items-center mb-2">
                         <label className="block font-bold">2. 選擇目標學生</label>
                         <button onClick={toggleAllStudents} className="text-sm text-blue-600 hover:underline">
-                            {selectedStudentIds.length === (students?.length || 0) ? '取消全選' : '全選所有學生'}
+                            {selectedStudentIds.length === sortedStudents.length ? '取消全選' : '全選所有學生'}
                         </button>
                     </div>
                     <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 border rounded bg-gray-50">
@@ -424,7 +434,6 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
                                 <tr><td colSpan="2" className="px-4 py-10 text-center text-gray-400">請從上方選擇學生以生成分析報告</td></tr>
                             ) : (
                                 sortedStudents.filter(s => selectedStudentIds.includes(s.id)).map(student => {
-                                    // 獲取該學生目前被勾選的多個課題
                                     const studentSelectedTopics = selectedBatchTopics[student.id] || [];
 
                                     return (
@@ -436,19 +445,17 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
                                                 </div>
                                             </td>
                                             <td className="px-4 py-4 align-top">
+                                                
+                                                {/* 課題卡片區 */}
                                                 <div className="flex flex-wrap gap-3 items-stretch">
                                                     {student.weaknesses && student.weaknesses.length > 0 ? student.weaknesses.map(topic => {
                                                         const historyRecord = history.find(h => h.studentId === student.id && h.topics === topic.name);
                                                         const currentStatus = historyRecord ? historyRecord.status : 'pending';
                                                         const isDanger = topic.percentage < 40;
-                                                        
-                                                        // 判斷此課題是否被勾選 (多選狀態)
                                                         const isSelectedForBatch = !!studentSelectedTopics.find(t => t.id === topic.id);
 
                                                         return (
                                                             <div key={topic.id} className={`relative w-52 bg-white border rounded-lg p-3 shadow-sm hover:shadow-md transition-all ${isDanger ? 'border-red-200' : 'border-green-200'} ${isSelectedForBatch ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}>
-                                                                
-                                                                {/* 【新增】多選用 Checkbox */}
                                                                 <input 
                                                                     type="checkbox" 
                                                                     className="absolute top-3 right-3 w-4 h-4 cursor-pointer accent-blue-600"
@@ -456,7 +463,6 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
                                                                     onChange={() => toggleBatchTopic(student.id, topic)}
                                                                     title="打勾以生成綜合練習"
                                                                 />
-
                                                                 <div onClick={() => handleQuickGenerate(student, topic)} className="cursor-pointer group mb-2 pr-6">
                                                                     <div className="text-[10px] text-blue-600 font-mono group-hover:underline">#{topic.id}</div>
                                                                     <div className="text-sm font-bold leading-snug mb-2 group-hover:text-blue-700 h-10 overflow-hidden" title={topic.name}>{topic.name}</div>
@@ -475,19 +481,22 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
                                                             </div>
                                                         );
                                                     }) : <div className="text-sm text-gray-400 py-2">🎉 該範圍內表現良好，無低於 40% 的課題</div>}
-
-                                                    {/* 【新增】如果勾選了 2 個或以上的課題，顯示「綜合生成按鈕」 */}
-                                                    {studentSelectedTopics.length > 1 && (
-                                                        <div className="flex items-center justify-center w-40 bg-blue-50 border border-blue-200 border-dashed rounded-lg p-3 shadow-sm hover:bg-blue-100 transition-colors cursor-pointer" onClick={() => handleBatchGenerate(student, studentSelectedTopics)}>
-                                                            <div className="flex flex-col items-center gap-1 text-blue-600">
-                                                                <span className="text-2xl mb-1">📋</span>
-                                                                <span className="font-bold text-sm">生成綜合練習</span>
-                                                                <span className="text-xs font-normal text-blue-500">已選 {studentSelectedTopics.length} 個</span>
-                                                            </div>
-                                                        </div>
-                                                    )}
-
                                                 </div>
+
+                                                {/* 【修改】綜合生成按鈕移到下方獨立佔位，不再跟著卡片水平排列 */}
+                                                {studentSelectedTopics.length > 1 && (
+                                                    <div 
+                                                        className="mt-4 w-full max-w-md flex items-center justify-center bg-blue-50 border border-blue-400 border-dashed rounded-lg py-3 px-4 shadow-sm hover:bg-blue-100 transition-colors cursor-pointer" 
+                                                        onClick={() => handleBatchGenerate(student, studentSelectedTopics)}
+                                                    >
+                                                        <div className="flex items-center gap-3 text-blue-700">
+                                                            <span className="text-2xl">📋</span>
+                                                            <span className="font-bold text-base">一鍵生成綜合練習</span>
+                                                            <span className="text-xs font-normal bg-blue-200 px-2 py-1 rounded-full">已選 {studentSelectedTopics.length} 個課題</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+
                                             </td>
                                         </tr>
                                     );
