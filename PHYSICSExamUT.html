@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>V2.7 PHYSICS EXAM UT </title>
+    <title>V2.8 PHYSICS EXAM UT </title>
     
     <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -145,7 +145,7 @@
                 />
             </div>
         );
-// 【弱點跟進進度條 + 簡化狀態版】GenerateView
+// 【狀態防護 + 救援按鈕版】GenerateView
 const GenerateView = ({ students = [], setStudents, exams = [], history = [], setHistory }) => {
     const [selectedExamId, setSelectedExamId] = React.useState(() => {
         return exams && exams.length > 0 ? exams[exams.length - 1].id : 'all';
@@ -175,7 +175,7 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
         e.preventDefault(); 
         e.stopPropagation(); 
         
-        if (confirm(`確定要永久刪除學生「${studentName}」的記錄嗎？\n這將使該學生從名單中消失（重新整理也不會再出現）。`)) {
+        if (confirm(`確定要暫時隱藏學生「${studentName}」嗎？\n這將使該學生從名單中消失（可從上方設定中還原）。`)) {
             setDeletedStudentIds(prev => [...prev, studentId]);
             setSelectedStudentIds(prev => prev.filter(id => id !== studentId));
         }
@@ -186,6 +186,22 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
     const [defaultDifficulty, setDefaultDifficulty] = React.useState('Medium'); 
     const [language, setLanguage] = React.useState('繁體中文');
     const [questionType, setQuestionType] = React.useState('MC (Multiple Choice)');
+
+    // 【新增】智能抓取狀態，防止因為按了生成新 Prompt 而蓋掉「已評分」的狀態
+    const getTopicStatus = React.useCallback((studentId, topicName) => {
+        let relevantRecords;
+        if (selectedExamId === 'all') {
+            relevantRecords = history.filter(h => h.studentId === studentId && h.topics.includes(topicName));
+        } else {
+            // 向下兼容：把舊版沒有 examId 的記錄也納入計算
+            relevantRecords = history.filter(h => h.studentId === studentId && h.topics.includes(topicName) && (h.examId === selectedExamId || !h.examId));
+        }
+        
+        if (relevantRecords.length === 0) return 'pending';
+        // 只要有任何一筆相關紀錄是 graded，就視為已完成，永不退回 pending
+        if (relevantRecords.some(r => r.status === 'graded')) return 'graded';
+        return 'pending';
+    }, [history, selectedExamId]);
 
     const studentsAnalysis = React.useMemo(() => {
         try {
@@ -214,23 +230,36 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
 
                     if (studentRow) {
                         mapData.forEach(q => {
-                            const qId = q.Question_ID || q.questionId || q.id;
-                            const topicName = q.Topic_Name || q.topic || '未分類課題';
-                            const topicId = q.Topic_ID || '';
-                            const conceptDetail = q.Concept_Detail || ''; 
-                            if (!qId) return;
-                            const rawScore = studentRow[qId];
+                            const rawQId = String(q.Question_ID || q.questionId || q.id || '').trim();
+                            if (!rawQId) return;
+                            
+                            const topicName = String(q.Topic_Name || q.topic || '未分類課題').trim();
+                            const topicId = String(q.Topic_ID || '').trim();
+                            const conceptDetail = String(q.Concept_Detail || '').trim(); 
+                            
+                            let rawScore = studentRow[rawQId];
+                            if (rawScore === undefined || rawScore === '') {
+                                const altQId1 = `Q${rawQId}`; 
+                                const altQId2 = rawQId.replace(/^Q/i, ''); 
+                                if (studentRow[altQId1] !== undefined && studentRow[altQId1] !== '') rawScore = studentRow[altQId1];
+                                else if (studentRow[altQId2] !== undefined && studentRow[altQId2] !== '') rawScore = studentRow[altQId2];
+                            }
+
                             if (rawScore !== undefined && rawScore !== null && rawScore !== '') {
                                 const score = Number(rawScore) || 0;
                                 const max = Number(q.Full_Mark || q.FullMark || q.Max || 1) || 0;
                                 totalScoreSum += score;
                                 totalMaxSum += max;
+                                
                                 if (!topicMap[topicName]) {
                                     topicMap[topicName] = { name: topicName, id: topicId, score: 0, total: 0, wrongDetails: new Set() };
                                 }
                                 topicMap[topicName].score += score;
                                 topicMap[topicName].total += max;
-                                if (score < max && conceptDetail) topicMap[topicName].wrongDetails.add(conceptDetail);
+                                
+                                if (score < max && conceptDetail) {
+                                    topicMap[topicName].wrongDetails.add(conceptDetail);
+                                }
                             }
                         });
                     }
@@ -313,16 +342,18 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
         });
     };
 
+    // 【修改】當手動改變狀態時，把所有跟這個課題有關的紀錄通通更新，確保留檔一致
     const updateTopicStatus = (studentId, topicName, status) => {
-        let record;
+        let relevantRecords;
         if (selectedExamId === 'all') {
-            record = history.find(h => h.studentId === studentId && h.topics.includes(topicName));
+            relevantRecords = history.filter(h => h.studentId === studentId && h.topics.includes(topicName));
         } else {
-            record = history.find(h => h.studentId === studentId && h.topics.includes(topicName) && h.examId === selectedExamId);
+            relevantRecords = history.filter(h => h.studentId === studentId && h.topics.includes(topicName) && (h.examId === selectedExamId || !h.examId));
         }
 
-        if (record) {
-            setHistory(history.map(h => h.id === record.id ? { ...h, status } : h));
+        if (relevantRecords.length > 0) {
+            const recordIds = relevantRecords.map(r => r.id);
+            setHistory(history.map(h => recordIds.includes(h.id) ? { ...h, status } : h));
         } else {
             const student = students.find(s => s.id === studentId);
             setHistory([{ id: Date.now(), date: new Date().toISOString().split('T')[0], studentId, studentName: student?.label || studentId, topics: topicName, difficulty: defaultDifficulty, count: defaultCount, status, score: '-', maxScore: defaultCount, examId: selectedExamId }, ...history]);
@@ -347,7 +378,7 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
             </div>
 
             {showSettings && (
-                <div className="mb-6 p-5 bg-white rounded-lg shadow-sm border border-blue-100 flex flex-wrap gap-6 items-end">
+                <div className="mb-6 p-5 bg-white rounded-lg shadow-sm border border-blue-100 flex flex-wrap gap-6 items-end relative">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">語言</label>
                         <select value={language} onChange={e => setLanguage(e.target.value)} className="border rounded-md px-3 py-2 w-32">
@@ -375,6 +406,21 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
                         <label className="block text-sm font-medium text-gray-700 mb-1">預設題目數</label>
                         <input type="number" value={defaultCount} onChange={e => setDefaultCount(e.target.value)} className="border rounded-md px-3 py-2 w-24" />
                     </div>
+                    
+                    {/* 【新增】隱藏學生還原按鈕 */}
+                    {deletedStudentIds.length > 0 && (
+                        <div className="ml-auto">
+                            <label className="block text-sm font-bold text-red-500 mb-1">已隱藏 {deletedStudentIds.length} 名學生</label>
+                            <button 
+                                onClick={() => {
+                                    if(confirm('確定要還原所有被隱藏的學生嗎？')) setDeletedStudentIds([]);
+                                }} 
+                                className="border border-red-300 text-red-600 bg-red-50 hover:bg-red-100 rounded-md px-4 py-2 text-sm transition-colors shadow-sm font-bold"
+                            >
+                                🔄 點此還原名單
+                            </button>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -405,7 +451,7 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
                                     <button 
                                         onClick={(e) => handleDeleteStudent(e, s.id, s.label)}
                                         className="absolute right-1 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center rounded-full bg-gray-200 text-gray-500 hover:bg-red-500 hover:text-white opacity-0 group-hover:opacity-100 transition-all text-[10px]"
-                                        title="刪除學生"
+                                        title="隱藏此學生"
                                     >×</button>
                                 </label>
                             </div>
@@ -430,19 +476,13 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
                                 sortedStudents.filter(s => selectedStudentIds.includes(s.id)).map(student => {
                                     const studentSelectedTopics = selectedBatchTopics[student.id] || [];
 
-                                    // 【新增】計算弱點完成進度
                                     const totalWeaknesses = student.weaknesses ? student.weaknesses.length : 0;
                                     let completedWeaknesses = 0;
 
                                     if (totalWeaknesses > 0) {
                                         student.weaknesses.forEach(topic => {
-                                            let currentRecord;
-                                            if (selectedExamId === 'all') {
-                                                currentRecord = history.find(h => h.studentId === student.id && h.topics.includes(topic.name));
-                                            } else {
-                                                currentRecord = history.find(h => h.studentId === student.id && h.topics.includes(topic.name) && h.examId === selectedExamId);
-                                            }
-                                            if (currentRecord && currentRecord.status === 'graded') {
+                                            // 利用新的智能狀態獲取方法
+                                            if (getTopicStatus(student.id, topic.name) === 'graded') {
                                                 completedWeaknesses++;
                                             }
                                         });
@@ -458,7 +498,6 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
                                                     總分: <span className={`font-bold ${student.avgScore < 40 ? 'text-red-600' : 'text-green-600'}`}>{student.avgScore}%</span>
                                                 </div>
                                                 
-                                                {/* 【新增】弱點跟進進度條UI */}
                                                 {totalWeaknesses > 0 && (
                                                     <div className="mt-4 pt-3 border-t border-gray-100">
                                                         <div className="text-[11px] text-gray-500 mb-1 flex justify-between items-end">
@@ -479,15 +518,10 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
                                                 
                                                 <div className="flex flex-wrap gap-3 items-stretch">
                                                     {student.weaknesses && student.weaknesses.length > 0 ? student.weaknesses.map(topic => {
-                                                        let currentRecord;
-                                                        if (selectedExamId === 'all') {
-                                                            currentRecord = history.find(h => h.studentId === student.id && h.topics.includes(topic.name));
-                                                        } else {
-                                                            currentRecord = history.find(h => h.studentId === student.id && h.topics.includes(topic.name) && h.examId === selectedExamId);
-                                                        }
-                                                        const currentStatus = currentRecord ? currentRecord.status : 'pending';
+                                                        // 獲取最新穩定狀態
+                                                        const currentStatus = getTopicStatus(student.id, topic.name);
                                                         
-                                                        const isStubborn = selectedExamId !== 'all' && history.some(h => h.studentId === student.id && h.topics.includes(topic.name) && h.examId !== selectedExamId);
+                                                        const isStubborn = selectedExamId !== 'all' && history.some(h => h.studentId === student.id && h.topics.includes(topic.name) && h.examId && h.examId !== selectedExamId);
                                                         const isDanger = topic.percentage < 40;
                                                         const isSelectedForBatch = !!studentSelectedTopics.find(t => t.id === topic.id);
 
@@ -500,12 +534,12 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
                                                                     onChange={() => toggleBatchTopic(student.id, topic)}
                                                                     title="打勾以生成綜合練習"
                                                                 />
-                                                                <div onClick={() => handleQuickGenerate(student, topic)} className="cursor-pointer group mb-2 pr-6">
+                                                                <div onClick={() => handleQuickGenerate(student, topic)} className="cursor-pointer group mb-2 pr-6" title="點擊生成單一課題 Prompt">
                                                                     <div className="flex justify-between items-start">
                                                                         <div className="text-[10px] text-blue-600 font-mono group-hover:underline">#{topic.id}</div>
                                                                         {isStubborn && (
                                                                             <span 
-                                                                                title="這位同學之前已經針對這個弱點補底過、你也改過他的卷子了，但他這次這個課題還是考砸了喔！" 
+                                                                                title="這名學生之前已經針對這個弱點補底過，但他這次還是考砸了喔！" 
                                                                                 className="text-orange-500 cursor-help"
                                                                             >⚠️</span>
                                                                         )}
@@ -521,7 +555,6 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
                                                                     </div>
                                                                 </div>
                                                                 
-                                                                {/* 【修改】簡化狀態選單：只保留「未完成」和「已評分 (已完成)」 */}
                                                                 <select 
                                                                     value={currentStatus} 
                                                                     onChange={(e) => updateTopicStatus(student.id, topic.name, e.target.value)} 
@@ -559,7 +592,7 @@ const GenerateView = ({ students = [], setStudents, exams = [], history = [], se
             </div>
         </div>
     );
-};
+}; 
         
         // --- Main App ---
         const App = () => {
