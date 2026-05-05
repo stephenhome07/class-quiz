@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Physics Quiz Analyzer V2.04</title>
+    <title> V2.05 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -372,7 +372,7 @@ const App = () => {
                 }));
             };
 
-            const getStudentAnalysis = (studentId, quizId) => {
+            const getStudentAnalysis = (studentId, quizId, scores) => {
                 // 新增：檢查該學生是否真的有這份小測的成績紀錄，若無則直接跳過
                 const studentScores = (scores[studentId] || {})[quizId];
                 if (!studentScores || Object.keys(studentScores).length === 0) return null;
@@ -432,7 +432,7 @@ const App = () => {
 
             // --- Views Components ---
             
-            const StudentView = () => {
+            const StudentView = ({ students, setStudents, setScores }) => {
                 // 1. 群組狀態與貼上資料狀態
                 const [newCohort, setNewCohort] = React.useState('2025-2028'); // 預設可以寫他常用的群組
                 const [pasteData, setPasteData] = React.useState('');
@@ -552,7 +552,7 @@ const App = () => {
             };
 
     
-            const ScoreInputView = () => {
+            const ScoreInputView = ({ activeStudents, scores, setScores }) => {
                 const [selectedQuiz, setSelectedQuiz] = React.useState(Object.keys(QUIZ_MAPS)[0]);
                 const [selectedStudentId, setSelectedStudentId] = React.useState('');
                 const map = QUIZ_MAPS[selectedQuiz];
@@ -659,7 +659,7 @@ const App = () => {
             };
 
  // 弱點分析與 AI 補底卷生成視圖
-            const AnalysisView = () => {
+            const AnalysisView = ({ activeStudents, scores }) => {
                 const [selectedStudent, setSelectedStudent] = React.useState('');
                 const [selectedQuiz, setSelectedQuiz] = React.useState(Object.keys(QUIZ_MAPS)[0]);
                 
@@ -840,7 +840,7 @@ const App = () => {
             };
 
             
-            const StudentReportView = () => {
+            const StudentReportView = ({ students, activeStudents, scores }) => {
                 const [selectedStudentId, setSelectedStudentId] = React.useState('');
                 const s = students.find(x => x.id === selectedStudentId);
                 
@@ -999,7 +999,7 @@ const App = () => {
             };
 
             
-            const StudentChartView = () => {
+            const StudentChartView = ({ activeStudents, scores }) => {
                 const [selectedStudentId, setSelectedStudentId] = React.useState('');
                 const [chartQuiz, setChartQuiz] = React.useState(Object.keys(QUIZ_MAPS)[0]);
                 const chartRef = React.useRef(null);
@@ -1138,7 +1138,7 @@ const App = () => {
             };
 
             // 全班課題綜合分析版面 (加入 P-Value 難度診斷)
-            const TopicAnalysisView = () => {
+            const TopicAnalysisView = ({ activeStudents, scores }) => {
                 const [localQuiz, setLocalQuiz] = React.useState(Object.keys(QUIZ_MAPS)[0]);
                 const map = QUIZ_MAPS[localQuiz];
 
@@ -1394,7 +1394,7 @@ const App = () => {
             };
 
             
-             const BackupView = () => {
+             const BackupView = ({ students, setStudents, scores, setScores }) => {
                 // 用來記錄準備合併進來的群組名稱
                 const [mergeCohort, setMergeCohort] = React.useState('2025-2028');
                 
@@ -1567,13 +1567,13 @@ const App = () => {
 
             return (
                 <div className="flex min-h-screen relative"><Sidebar /><div className="flex-1 ml-64 overflow-hidden">
-                    {view === 'students' && <StudentView />}
-                    {view === 'scores' && <ScoreInputView />}
-                    {view === 'analysis' && <AnalysisView />}
-                    {view === 'report' && <StudentReportView />}
-                    {view === 'chart' && <StudentChartView />}
-                    {view === 'topicAnalysis' && <TopicAnalysisView />}
-                    {view === 'backup' && <BackupView />}
+                    {view === 'students' && <StudentView students={students} setStudents={setStudents} setScores={setScores} />}
+                    {view === 'scores' && <ScoreInputView activeStudents={activeStudents} scores={scores} setScores={setScores} />}
+                    {view === 'analysis' && <AnalysisView activeStudents={activeStudents} scores={scores} />}
+                    {view === 'report' && <StudentReportView students={students} activeStudents={activeStudents} scores={scores} />}
+                    {view === 'chart' && <StudentChartView activeStudents={activeStudents} scores={scores} />}
+                    {view === 'topicAnalysis' && <TopicAnalysisView activeStudents={activeStudents} scores={scores} />}
+                    {view === 'backup' && <BackupView students={students} setStudents={setStudents} scores={scores} setScores={setScores} />}
                 </div></div>
             );
         };
