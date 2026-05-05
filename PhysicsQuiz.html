@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.07 Physics Quiz Analyzer</title>
+    <title> V2.08 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -1373,6 +1373,41 @@
                     </div>
                 );
             };
+        const getStudentAnalysis = (studentId, quizId, scores) => {
+                // 加上這行防呆：如果 scores 不存在，就直接回傳 null，避免畫面崩潰
+                if (!scores) return null;
+                // 新增：檢查該學生是否真的有這份小測的成績紀錄，若無則直接跳過
+                const studentScores = (scores[studentId] || {})[quizId];
+                if (!studentScores || Object.keys(studentScores).length === 0) return null;
+
+                const map = QUIZ_MAPS[quizId];
+                if (!map) return null;
+
+                const analysis = {};
+                let totalScore = 0; let totalMax = 0;
+
+                map.questions.forEach(q => {
+                    const s = studentScores[q.id] || 0;
+                    totalScore += s; totalMax += q.max;
+                    
+                    if (!analysis[q.topicId]) {
+                        analysis[q.topicId] = { 
+                            max: 0, 
+                            score: 0, 
+                            topicName: SYLLABUS_TOPICS[q.topicId] || '未知課題', 
+                            weakPoints: [] 
+                        };
+                    }
+                    analysis[q.topicId].max += q.max; 
+                    analysis[q.topicId].score += s;
+                    
+                    // 如果這題得分低於一半，就把「具體的題目描述」加進弱點清單
+                    if (s < q.max * 0.5) analysis[q.topicId].weakPoints.push(q.topicDesc);
+                });
+
+                const weakTopics = Object.keys(analysis).filter(k => (analysis[k].score / analysis[k].max) < 0.5);
+                return { totalScore, totalMax, analysis, weakTopics };
+            };
 
 const App = () => {
             // ★ 將這裡換成你剛剛複製的 Google Apps Script 網址 ★
@@ -1467,41 +1502,7 @@ const App = () => {
                 }));
             };
 
-            const getStudentAnalysis = (studentId, quizId, scores) => {
-                // 加上這行防呆：如果 scores 不存在，就直接回傳 null，避免畫面崩潰
-                if (!scores) return null;
-                // 新增：檢查該學生是否真的有這份小測的成績紀錄，若無則直接跳過
-                const studentScores = (scores[studentId] || {})[quizId];
-                if (!studentScores || Object.keys(studentScores).length === 0) return null;
-
-                const map = QUIZ_MAPS[quizId];
-                if (!map) return null;
-
-                const analysis = {};
-                let totalScore = 0; let totalMax = 0;
-
-                map.questions.forEach(q => {
-                    const s = studentScores[q.id] || 0;
-                    totalScore += s; totalMax += q.max;
-                    
-                    if (!analysis[q.topicId]) {
-                        analysis[q.topicId] = { 
-                            max: 0, 
-                            score: 0, 
-                            topicName: SYLLABUS_TOPICS[q.topicId] || '未知課題', 
-                            weakPoints: [] 
-                        };
-                    }
-                    analysis[q.topicId].max += q.max; 
-                    analysis[q.topicId].score += s;
-                    
-                    // 如果這題得分低於一半，就把「具體的題目描述」加進弱點清單
-                    if (s < q.max * 0.5) analysis[q.topicId].weakPoints.push(q.topicDesc);
-                });
-
-                const weakTopics = Object.keys(analysis).filter(k => (analysis[k].score / analysis[k].max) < 0.5);
-                return { totalScore, totalMax, analysis, weakTopics };
-            };
+            
 
             const exportScoresCSV = () => {
                 const data = activeStudents.map(s => {
