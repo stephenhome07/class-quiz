@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.09 Physics Quiz Analyzer</title>
+    <title> V2.11 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -402,7 +402,7 @@
             };
 
     
-            const ScoreInputView = ({ activeStudents, scores, setScores }) => {
+                const ScoreInputView = ({ activeStudents, scores, setScores }) => {
                 const [selectedQuiz, setSelectedQuiz] = React.useState(Object.keys(QUIZ_MAPS)[0]);
                 const [selectedStudentId, setSelectedStudentId] = React.useState('');
                 const map = QUIZ_MAPS[selectedQuiz];
@@ -516,10 +516,31 @@
                 );
             };
 
- // 弱點分析與 AI 補底卷生成視圖
+             // 弱點分析與 AI 補底卷生成視圖
             const AnalysisView = ({ activeStudents, scores }) => {
+
+                // ==========================================
+                // 1. 新增：計算當前群組有輸入成績的測驗
+                // ==========================================
+                const activeQuizzes = React.useMemo(() => {
+                    return Object.keys(QUIZ_MAPS).filter(quizId => {
+                        // 檢查這個群組裡，有沒有任何一個學生在這個小測有成績
+                        return activeStudents.some(s => scores[s.id]?.[quizId] && Object.keys(scores[s.id][quizId]).length > 0);
+                    });
+                }, [activeStudents, scores]);
+                
                 const [selectedStudent, setSelectedStudent] = React.useState('');
-                const [selectedQuiz, setSelectedQuiz] = React.useState(Object.keys(QUIZ_MAPS)[0]);
+                // ==========================================
+                // 2. 修改：預設選擇第一個「有成績」的測驗
+                // ==========================================
+                const [selectedQuiz, setSelectedQuiz] = React.useState(activeQuizzes[0] || Object.keys(QUIZ_MAPS)[0]);
+            
+                // 新增：如果切換群組後，原本選的測驗沒成績了，就自動跳到有成績的測驗
+                React.useEffect(() => {
+                    if (activeQuizzes.length > 0 && !activeQuizzes.includes(selectedQuiz)) {
+                        setSelectedQuiz(activeQuizzes[0]);
+                    }
+                }, [activeQuizzes, selectedQuiz]);
                 
                 // AI 設定狀態
                 const [aiLang, setAiLang] = React.useState('zh');
@@ -593,7 +614,12 @@
                                         value={selectedQuiz} 
                                         onChange={(e) => setSelectedQuiz(e.target.value)}
                                     >
-                                        {Object.keys(QUIZ_MAPS).map(k => <option key={k} value={k}>{QUIZ_MAPS[k].title}</option>)}
+                                        {activeQuizzes.length > 0 
+                                            ? activeQuizzes.map(key => (
+                                                <option key={key} value={key}>{QUIZ_MAPS[key].title}</option>
+                                              ))
+                                            : <option value={selectedQuiz}>-- 此群組尚未輸入任何測驗成績 --</option>
+                                        }
                                     </select>
                                 </div>
 
@@ -996,8 +1022,25 @@
             };
 
             // 全班課題綜合分析版面 (加入 P-Value 難度診斷)
+            // 全班課題綜合分析版面 (加入 P-Value 難度診斷)
             const TopicAnalysisView = ({ activeStudents, scores }) => {
-                const [localQuiz, setLocalQuiz] = React.useState(Object.keys(QUIZ_MAPS)[0]);
+                // 1. 新增：動態計算當前群組有輸入成績的測驗
+                const activeQuizzes = React.useMemo(() => {
+                    return Object.keys(QUIZ_MAPS).filter(quizId => {
+                        return activeStudents.some(s => scores[s.id]?.[quizId] && Object.keys(scores[s.id][quizId]).length > 0);
+                    });
+                }, [activeStudents, scores]);
+
+                // 2. 修改：預設選擇 activeQuizzes 的第一個，而不是 Object.keys(QUIZ_MAPS)
+                const [localQuiz, setLocalQuiz] = React.useState(activeQuizzes[0] || Object.keys(QUIZ_MAPS)[0]);
+
+                // 3. 新增：防呆機制，當群組切換導致目前測驗沒成績時，自動跳轉
+                React.useEffect(() => {
+                    if (activeQuizzes.length > 0 && !activeQuizzes.includes(localQuiz)) {
+                        setLocalQuiz(activeQuizzes[0]);
+                    }
+                }, [activeQuizzes, localQuiz]);
+
                 const map = QUIZ_MAPS[localQuiz];
 
                 const getClassStats = () => {
@@ -1090,7 +1133,11 @@
                             <h2 className="text-2xl font-bold flex items-center gap-2"><Icon name="Target" /> 全班課題綜合分析</h2>
                             <select className="p-2 border rounded-md shadow-sm outline-none font-bold text-blue-700 bg-blue-50" 
                                 value={localQuiz} onChange={(e) => setLocalQuiz(e.target.value)}>
-                                {Object.keys(QUIZ_MAPS).map(k => <option key={k} value={k}>{QUIZ_MAPS[k].title}</option>)}
+                                {/* 4. 修改：只顯示有成績的測驗 */}
+                                {activeQuizzes.length > 0 
+                                    ? activeQuizzes.map(k => <option key={k} value={k}>{QUIZ_MAPS[k].title}</option>)
+                                    : <option value={localQuiz}>-- 此群組尚未輸入任何測驗成績 --</option>
+                                }
                             </select>
                         </div>
 
