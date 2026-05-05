@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.06 Physics Quiz Analyzer</title>
+    <title> V2.07 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -279,159 +279,7 @@
 
         };
 
-const App = () => {
-            // ★ 將這裡換成你剛剛複製的 Google Apps Script 網址 ★
-            const API_URL = 'https://script.google.com/macros/s/AKfycbz1DKuoBED9iaxYRzctOqfpZhLEtJJScjPyqujHWAPoZjHHpX_3z2T0iqtqob3am9WeuQ/exec';
-
-            const [view, setView] = React.useState('students');
-            const [students, setStudents] = React.useState([]);
-            const [scores, setScores] = React.useState({});
             
-            // 新增：雲端連線狀態
-            const [isLoading, setIsLoading] = React.useState(true);
-            const [isSaving, setIsSaving] = React.useState(false);
-
-           // 自動從現有學生名單中抓取所有不重複的群組名稱 (加入防護罩)
-            const allCohorts = ['所有學生', ...new Set((students || []).map(s => s.cohort || '2024-2027'))];
-            
-            // 從老師的瀏覽器記憶中讀取上次選的群組，預設為 '所有學生'
-            const [currentCohort, setCurrentCohort] = React.useState(localStorage.getItem('saved_cohort') || '所有學生');
-            
-            // 當老師切換群組時，自動記在瀏覽器裡 (下次打開不用重選)
-            React.useEffect(() => {
-                localStorage.setItem('saved_cohort', currentCohort);
-            }, [currentCohort]);
-
-            // ⚠️ 核心過濾器：依照選擇的群組，過濾出「當前作用中」的學生名單 (加入防護罩)
-            const activeStudents = currentCohort === '所有學生' 
-                ? (students || [])
-                : (students || []).filter(s => (s.cohort || '2024-2027') === currentCohort);
-    
-            // 初次載入時，從 Google 雲端讀取資料 (防崩潰保護版)
-            React.useEffect(() => {
-                fetch(API_URL)
-                    .then(res => res.json())
-                    .then(data => {
-                        console.log("從雲端接收到的原始資料：", data); // 幫助你在 F12 檢查資料
-                        
-                        // 強制檢查與轉型，防止 React 渲染崩潰 (白屏)
-                        // 如果 data.students 不是陣列，就強制給予 [] 空陣列
-                        const validStudents = Array.isArray(data.students) ? data.students : [];
-                        
-                        // 如果 data.scores 不是物件，就強制給予 {} 空物件
-                        const validScores = (typeof data.scores === 'object' && data.scores !== null) ? data.scores : {};
-                        
-                        setStudents(validStudents);
-                        setScores(validScores);
-                        setIsLoading(false);
-                    })
-                    .catch(err => {
-                        console.error("讀取失敗:", err);
-                        alert("無法解析雲端資料或連線失敗，請檢查 API 網址。");
-                        setIsLoading(false);
-                    });
-            }, []);
-
-            // 新增：手動同步到雲端的函數
-            const syncToCloud = () => {
-                setIsSaving(true);
-                fetch(API_URL, {
-                    method: 'POST',
-                    body: JSON.stringify({ students: students, scores: scores })
-                })
-                .then(res => res.json())
-                .then(data => {
-                    setIsSaving(false);
-                    if(data.status === 'success') {
-                        // 可以加入一個小提示或不加
-                    }
-                })
-                .catch(err => {
-                    console.error("存檔失敗:", err);
-                    alert("同步到雲端失敗！");
-                    setIsSaving(false);
-                });
-            };
-
-            // 當畫面還在載入時，顯示 Loading 畫面
-            if (isLoading) {
-                return (
-                    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
-                        <Icon name="Loader2" size={48} className="text-blue-500 animate-spin mb-4" />
-                        <h2 className="text-xl font-bold text-gray-700">正在從 Google 雲端讀取資料...</h2>
-                    </div>
-                );
-            };
-
-
-
-            const handleScoreChange = (studentId, quizId, qId, val) => {
-                const numVal = val === '' ? '' : parseFloat(val);
-                setScores(prev => ({
-                    ...prev, [studentId]: { ...(prev[studentId] || {}), [quizId]: { ...((prev[studentId] && prev[studentId][quizId]) || {}), [qId]: numVal } }
-                }));
-            };
-
-            const getStudentAnalysis = (studentId, quizId, scores) => {
-                // 加上這行防呆：如果 scores 不存在，就直接回傳 null，避免畫面崩潰
-                if (!scores) return null;
-                // 新增：檢查該學生是否真的有這份小測的成績紀錄，若無則直接跳過
-                const studentScores = (scores[studentId] || {})[quizId];
-                if (!studentScores || Object.keys(studentScores).length === 0) return null;
-
-                const map = QUIZ_MAPS[quizId];
-                if (!map) return null;
-
-                const analysis = {};
-                let totalScore = 0; let totalMax = 0;
-
-                map.questions.forEach(q => {
-                    const s = studentScores[q.id] || 0;
-                    totalScore += s; totalMax += q.max;
-                    
-                    if (!analysis[q.topicId]) {
-                        analysis[q.topicId] = { 
-                            max: 0, 
-                            score: 0, 
-                            topicName: SYLLABUS_TOPICS[q.topicId] || '未知課題', 
-                            weakPoints: [] 
-                        };
-                    }
-                    analysis[q.topicId].max += q.max; 
-                    analysis[q.topicId].score += s;
-                    
-                    // 如果這題得分低於一半，就把「具體的題目描述」加進弱點清單
-                    if (s < q.max * 0.5) analysis[q.topicId].weakPoints.push(q.topicDesc);
-                });
-
-                const weakTopics = Object.keys(analysis).filter(k => (analysis[k].score / analysis[k].max) < 0.5);
-                return { totalScore, totalMax, analysis, weakTopics };
-            };
-
-            const exportScoresCSV = () => {
-                const data = activeStudents.map(s => {
-                    const row = { Class: s.class, ClassNumber: s.num, Name: s.name };
-                    Object.keys(QUIZ_MAPS).forEach(quizId => {
-                        const map = QUIZ_MAPS[quizId];
-                        const sScores = (scores[s.id] || {})[quizId] || {};
-                        let total = 0;
-                        
-                        // 只計算總分，不再區分 MC 和 LQ
-                        map.questions.forEach(q => {
-                            total += (sScores[q.id] || 0);
-                        });
-                        
-                        // 欄位名稱直接顯示 CH01, CH02 等
-                        row[quizId] = total; 
-                    });
-                    return row;
-                });
-                const csv = Papa.unparse(data);
-                const blob = new Blob(["\uFEFF"+csv], { type: 'text/csv;charset=utf-8;' });
-                const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-                a.download = `Physics_Quiz_Scores.csv`; a.click();
-            };
-
             // --- Views Components ---
             
             const StudentView = ({ students, setStudents, setScores }) => {
@@ -1525,6 +1373,160 @@ const App = () => {
                     </div>
                 );
             };
+
+const App = () => {
+            // ★ 將這裡換成你剛剛複製的 Google Apps Script 網址 ★
+            const API_URL = 'https://script.google.com/macros/s/AKfycbz1DKuoBED9iaxYRzctOqfpZhLEtJJScjPyqujHWAPoZjHHpX_3z2T0iqtqob3am9WeuQ/exec';
+
+            const [view, setView] = React.useState('students');
+            const [students, setStudents] = React.useState([]);
+            const [scores, setScores] = React.useState({});
+            
+            // 新增：雲端連線狀態
+            const [isLoading, setIsLoading] = React.useState(true);
+            const [isSaving, setIsSaving] = React.useState(false);
+
+           // 自動從現有學生名單中抓取所有不重複的群組名稱 (加入防護罩)
+            const allCohorts = ['所有學生', ...new Set((students || []).map(s => s.cohort || '2024-2027'))];
+            
+            // 從老師的瀏覽器記憶中讀取上次選的群組，預設為 '所有學生'
+            const [currentCohort, setCurrentCohort] = React.useState(localStorage.getItem('saved_cohort') || '所有學生');
+            
+            // 當老師切換群組時，自動記在瀏覽器裡 (下次打開不用重選)
+            React.useEffect(() => {
+                localStorage.setItem('saved_cohort', currentCohort);
+            }, [currentCohort]);
+
+            // ⚠️ 核心過濾器：依照選擇的群組，過濾出「當前作用中」的學生名單 (加入防護罩)
+            const activeStudents = currentCohort === '所有學生' 
+                ? (students || [])
+                : (students || []).filter(s => (s.cohort || '2024-2027') === currentCohort);
+    
+            // 初次載入時，從 Google 雲端讀取資料 (防崩潰保護版)
+            React.useEffect(() => {
+                fetch(API_URL)
+                    .then(res => res.json())
+                    .then(data => {
+                        console.log("從雲端接收到的原始資料：", data); // 幫助你在 F12 檢查資料
+                        
+                        // 強制檢查與轉型，防止 React 渲染崩潰 (白屏)
+                        // 如果 data.students 不是陣列，就強制給予 [] 空陣列
+                        const validStudents = Array.isArray(data.students) ? data.students : [];
+                        
+                        // 如果 data.scores 不是物件，就強制給予 {} 空物件
+                        const validScores = (typeof data.scores === 'object' && data.scores !== null) ? data.scores : {};
+                        
+                        setStudents(validStudents);
+                        setScores(validScores);
+                        setIsLoading(false);
+                    })
+                    .catch(err => {
+                        console.error("讀取失敗:", err);
+                        alert("無法解析雲端資料或連線失敗，請檢查 API 網址。");
+                        setIsLoading(false);
+                    });
+            }, []);
+
+            // 新增：手動同步到雲端的函數
+            const syncToCloud = () => {
+                setIsSaving(true);
+                fetch(API_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ students: students, scores: scores })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    setIsSaving(false);
+                    if(data.status === 'success') {
+                        // 可以加入一個小提示或不加
+                    }
+                })
+                .catch(err => {
+                    console.error("存檔失敗:", err);
+                    alert("同步到雲端失敗！");
+                    setIsSaving(false);
+                });
+            };
+
+            // 當畫面還在載入時，顯示 Loading 畫面
+            if (isLoading) {
+                return (
+                    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
+                        <Icon name="Loader2" size={48} className="text-blue-500 animate-spin mb-4" />
+                        <h2 className="text-xl font-bold text-gray-700">正在從 Google 雲端讀取資料...</h2>
+                    </div>
+                );
+            };
+
+
+
+            const handleScoreChange = (studentId, quizId, qId, val) => {
+                const numVal = val === '' ? '' : parseFloat(val);
+                setScores(prev => ({
+                    ...prev, [studentId]: { ...(prev[studentId] || {}), [quizId]: { ...((prev[studentId] && prev[studentId][quizId]) || {}), [qId]: numVal } }
+                }));
+            };
+
+            const getStudentAnalysis = (studentId, quizId, scores) => {
+                // 加上這行防呆：如果 scores 不存在，就直接回傳 null，避免畫面崩潰
+                if (!scores) return null;
+                // 新增：檢查該學生是否真的有這份小測的成績紀錄，若無則直接跳過
+                const studentScores = (scores[studentId] || {})[quizId];
+                if (!studentScores || Object.keys(studentScores).length === 0) return null;
+
+                const map = QUIZ_MAPS[quizId];
+                if (!map) return null;
+
+                const analysis = {};
+                let totalScore = 0; let totalMax = 0;
+
+                map.questions.forEach(q => {
+                    const s = studentScores[q.id] || 0;
+                    totalScore += s; totalMax += q.max;
+                    
+                    if (!analysis[q.topicId]) {
+                        analysis[q.topicId] = { 
+                            max: 0, 
+                            score: 0, 
+                            topicName: SYLLABUS_TOPICS[q.topicId] || '未知課題', 
+                            weakPoints: [] 
+                        };
+                    }
+                    analysis[q.topicId].max += q.max; 
+                    analysis[q.topicId].score += s;
+                    
+                    // 如果這題得分低於一半，就把「具體的題目描述」加進弱點清單
+                    if (s < q.max * 0.5) analysis[q.topicId].weakPoints.push(q.topicDesc);
+                });
+
+                const weakTopics = Object.keys(analysis).filter(k => (analysis[k].score / analysis[k].max) < 0.5);
+                return { totalScore, totalMax, analysis, weakTopics };
+            };
+
+            const exportScoresCSV = () => {
+                const data = activeStudents.map(s => {
+                    const row = { Class: s.class, ClassNumber: s.num, Name: s.name };
+                    Object.keys(QUIZ_MAPS).forEach(quizId => {
+                        const map = QUIZ_MAPS[quizId];
+                        const sScores = (scores[s.id] || {})[quizId] || {};
+                        let total = 0;
+                        
+                        // 只計算總分，不再區分 MC 和 LQ
+                        map.questions.forEach(q => {
+                            total += (sScores[q.id] || 0);
+                        });
+                        
+                        // 欄位名稱直接顯示 CH01, CH02 等
+                        row[quizId] = total; 
+                    });
+                    return row;
+                });
+                const csv = Papa.unparse(data);
+                const blob = new Blob(["\uFEFF"+csv], { type: 'text/csv;charset=utf-8;' });
+                const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+                a.download = `Physics_Quiz_Scores.csv`; a.click();
+            };
+
 
             const Sidebar = () => (
                 <div className="w-64 bg-slate-800 text-white h-screen fixed left-0 top-0 flex flex-col z-10 shadow-lg">
