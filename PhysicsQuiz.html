@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.05 Physics Quiz Analyzer</title>
+    <title> V2.06 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -373,6 +373,8 @@ const App = () => {
             };
 
             const getStudentAnalysis = (studentId, quizId, scores) => {
+                // 加上這行防呆：如果 scores 不存在，就直接回傳 null，避免畫面崩潰
+                if (!scores) return null;
                 // 新增：檢查該學生是否真的有這份小測的成績紀錄，若無則直接跳過
                 const studentScores = (scores[studentId] || {})[quizId];
                 if (!studentScores || Object.keys(studentScores).length === 0) return null;
@@ -587,7 +589,7 @@ const App = () => {
                         <div className="w-full md:w-1/4 card p-4 max-h-[80vh] overflow-y-auto">
                             <h3 className="font-bold mb-4">選擇學生</h3>
                             {activeStudents.map(s => {
-                                const ana = getStudentAnalysis(s.id, selectedQuiz);
+                                const ana = getStudentAnalysis(s.id, selectedQuiz, scores);
                                 const isFail = ana && (ana.totalScore / ana.totalMax < 0.5);
                                 return (
                                     <div key={s.id} onClick={() => setSelectedStudentId(s.id)}
@@ -673,7 +675,7 @@ const App = () => {
                 const map = QUIZ_MAPS[selectedQuiz];
                 
                 // 取得該學生此小測的成績分析
-                const ana = getStudentAnalysis(selectedStudent, selectedQuiz);
+                const ana = getStudentAnalysis(selectedStudent, selectedQuiz, scores);
 
                 const generatePrompt = () => {
                     if (!ana || ana.weakTopics.length === 0) return aiLang === 'en' ? "This student is performing well. No remedial worksheet is needed." : "此學生表現良好，暫不需要補底練習。";
@@ -711,7 +713,7 @@ const App = () => {
                         <div className="w-full md:w-1/4 card p-4 overflow-y-auto max-h-[85vh]">
                             <h3 className="font-bold mb-4 flex items-center gap-2"><Icon name="Users" size={18}/> 選擇學生</h3>
                             {activeStudents.map(s => {
-                                const studentAna = getStudentAnalysis(s.id, selectedQuiz);
+                                const studentAna = getStudentAnalysis(s.id, selectedQuiz, scores);
                                 const isFail = studentAna && (studentAna.totalScore / studentAna.totalMax < 0.5);
                                 return (
                                     <div key={s.id} onClick={() => setSelectedStudent(s.id)}
@@ -852,7 +854,7 @@ const App = () => {
                     let grandMax = 0;
                     
                     Object.keys(QUIZ_MAPS).forEach(quizId => {
-                        const ana = getStudentAnalysis(s.id, quizId);
+                        const ana = getStudentAnalysis(s.id, quizId, scores);
                         if (ana) {
                             grandTotal += ana.totalScore;
                             grandMax += ana.totalMax;
