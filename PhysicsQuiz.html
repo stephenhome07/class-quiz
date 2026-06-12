@@ -1578,6 +1578,184 @@
                 return { totalScore, totalMax, analysis, weakTopics };
             };
 
+        // ==================== 新增：班級成績總表組件 ====================
+const ClassSummaryView = ({ activeStudents, scores }) => {
+    // 1. 自動從 scores 中擷取所有出現過的 Quiz 名稱並排序
+    const allQuizzes = React.useMemo(() => {
+        const quizSet = new Set();
+        Object.values(scores || {}).forEach(studentScores => {
+            if (studentScores) {
+                Object.keys(studentScores).forEach(quizName => quizSet.add(quizName));
+            }
+        });
+        return Array.from(quizSet).sort();
+    }, [scores]);
+
+    // 2. 狀態：記錄哪些 Quiz 要納入平均分計算（預設全部勾選）
+    const [includedQuizzes, setIncludedQuizzes] = React.useState({});
+
+    // 當偵測到有新 Quiz 時，預設勾選
+    React.useEffect(() => {
+        const initial = {};
+        allQuizzes.forEach(q => {
+            initial[q] = true;
+        });
+        setIncludedQuizzes(initial);
+    }, [allQuizzes]);
+
+    // 切換某個 Quiz 是否參與平均分計算
+    const toggleQuiz = (quizName) => {
+        setIncludedQuizzes(prev => ({ ...prev, [quizName]: !prev[quizName] }));
+    };
+
+    // 3. 處理學生資料、各科分數與動態計算平均分
+    const computedData = React.useMemo(() => {
+        return activeStudents.map(student => {
+            let total = 0;
+            let count = 0;
+            const quizScores = {};
+
+            allQuizzes.forEach(quiz => {
+                // 讀取該學生在該 Quiz 的分數
+                const scoreVal = scores[student.id]?.[quiz];
+                const score = (scoreVal !== undefined && scoreVal !== '') ? Number(scoreVal) : null;
+                quizScores[quiz] = score;
+
+                // 如果該 Quiz 被勾選納入計算，且分數有效，則計入平均分
+                if (includedQuizzes[quiz] && score !== null && !isNaN(score)) {
+                    total += score;
+                    count++;
+                }
+            });
+
+            const average = count > 0 ? (total / count).toFixed(1) : '-';
+            return {
+                ...student,
+                quizScores,
+                average
+            };
+        });
+    }, [activeStudents, scores, allQuizzes, includedQuizzes]);
+
+    // 4. 一鍵複製到剪貼簿功能 (採用 Excel 完美的 Tab 分隔格式)
+    const handleCopyToExcel = () => {
+        if (computedData.length === 0) {
+            alert("沒有學生資料可複製");
+            return;
+        }
+
+        // 表頭
+        let tsv = ["班別", "學號", "姓名", ...allQuizzes, "平均分"].join("\t") + "\n";
+
+        // 內容行
+        computedData.forEach(student => {
+            const row = [
+                student.class || student.className || '',
+                student.number || student.classNumber || '',
+                student.name || '',
+                ...allQuizzes.map(quiz => student.quizScores[quiz] !== null ? student.quizScores[quiz] : ''),
+                student.average
+            ];
+            tsv += row.join("\t") + "\n";
+        });
+
+        // 寫入剪貼簿
+        navigator.clipboard.writeText(tsv)
+            .then(() => {
+                alert("📋 已成功複製表格資料！\n請直接到 Excel 點選儲存格並按下 Ctrl+V 即可貼上。");
+            })
+            .catch(err => {
+                alert("複製失敗，請手動選取網頁表格。錯誤: " + err);
+            });
+    };
+
+    return (
+        <div className="p-6 max-w-7xl mx-auto animate-fadeIn">
+            <div className="flex justify-between items-center mb-6">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                        <Icon name="Table" /> 班級成績總表 (Excel 匯出)
+                    </h1>
+                    <p className="text-sm text-slate-500 mt-1">可自由勾選參與計算平均分的 Quiz，並支援一鍵複製至 Excel。</p>
+                </div>
+                <button 
+                    onClick={handleCopyToExcel}
+                    className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg shadow transition"
+                >
+                    <Icon name="Copy" size={18} /> 複製到 Excel 格式
+                </button>
+            </div>
+
+            {/* Quiz 篩選控制面板 */}
+            <div className="card p-4 mb-6 bg-white rounded-xl border border-slate-200 shadow-sm">
+                <h3 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-1">
+                    <Icon name="Settings" size={16} /> 選擇納入【平均分】計算的 Quiz：
+                </h3>
+                {allQuizzes.length === 0 ? (
+                    <p className="text-xs text-slate-400">目前暫無 Quiz 數據</p>
+                ) : (
+                    <div className="flex flex-wrap gap-4">
+                        {allQuizzes.map(quiz => (
+                            <label key={quiz} className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-md border border-slate-200 cursor-pointer hover:bg-slate-100 transition text-sm">
+                                <input 
+                                    type="checkbox" 
+                                    className="w-4 h-4 text-blue-600 rounded"
+                                    checked={!!includedQuizzes[quiz]} 
+                                    onChange={() => toggleQuiz(quiz)} 
+                                />
+                                <span className="text-slate-700 font-medium">{quiz}</span>
+                            </label>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* 數據預覽表格 */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto max-h-[600px] overflow-y-auto">
+                <table className="w-full text-left border-collapse min-w-[800px]">
+                    <thead className="bg-slate-100 sticky top-0 z-10 shadow-[0_1px_0_0_rgba(226,232,240,1)]">
+                        <tr>
+                            <th className="p-3 text-sm font-semibold text-slate-600 border-b border-slate-200">班別</th>
+                            <th className="p-3 text-sm font-semibold text-slate-600 border-b border-slate-200">學號</th>
+                            <th className="p-3 text-sm font-semibold text-slate-600 border-b border-slate-200">姓名</th>
+                            {allQuizzes.map(quiz => (
+                                <th key={quiz} className={`p-3 text-sm font-semibold border-b border-slate-200 ${includedQuizzes[quiz] ? 'text-slate-800 bg-blue-50/50' : 'text-slate-400 line-through'}`}>
+                                    {quiz}
+                                </th>
+                            ))}
+                            <th className="p-3 text-sm font-bold text-blue-600 bg-blue-50 border-b border-slate-200">平均分</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {computedData.length === 0 ? (
+                            <tr>
+                                <td colSpan={4 + allQuizzes.length} className="text-center p-8 text-slate-400">暫無學生數據</td>
+                            </tr>
+                        ) : (
+                            computedData.map((student, idx) => (
+                                <tr key={student.id || idx} className="hover:bg-slate-50 transition border-b border-slate-100">
+                                    <td className="p-3 text-sm text-slate-700 font-medium">{student.class || student.className || '-'}</td>
+                                    <td className="p-3 text-sm text-slate-600">{student.number || student.classNumber || '-'}</td>
+                                    <td className="p-3 text-sm text-slate-800 font-medium">{student.name || '-'}</td>
+                                    {allQuizzes.map(quiz => {
+                                        const score = student.quizScores[quiz];
+                                        return (
+                                            <td key={quiz} className={`p-3 text-sm ${!includedQuizzes[quiz] ? 'text-slate-300' : 'text-slate-600'}`}>
+                                                {score !== null ? score : <span className="text-slate-300">-</span>}
+                                            </td>
+                                        );
+                                    })}
+                                    <td className="p-3 text-sm font-bold text-blue-600 bg-blue-50/30">{student.average}</td>
+                                </tr>
+                            ))
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+        
 const App = () => {
             // ★ 將這裡換成你剛剛複製的 Google Apps Script 網址 ★
             const API_URL = 'https://script.google.com/macros/s/AKfycbz1DKuoBED9iaxYRzctOqfpZhLEtJJScjPyqujHWAPoZjHHpX_3z2T0iqtqob3am9WeuQ/exec';
@@ -1728,6 +1906,9 @@ const App = () => {
                         <button onClick={() => setView('report')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'report' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="FileText" size={18} /> 統測/大考總表</button>
                         <button onClick={() => setView('chart')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'chart' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="BarChart2" size={18} /> 課題圖表分析</button>
                         <button onClick={() => setView('topicAnalysis')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'topicAnalysis' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="Target" size={18} /> 課題綜合分析 (全班)</button>
+                        <button onClick={() => setView('classSummary')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'classSummary' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}>
+                            <Icon name="Table" size={18} /> 班級成績總表 (Excel)
+                        </button>
                         <button onClick={() => setView('backup')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'backup' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="Database" size={18} /> 數據備份與還原</button>
                     </nav>
                 </div>
@@ -1741,6 +1922,7 @@ const App = () => {
                     {view === 'report' && <StudentReportView students={students} activeStudents={activeStudents} scores={scores} />}
                     {view === 'chart' && <StudentChartView activeStudents={activeStudents} scores={scores} />}
                     {view === 'topicAnalysis' && <TopicAnalysisView activeStudents={activeStudents} scores={scores} />}
+                    {view === 'classSummary' && <ClassSummaryView activeStudents={activeStudents} scores={scores} />}
                     {view === 'backup' && <BackupView students={students} setStudents={setStudents} scores={scores} setScores={setScores} />}
                 </div></div>
             );
