@@ -44,357 +44,10 @@
             return <span ref={containerRef} style={{ display: 'inline-flex', alignItems: 'center', verticalAlign: 'middle' }} />;
         };
 
-// 新增：官方課題名稱對照表
-// 官方課題名稱對照表 (涵蓋 Core 及 Elective E3, E4)
-        const DEFAULT_SYLLABUS = {
-            // 第1冊 熱和氣體
-            '1.1.1': '量度温度',
-            '1.1.2': '攝氏温標',
-            '1.2.1': '內能與能量轉移',
-            '1.2.2': '熱傳遞方式',
-            '1.3.1': '功率與量度轉移的能量',
-            '1.3.2': '熱容量和比熱容量',
-            '1.4.1': '潛熱',
-            '1.4.2': '蒸發與凝結',
-            '1.5.1': '氣體定律',
-            '1.5.2': '氣體分子運動論',
 
-            // 第2冊 力和運動
-            '2.1.1': '長度和時間',
-            '2.1.2': '距離和位移',
-            '2.1.3': '速率、速度和加速度',
-            '2.1.4': '誤差估算',
-            '2.2.1': '描述直線運動',
-            '2.2.2': '運動線圖',
-            '2.2.3': '勻加速運動方程',
-            '2.2.4': '重力下的垂直運動',
-            '2.3.1': '力',
-            '2.3.2': '牛頓運動第一定律',
-            '2.3.3': '牛頓運動第二定律',
-            '2.3.4': '重量與牛頓運動第二定律',
-            '2.3.5': '流體阻力',
-            '2.3.6': '摩擦力',
-            '2.3.7': '牛頓運動第三定律',
-            '2.4.1': '物體組成的系統',
-            '2.4.2': '力的合成和分解',
-            '2.4.3': '共面力與牛頓運動定律',
-            '2.5.1': '力的轉動效應',
-            '2.5.2': '剛體的平衡',
-            '2.6.1': '功',
-            '2.6.2': '機械能',
-            '2.6.3': '能量變化和能量守恆',
-            '2.6.4': '功率',
-            '2.7.1': '動量守恆',
-            '2.7.2': '動量變化',
-            '2.8.1': '認識拋體運動',
-            '2.8.2': '分析拋體運動',
-            '2.9.1': '描述圓周運動',
-            '2.9.2': '向心力與向心加速度',
-            '2.9.3': '勻速圓周運動的例子',
-            '2.10.1': '萬有引力',
-            '2.10.2': '引力作用下的圓周運動',
-
-            // 第3A及3B冊 波動 I & II
-            '3.1.1': '光線',
-            '3.1.2': '反射與平面鏡',
-            '3.2.1': '折射',
-            '3.2.2': '全內反射',
-            '3.3.1': '凸透鏡與凹透鏡',
-            '3.3.2': '凸透鏡成像',
-            '3.3.3': '凹透鏡成像',
-            '3.3.4': '物、像以及透鏡的關係',
-            '3.4.1': '波的簡介',
-            '3.4.2': '橫波的波動',
-            '3.4.3': '橫波的粒子振動',
-            '3.4.4': '以線圖描述橫波',
-            '3.5.1': '水波',
-            '3.5.2': '反射與折射',
-            '3.5.3': '衍射與干涉',
-            '3.5.4': '駐波',
-            '3.6.1': '光的波動本質',
-            '3.6.2': '楊氏雙縫實驗',
-            '3.6.3': '平面透射光柵',
-            '3.6.4': '電磁波',
-            '3.7.1': '縱波',
-            '3.7.2': '聲音的本質',
-            '3.7.3': '聲音的其他特性',
-
-            // 第4冊 電和磁
-            '4.1.1': '電荷',
-            '4.1.2': '靜電力',
-            '4.1.3': '電場',
-            '4.2.1': '電流',
-            '4.2.2': '電壓',
-            '4.2.3': '電阻',
-            '4.2.4': '電阻器網絡',
-            '4.2.5': '電功率',
-            '4.3.1': '分析電路',
-            '4.3.2': '實際安培計、伏特計和電池組',
-            '4.4.1': '家用電器的功率和能量消耗',
-            '4.4.2': '家居電線佈置及安全措施',
-            '4.4.3': '交流電',
-            '4.5.1': '磁力和磁場',
-            '4.5.2': '電流的磁效應',
-            '4.6.1': '作用於載電流導體的磁力',
-            '4.6.2': '直流電動機',
-            '4.6.3': '其他情況下的磁力',
-            '4.7.1': '磁場產生的電流',
-            '4.7.2': '電磁感應的應用',
-            '4.7.3': '法拉第定律的定量處理',
-            '4.8.1': '變壓器',
-            '4.8.2': '輸電',
-
-            // 第5冊 放射現象和核能
-            '5.1.1': '致電離輻射與X射線',
-            '5.1.2': '核輻射',
-            '5.1.3': '輻射安全',
-            '5.2.1': '原子模型',
-            '5.2.2': '放射衰變',
-            '5.2.3': '放射性同位素的應用',
-            '5.3.1': '核裂變與核聚變',
-            '5.3.2': '質能關係',
-            '5.3.3': '核能',
-
-            // 第E3冊 能量和能源的使用
-            'E3.1.1': '家用耗能電器',
-            'E3.1.2': '無火烹調',
-            'E3.1.3': '抽熱',
-            'E3.2.1': '電燈',
-            'E3.2.2': '量度亮度',
-            'E3.3.1': '樓宇的能源效益',
-            'E3.3.2': '交通工具的能源效益',
-            'E3.4.1': '可再生能源與不可再生能源',
-            'E3.4.2': '能源消耗對環境的衝擊',
-
-            // 第E4冊 醫學物理學
-            'E4.1.1': '人類的視覺',
-            'E4.1.2': '視覺缺陷及其糾正方法',
-            'E4.1.3': '光纖內窺鏡檢查術',
-            'E4.2.1': '人類的聽覺',
-            'E4.2.2': '使用超聲波作醫學影像',
-            'E4.2.3': '超聲波掃描',
-            'E4.3.1': 'X射線放射攝影成像',
-            'E4.3.2': 'CT掃描',
-            'E4.3.3': '放射性核素造影術',
-            'E4.3.4': '致電離輻射成像方法的健康風險'
-        };
-
-        const DEFAULT_QUIZ_MAPS = {
-            'CH09': {
-                title: '09 功、能量和功率',
-                questions: [
-                    // Part A: MC (選擇題)
-                    { id: 'MC1', type: 'MC', max: 1, level: '中', topicId: '2.6.1', topicDesc: '計算與位移成夾角的施力所作的功' },
-                    { id: 'MC2', type: 'MC', max: 1, level: '淺', topicId: '2.6.3', topicDesc: '分析無摩擦斜面上物體的動能與勢能變化' },
-                    { id: 'MC3', type: 'MC', max: 1, level: '淺', topicId: '2.6.2', topicDesc: '計算物體垂直提升時獲得的重力勢能' },
-                    { id: 'MC4', type: 'MC', max: 1, level: '中', topicId: '2.6.4', topicDesc: '利用動能變化及時間計算汽車的平均功率' },
-                    { id: 'MC5', type: 'MC', max: 1, level: '深', topicId: '2.6.1', topicDesc: '計算特定施力所作的功 (殺手題：需分辨施力作功與淨力作功，不被摩擦力干擾)' },
-                    { id: 'MC6', type: 'MC', max: 1, level: '深', topicId: '2.6.1', topicDesc: '分析勻加速運動中，作功與位移的線圖關係' },
-                    { id: 'MC7', type: 'MC', max: 1, level: '深', topicId: '2.6.2', topicDesc: '比較不同質量拋體的最高點勢能、動能及飛行時間' },
-
-                    // Part B: Long Questions (長題目)
-                    // Q1: 建造金字塔 (拉動石塊上斜坡)
-                    { id: 'LQ1a', type: 'LQ', max: 2, level: '淺', topicId: '2.6.2', topicDesc: '計算石塊被拉至頂部時所增加的重力勢能' },
-                    { id: 'LQ1b', type: 'LQ', max: 2, level: '中', topicId: '2.6.1', topicDesc: '計算克服斜面摩擦力所作的功 (需先由重量計算摩擦力)' },
-                    { id: 'LQ1c', type: 'LQ', max: 2, level: '淺', topicId: '2.6.3', topicDesc: '計算拉動石塊所需的總能量 (勢能增加 + 克服摩擦力作功)' },
-
-                    // Q2: 推動重物 (恆速運動)
-                    { id: 'LQ2a', type: 'LQ', max: 1, level: '淺', topicId: '2.3.2', topicDesc: '應用牛頓第一定律分析恆速運動中的摩擦力' },
-                    { id: 'LQ2b', type: 'LQ', max: 2, level: '中', topicId: '2.6.4', topicDesc: '應用 P = Fv 公式計算克服摩擦力的功率' },
-
-                    // Q3: 跳水男孩 (勢能與動能轉換)
-                    { id: 'LQ3ai', type: 'LQ', max: 2, level: '淺', topicId: '2.6.2', topicDesc: '從勢能-時間線圖中讀取並計算起跳點的高度' },
-                    { id: 'LQ3aii', type: 'LQ', max: 2, level: '淺', topicId: '2.6.2', topicDesc: '從勢能-時間線圖中讀取並計算最高點的高度' },
-                    { id: 'LQ3b', type: 'LQ', max: 3, level: '深', topicId: '2.6.3', topicDesc: '根據能量守恆定律，描繪對應的動能-時間線圖' },
-                    { id: 'LQ3c', type: 'LQ', max: 2, level: '深', topicId: '2.6.3', topicDesc: '利用能量守恆定律計算物體克服水阻力作功後的最大深度' }
-                ]
-            },
-                'CH12': {
-                    title: '12 勻速圓周運動',
-                    questions: [
-                        { id: 'MC1', type: 'MC', max: 1, topicId: '2.9.2', topicDesc: '應用公式 F = 4π²mr / T² 計算勻速圓周運動所需的向心力' },
-                        { id: 'MC2', type: 'MC', max: 1, topicId: '2.9.1', topicDesc: '辨識勻速圓周運動中速率、動能（標量）與動量（矢量）的變換性質' },
-                        { id: 'MC3', type: 'MC', max: 1, topicId: '2.9.1', topicDesc: '應用角速度定義 ω = 2π / T 進行天文運動相關計算' },
-                        { id: 'MC4', type: 'MC', max: 1, topicId: '2.9.3', topicDesc: '分析路面摩擦力改變對汽車拐彎最高安全速率的影響' },
-                        { id: 'LQ1a', type: 'LQ', max: 2, topicId: '2.9.2', topicDesc: '應用公式 F = mv² / r 計算快艇拐彎時的向心力' },
-                        { id: 'LQ1b', type: 'LQ', max: 1, topicId: '2.9.2', topicDesc: '討論在向心力不變時，速率與圓弧半徑之間的比例關係' },
-                        { id: 'LQ2a', type: 'LQ', max: 2, topicId: '2.9.1', topicDesc: '根據線速率與旋轉半徑計算圓周運動的週期 (T = 2πr / v)' },
-                        { id: 'LQ2b', type: 'LQ', max: 2, topicId: '2.9.2', topicDesc: '應用公式 a = v² / r 計算小球的向心加速度' },
-                        { id: 'LQ2c', type: 'LQ', max: 2, topicId: '2.9.2', topicDesc: '結合細繩最大張力限制，計算物體運動的臨界最高速率' },
-                        { id: 'LQ3a', type: 'LQ', max: 3, topicId: '2.9.3', topicDesc: '透過比較最大靜摩擦力與所需向心力，判斷汽車拐彎時是否打滑' },
-                        { id: 'LQ3b', type: 'LQ', max: 1, topicId: '2.9.3', topicDesc: '計算在不打滑的情況下，汽車拐彎所容許的最高速率' }
-                    ]
-                },
-                
-                'CH18': {
-                    title: '18 透鏡',
-                    questions: [
-                        { id: 'MC1', type: 'MC', max: 1, topicId: '3.3.1', topicDesc: '從透鏡成像光線圖中識別焦點與焦距的概念' },
-                        { id: 'MC2', type: 'MC', max: 1, topicId: '3.3.2', topicDesc: '分析透鏡光線圖並從中讀取焦距及成像數據' },
-                        { id: 'MC3', type: 'MC', max: 1, topicId: '3.3.4', topicDesc: '分析放大鏡（凸透鏡）的成像性質與物距的關係' },
-                        { id: 'MC4', type: 'MC', max: 1, topicId: '3.3.4', topicDesc: '辨識及理解放大鏡的結構、成像虛實與放大特徵' },
-                        { id: 'MC5', type: 'MC', max: 1, topicId: '3.3.3', topicDesc: '應用透鏡公式及放大率公式解決凹透鏡的像距計算問題' },
-                        { id: 'LQ1a', type: 'LQ', max: 1, topicId: '3.3.1', topicDesc: '根據成像能投射在屏幕上（實像）判定透鏡的種類' },
-                        { id: 'LQ1b', type: 'LQ', max: 3, topicId: '3.3.3', topicDesc: '結合線性放大率公式與透鏡公式計算凸透鏡的焦距' },
-                        { id: 'LQ1c', type: 'LQ', max: 1, topicId: '3.3.2', topicDesc: '分析改變像距（移動屏幕）對成像清晰度的影響' },
-                        { id: 'LQ2', type: 'LQ', max: 7, topicId: '3.3.2', topicDesc: '按比例繪製凹透鏡的光線圖以確定像的位置、大小及線性放大率' },
-                        { id: 'LQ3', type: 'LQ', max: 4, topicId: '3.3.3', topicDesc: '應用透鏡公式及線性放大率公式解決凸透鏡實像的綜合計算' }
-                    ]
-                    
-                },
-
-            
-                'CH25': {
-                title: '25 電功率和家居電路',
-                questions: [
-                    // Part A: MC (選擇題)
-                    { id: 'MC1', type: 'MC', max: 1, level: '中', topicId: '4.4.1', topicDesc: '計算不同電壓下電器的實際消耗功率' },
-                    { id: 'MC2', type: 'MC', max: 1, level: '淺', topicId: '4.4.1', topicDesc: '計算電費 (千瓦時 kWh 的應用)' },
-                    { id: 'MC3', type: 'MC', max: 1, level: '淺', topicId: '4.4.2', topicDesc: '辨認三腳插頭的正確接線顏色 (活線、中線、水線)' },
-                    { id: 'MC4', type: 'MC', max: 1, level: '中', topicId: '4.4.2', topicDesc: '利用斷路器額定值計算可並聯的最多電器數量' },
-                    { id: 'MC5', type: 'MC', max: 1, level: '深', topicId: '4.2.5', topicDesc: '計算電阻器網絡中個別電阻的耗損功率' },
-                    { id: 'MC6', type: 'MC', max: 1, level: '深', topicId: '4.3.1', topicDesc: '分析包含燈泡和可變電阻的串聯電路並計算電阻值' },
-
-                    // Part B: Long Questions (長題目)
-                    // Q1: 燈泡與光管 (220V, 60W)
-                    { id: 'LQ1a', type: 'LQ', max: 1, level: '淺', topicId: '4.4.1', topicDesc: '解釋電器額定值 (220V, 60W) 的物理意義' },
-                    { id: 'LQ1bi', type: 'LQ', max: 2, level: '淺', topicId: '4.4.1', topicDesc: '計算電器正常操作時的電流' },
-                    { id: 'LQ1bii', type: 'LQ', max: 3, level: '中', topicId: '4.4.1', topicDesc: '比較不同發光裝置的能量轉換效率及亮度' },
-
-                    // Q2: 電動機 (Motor) 吊起重物
-                    { id: 'LQ2a', type: 'LQ', max: 4, level: '中', topicId: '2.6.4', topicDesc: '分別計算電動機的輸入電功率及輸出的機械功率' },
-                    { id: 'LQ2b', type: 'LQ', max: 2, level: '淺', topicId: '2.6.4', topicDesc: '計算系統的能量轉換效率 (Efficiency)' },
-                    { id: 'LQ2c', type: 'LQ', max: 1, level: '淺', topicId: '2.6.3', topicDesc: '指出機器運作時能量流失的原因 (克服摩擦力作功)' },
-
-                    // Q3: 帶香港電器到日本使用 (110V vs 220V)
-                    { id: 'LQ3a', type: 'LQ', max: 3, level: '中', topicId: '4.4.1', topicDesc: '解釋電器在較低電壓下操作時變暗的原因及列出假設' },
-                    { id: 'LQ3b', type: 'LQ', max: 4, level: '深', topicId: '4.4.2', topicDesc: '分析在錯誤電壓下多個電器並聯時，總電流與保險絲額定值的關係' },
-
-                    // Q4: 燈泡 X (40W) 和燈泡 Y (25W) 的並聯與串聯比較
-                    { id: 'LQ4ai', type: 'LQ', max: 3, level: '淺', topicId: '4.4.1', topicDesc: '利用額定值計算燈泡的電阻' },
-                    { id: 'LQ4aii', type: 'LQ', max: 3, level: '淺', topicId: '4.4.1', topicDesc: '計算並聯電路中各分支的電流' },
-                    { id: 'LQ4aiii', type: 'LQ', max: 2, level: '中', topicId: '4.4.1', topicDesc: '比較並聯燈泡的實際功率及亮度' },
-                    { id: 'LQ4bi', type: 'LQ', max: 1, level: '深', topicId: '4.3.1', topicDesc: '計算兩個不同電阻燈泡串聯時的電流' },
-                    { id: 'LQ4bii', type: 'LQ', max: 2, level: '深', topicId: '4.3.1', topicDesc: '計算串聯電路中的電壓分配' },
-                    { id: 'LQ4biii', type: 'LQ', max: 2, level: '深', topicId: '4.3.1', topicDesc: '計算並比較串聯燈泡的實際功率及亮度 (殺手題常客)' },
-                    { id: 'LQ4c', type: 'LQ', max: 2, level: '淺', topicId: '4.4.2', topicDesc: '解釋家居電器採用並聯連接的兩個主要優點' }
-                ]
-            },
-            'CH26': {
-                title: '26 電磁學',
-                questions: [
-                    // Part A: MC (選擇題)
-                    { id: 'MC1', type: 'MC', max: 1, level: '淺', topicId: '4.5.2', topicDesc: '辨識長直載流導線周圍磁場強度與距離的關係線圖' },
-                    { id: 'MC2', type: 'MC', max: 1, level: '中', topicId: '4.6.3', topicDesc: '辨認兩條平行載流導線之間的磁力大小公式' },
-                    { id: 'MC3', type: 'MC', max: 1, level: '淺', topicId: '4.5.2', topicDesc: '比較不同電流及線圈匝數對電磁鐵磁場強度的影響' },
-                    { id: 'MC4', type: 'MC', max: 1, level: '中', topicId: '4.5.2', topicDesc: '分析螺線管產生之磁場的方向及強度分佈特徵' },
-                    { id: 'MC5', type: 'MC', max: 1, level: '中', topicId: '4.6.1', topicDesc: '判斷通電線圈與磁鐵之間的磁力相互作用及運動方向' },
-                    { id: 'MC6', type: 'MC', max: 1, level: '中', topicId: '4.6.3', topicDesc: '判斷通電鋁帶（反向/平行電流）之間的磁力相互作用（吸引或排斥）' },
-                    { id: 'MC7', type: 'MC', max: 1, level: '中', topicId: '4.6.1', topicDesc: '利用弗萊明左手定則判斷均勻磁場中載流矩形線圈所受磁力的方向' },
-    
-                    // Part B: Long Questions (長題目)
-                    // Q1: 三角形線圈在磁場中受力
-                    { id: 'LQ1a', type: 'LQ', max: 3, level: '淺', topicId: '4.6.1', topicDesc: '利用弗萊明左手定則畫出三角形線圈各邊所受的磁力方向' },
-                    { id: 'LQ1b', type: 'LQ', max: 1, level: '中', topicId: '4.6.1', topicDesc: '判斷閉合線圈在均勻磁場中所受的淨磁力' },
-    
-                    // Q2: 兩條長直平行導線的磁力與磁場
-                    { id: 'LQ2ai', type: 'LQ', max: 3, level: '中', topicId: '4.6.3', topicDesc: '解釋及判斷兩條同向平行載流導線之間的磁力方向' },
-                    { id: 'LQ2aii', type: 'LQ', max: 4, level: '深', topicId: '4.6.3', topicDesc: '推導兩條平行導線之間單位長度的磁力公式' },
-                    { id: 'LQ2bi', type: 'LQ', max: 1, level: '淺', topicId: '4.6.3', topicDesc: '代入公式計算兩條平行電纜之間單位長度的磁力大小' },
-                    { id: 'LQ2bii', type: 'LQ', max: 2, level: '中', topicId: '4.5.2', topicDesc: '計算兩條平行同向載流電纜中點的淨磁場大小' },
-    
-                    // Q3: 磁場中的載流金屬棒 (電動機原理)
-                    { id: 'LQ3a', type: 'LQ', max: 1, level: '中', topicId: '4.6.1', topicDesc: '根據載流導體的運動方向推斷磁鐵的極性' },
-                    { id: 'LQ3b', type: 'LQ', max: 4, level: '深', topicId: '4.6.1', topicDesc: '繪畫在軌道上運動的載流金屬棒的自由體受力圖 (包含磁力、重力、摩擦力及正向力)' },
-                    { id: 'LQ3c', type: 'LQ', max: 1, level: '淺', topicId: '4.6.1', topicDesc: '判斷直流電源極性反轉後金屬棒的運動方向變化' }
-                ]
-            },
-            'CH27': {
-                title: '27 帶電粒子在磁場中的運動',
-                questions: [
-                    // Part A: MC (選擇題)
-                    { id: 'MC1', type: 'MC', max: 1, level: '中', topicId: '4.6.3', topicDesc: '應用電場力與磁力平衡的概念 (速度選擇器) 判斷所需的電場方向' },
-                    { id: 'MC2', type: 'MC', max: 1, level: '中', topicId: '4.6.3', topicDesc: '分析帶電粒子在磁場中的偏轉路徑、正負電荷判別及軌道半徑影響因素' },
-    
-                    // Part B: Long Questions (長題目)
-                    // Q1: 電子束在磁場中的偏轉
-                    { id: 'LQ1a', type: 'LQ', max: 1, level: '淺', topicId: '4.5.1', topicDesc: '根據左手定則從電子束的偏轉路徑判斷磁場方向' },
-                    { id: 'LQ1bi', type: 'LQ', max: 1, level: '淺', topicId: '4.6.3', topicDesc: '描述磁場強度增加對帶電粒子軌道半徑 (偏轉程度) 的影響' },
-                    { id: 'LQ1bii', type: 'LQ', max: 2, level: '中', topicId: '4.6.3', topicDesc: '比較及繪畫正離子與電子在磁場中偏轉方向及曲率的差異' },
-    
-                    // Q2: 速度選擇器與質譜儀原理
-                    { id: 'LQ2a', type: 'LQ', max: 3, level: '淺', topicId: '4.1.3', topicDesc: '利用平行板間的電勢差與距離計算電場強度及方向' },
-                    { id: 'LQ2b', type: 'LQ', max: 2, level: '淺', topicId: '4.6.3', topicDesc: '在平衡狀態下（不偏轉）利用電場力計算粒子受到的磁力' },
-                    { id: 'LQ2c', type: 'LQ', max: 2, level: '中', topicId: '4.6.3', topicDesc: '利用速度選擇器公式 v = E/B 計算粒子的運動速率' },
-                    { id: 'LQ2d', type: 'LQ', max: 2, level: '深', topicId: '2.9.2', topicDesc: '結合向心力公式 Bqv = mv²/r 計算粒子在磁場中運動的直徑 d' },
-                    { id: 'LQ2ei', type: 'LQ', max: 2, level: '中', topicId: '4.6.3', topicDesc: '論證速度選擇器的原理：通過速度與電荷及質量無關的特性' },
-                    { id: 'LQ2eii', type: 'LQ', max: 2, level: '深', topicId: '4.6.3', topicDesc: '分析電子與重離子在磁場中運動路徑的兩大差異 (旋轉方向與荷質比對半徑的影響)' }
-                ]
-            },
-            'CH28': {
-                title: '28 電磁感應',
-                questions: [
-                    // Part A: MC (選擇題)
-                    { id: 'MC1', type: 'MC', max: 1, level: '淺', topicId: '4.7.2', topicDesc: '辨識簡單發電機產生的感應電流與時間線圖關係' }, // [cite: 35, 36, 37]
-                    { id: 'MC2', type: 'MC', max: 1, level: '中', topicId: '4.7.1', topicDesc: '分析矩形線圈穿過均勻磁場時的感應電壓與電流方向' }, // [cite: 38, 39, 40]
-                    { id: 'MC3', type: 'MC', max: 1, level: '中', topicId: '4.7.1', topicDesc: '應用楞次定律判斷開關閉合與斷開瞬間雙線圈的感應電流方向' }, // [cite: 41, 42, 43]
-                    { id: 'MC4', type: 'MC', max: 1, level: '中', topicId: '4.7.2', topicDesc: '藉由直流發電機輸出電壓線圖分析線圈旋轉位置與頻率' }, // [cite: 44, 45, 46, 47, 48]
-                    { id: 'MC5', type: 'MC', max: 1, level: '深', topicId: '4.7.1', topicDesc: '分析金屬棒在C型導軌上滑動時的受力、電勢高低及感應電流方向' }, // [cite: 49, 50, 51, 52, 53]
-    
-                    // Part B: Long Questions (長題目)
-                    // Q1: 磁鐵穿過螺線管
-                    { id: 'LQ1a', type: 'LQ', max: 3, level: '淺', topicId: '4.7.1', topicDesc: '應用楞次定律判斷磁鐵穿過螺線管三個階段的感應電流方向' }, // [cite: 54, 55, 56, 57, 71]
-                    { id: 'LQ1b', type: 'LQ', max: 3, level: '中', topicId: '4.7.1', topicDesc: '根據電磁感應對運動的阻礙，比較磁鐵下落時與重力加速度的大小關係' }, // 
-    
-                    // Q2: 健身單車電磁煞車
-                    { id: 'LQ2', type: 'LQ', max: 3, level: '中', topicId: '4.7.2', topicDesc: '解釋健身單車電磁煞車系統中，利用變阻器控制磁場及渦電流阻力的原理' }, // [cite: 59, 60, 73, 74, 75]
-    
-                    // Q3: 磁場變化與電路分析
-                    { id: 'LQ3', type: 'LQ', max: 4, level: '深', topicId: '4.7.3', topicDesc: '結合法拉第定律定量計算磁場變化產生的電動勢，並進行電路總電流分析' }, // [cite: 61, 62, 76]
-    
-                    // Q4: 金屬棒在平行導軌上運動
-                    { id: 'LQ4a', type: 'LQ', max: 3, level: '淺', topicId: '4.7.3', topicDesc: '應用 E = Blv 公式定量計算金屬棒在平行導軌上運動的動生電動勢' }, // [cite: 63, 64, 65, 66]
-                    { id: 'LQ4b', type: 'LQ', max: 2, level: '淺', topicId: '4.3.1', topicDesc: '利用歐姆定律計算流經金屬棒的感應電流大小' }, // [cite: 67, 68]
-                    { id: 'LQ4c', type: 'LQ', max: 2, level: '淺', topicId: '4.2.5', topicDesc: '計算金屬棒因感應電流產生的發熱電功率' }, // 
-                    { id: 'LQ4d', type: 'LQ', max: 3, level: '中', topicId: '4.6.1', topicDesc: '計算並判斷維持金屬棒勻速運動所需的外部施力大小與方向' } // 
-                ]
-            },
-            'CH29': {
-                title: '29 交流電與變壓器',
-                questions: [
-                    // Part A: MC (選擇題)
-                    { id: 'MC1', type: 'MC', max: 1, level: '淺', topicId: '4.8.1', topicDesc: '利用變壓器電壓與匝數比公式計算副線圈的匝數' },
-                    { id: 'MC2', type: 'MC', max: 1, level: '淺', topicId: '4.8.1', topicDesc: '辨析升壓變壓器的基本特徵（電壓、電流及輸出功率的關係）' },
-                    { id: 'MC3', type: 'MC', max: 1, level: '中', topicId: '4.8.1', topicDesc: '分析包含理想變壓器與電阻器的電路，計算副線圈電壓、電流及原線圈電流' },
-                    { id: 'MC4', type: 'MC', max: 1, level: '中', topicId: '4.8.1', topicDesc: '根據多盞燈泡的總輸出功率與原線圈輸入電流計算變壓器的效率' },
-    
-                    // Part B: Long Questions (長題目)
-                    // Q1: 遠距離輸電的基本原理
-                    { id: 'LQ1a', type: 'LQ', max: 1, level: '淺', topicId: '4.8.2', topicDesc: '指出電網遠距離輸電所採用的電流類型（交流電）' },
-                    { id: 'LQ1bi', type: 'LQ', max: 1, level: '淺', topicId: '4.8.2', topicDesc: '解釋採用交流電進行電能傳輸的主因（易於利用變壓器升降電壓）' },
-                    { id: 'LQ1bii', type: 'LQ', max: 1, level: '淺', topicId: '4.8.2', topicDesc: '簡述高壓輸電能有效減少傳輸電纜上電能損耗（功率損耗）的原理' },
-    
-                    // Q2: 非額定電壓下的電器運作
-                    { id: 'LQ2a', type: 'LQ', max: 3, level: '中', topicId: '4.2.5', topicDesc: '利用 P = V²/R 公式估算與計算電器在非額定電壓下工作時的實際消耗功率' },
-                    { id: 'LQ2b', type: 'LQ', max: 1, level: '淺', topicId: '4.8.1', topicDesc: '判斷使電器恢復至額定功率運作所需的變壓器類型（升壓變壓器）' },
-                    { id: 'LQ2c', type: 'LQ', max: 2, level: '淺', topicId: '4.8.1', topicDesc: '應用變壓器公式計算滿足額定電壓所需的副線圈匝數' },
-    
-                    // Q3: 降壓方案對比（保護電阻器 vs 變壓器）
-                    { id: 'LQ3ai', type: 'LQ', max: 2, level: '淺', topicId: '4.2.5', topicDesc: '利用額定值計算燈泡正常發光時的電阻值' },
-                    { id: 'LQ3aii', type: 'LQ', max: 2, level: '淺', topicId: '4.2.5', topicDesc: '利用額定值計算流經發光燈泡的正常工作電流' },
-                    { id: 'LQ3aiii', type: 'LQ', max: 1, level: '中', topicId: '4.2.5', topicDesc: '分析串聯分壓電路，計算保護電阻器 R 所消耗（浪費）的電功率' },
-                    { id: 'LQ3aiv', type: 'LQ', max: 1, level: '中', topicId: '4.2.5', topicDesc: '計算利用電阻器串聯降壓時，整個供電系統的發光能源效益（效率）' },
-                    { id: 'LQ3bi', type: 'LQ', max: 2, level: '淺', topicId: '4.8.1', topicDesc: '計算變壓器取代電阻器降壓時，所需的線圈匝數比' },
-                    { id: 'LQ3bii', type: 'LQ', max: 2, level: '中', topicId: '4.8.1', topicDesc: '利用原線圈實際輸入功率與燈泡額定功率計算實際變壓器的運作效率' },
-                    { id: 'LQ3c', type: 'LQ', max: 4, level: '中', topicId: '4.8.1', topicDesc: '詳述實際變壓器能量損耗的兩大來源（線圈電阻發熱、鐵芯渦電流）及其對應的改善手段' }
-                ]
-            }
-        
-
-        };
-        // 2. 新增這兩行：優先從瀏覽器儲存讀取，若無則使用預設值
-        const SYLLABUS_TOPICS = JSON.parse(localStorage.getItem('USER_SYLLABUS')) || DEFAULT_SYLLABUS;
-        const QUIZ_MAPS = JSON.parse(localStorage.getItem('USER_QUIZ_MAPS')) || DEFAULT_QUIZ_MAPS;
+       // 直接從瀏覽器儲存區讀取設定，完全不用預設代碼
+        const SYLLABUS_TOPICS = JSON.parse(localStorage.getItem('USER_SYLLABUS')) || {};
+        const QUIZ_MAPS = JSON.parse(localStorage.getItem('USER_QUIZ_MAPS')) || {};
 
             
             // --- Views Components ---
@@ -1838,124 +1491,128 @@ const ClassSummaryView = ({ activeStudents, scores }) => {
         </div>
     );
 };
-    // ==================== 新增：課程與小測設定組件 ====================
-    const SettingsView = () => {
-        const [syllabusText, setSyllabusText] = React.useState('');
-        const [quizText, setQuizText] = React.useState('');
-    
-        // 初始化：將現有的 JSON 資料轉換成 Excel 可讀的 TSV (Tab分隔) 格式
-        React.useEffect(() => {
-            let sText = "課題編號\t課題名稱\n";
-            Object.entries(SYLLABUS_TOPICS).forEach(([id, name]) => {
-                sText += `${id}\t${name}\n`;
-            });
-            setSyllabusText(sText);
-    
-            let qText = "小測編號\t小測標題\t題目ID\t題型\t滿分\t難度\t課題編號\t題目描述\n";
-            Object.entries(QUIZ_MAPS).forEach(([quizId, map]) => {
-                if (map.questions) {
-                    map.questions.forEach(q => {
-                        qText += `${quizId}\t${map.title}\t${q.id}\t${q.type}\t${q.max}\t${q.level}\t${q.topicId}\t${q.topicDesc}\n`;
-                    });
-                }
-            });
-            setQuizText(qText);
-        }, []);
-    
-        // 儲存並解析貼上的文字
-        const handleSave = () => {
-            try {
-                // 1. 解析 Syllabus
-                const newSyllabus = {};
-                const sLines = syllabusText.trim().split('\n');
-                for (let i = 1; i < sLines.length; i++) { // 從 1 開始跳過表頭
-                    if (!sLines[i].trim()) continue;
-                    const cols = sLines[i].split('\t');
-                    if (cols.length >= 2) newSyllabus[cols[0].trim()] = cols[1].trim();
-                }
-    
-                // 2. 解析 Quiz Maps
-                const newQuizMaps = {};
-                const qLines = quizText.trim().split('\n');
-                for (let i = 1; i < qLines.length; i++) { // 從 1 開始跳過表頭
-                    if (!qLines[i].trim()) continue;
-                    const cols = qLines[i].split('\t');
-                    if (cols.length < 8) continue; 
-                    
-                    const [quizId, title, qId, type, max, level, topicId, desc] = cols.map(c => c.trim());
-                    
-                    if (!newQuizMaps[quizId]) {
-                        newQuizMaps[quizId] = { title: title, questions: [] };
-                    }
-                    newQuizMaps[quizId].questions.push({
-                        id: qId, type: type, max: Number(max), level: level, topicId: topicId, topicDesc: desc
-                    });
-                }
-    
-                // 3. 寫入瀏覽器快取
-                localStorage.setItem('USER_SYLLABUS', JSON.stringify(newSyllabus));
-                localStorage.setItem('USER_QUIZ_MAPS', JSON.stringify(newQuizMaps));
-                
-                alert('✅ 設定已成功儲存！系統將重新載入以套用最新設定。');
-                window.location.reload(); // 重新整理頁面以套用全域變數
-            } catch (err) {
-                alert('❌ 儲存失敗！請確保貼上的資料是從 Excel / Google Sheet 複製的 (包含 Tab 分隔)。\n錯誤細節: ' + err);
+// ==================== 1. 課程大綱設定組件 ====================
+const SyllabusSettingsView = () => {
+    const [syllabusText, setSyllabusText] = React.useState('');
+
+    // 將現有的資料轉為純文字顯示
+    React.useEffect(() => {
+        let sText = "課題編號\t課題名稱\n";
+        Object.entries(SYLLABUS_TOPICS).forEach(([id, name]) => {
+            sText += `${id}\t${name}\n`;
+        });
+        setSyllabusText(sText);
+    }, []);
+
+    const handleSave = () => {
+        try {
+            const newSyllabus = {};
+            const sLines = syllabusText.trim().split('\n');
+            for (let i = 1; i < sLines.length; i++) {
+                if (!sLines[i].trim()) continue;
+                const cols = sLines[i].split('\t');
+                if (cols.length >= 2) newSyllabus[cols[0].trim()] = cols[1].trim();
             }
-        };
-    
-        const handleReset = () => {
-            if(window.confirm('確定要清除自訂設定，恢復成系統最初的預設值嗎？')) {
-                localStorage.removeItem('USER_SYLLABUS');
-                localStorage.removeItem('USER_QUIZ_MAPS');
-                window.location.reload();
-            }
+            localStorage.setItem('USER_SYLLABUS', JSON.stringify(newSyllabus));
+            alert('✅ 課程大綱設定已儲存！');
+            window.location.reload();
+        } catch (err) {
+            alert('❌ 儲存失敗！錯誤: ' + err);
         }
-    
-        return (
-            <div className="p-6 max-w-7xl mx-auto animate-fadeIn">
-                <div className="flex justify-between items-center mb-6">
-                    <div>
-                        <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                            <Icon name="Settings" /> 課程大綱與小測內容設定
-                        </h1>
-                        <p className="text-sm text-slate-500 mt-1">您可以直接在 Google Sheet 編輯資料，然後全選複製 (Ctrl+C)，在此貼上 (Ctrl+V)。</p>
-                    </div>
-                    <div className="flex gap-3">
-                        <button onClick={handleReset} className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition">恢復預設值</button>
-                        <button onClick={handleSave} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2">
-                            <Icon name="Save" size={18} /> 儲存並套用
-                        </button>
-                    </div>
+    };
+
+    return (
+        <div className="p-6 max-w-4xl mx-auto animate-fadeIn">
+            <div className="flex justify-between items-center mb-6">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                        <Icon name="BookOpen" /> 課程大綱 (Syllabus) 設定
+                    </h1>
+                    <p className="text-sm text-slate-500 mt-1">請貼上包含兩欄 (課題編號, 課題名稱) 的 Excel/Google Sheet 資料。</p>
                 </div>
-    
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* 課程大綱設定區 */}
-                    <div className="card p-4 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col">
-                        <h3 className="text-md font-semibold text-slate-700 mb-2">1. 課程大綱 (Syllabus)</h3>
-                        <p className="text-xs text-slate-500 mb-3">Google Sheet 格式需包含兩欄：<b>[課題編號] [課題名稱]</b></p>
-                        <textarea 
-                            className="w-full h-[500px] p-3 text-sm font-mono bg-slate-50 border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 whitespace-pre"
-                            value={syllabusText}
-                            onChange={(e) => setSyllabusText(e.target.value)}
-                        />
-                    </div>
-    
-                    {/* 小測設定區 */}
-                    <div className="card p-4 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col">
-                        <h3 className="text-md font-semibold text-slate-700 mb-2">2. 小測與題目 (Quiz Maps)</h3>
-                        <p className="text-xs text-slate-500 mb-3">Google Sheet 格式需包含八欄：<b>[小測編號] [小測標題] [題目ID] [題型] [滿分] [難度] [課題編號] [題目描述]</b></p>
-                        <textarea 
-                            className="w-full h-[500px] p-3 text-sm font-mono bg-slate-50 border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 whitespace-pre flex-nowrap overflow-x-auto"
-                            wrap="off"
-                            value={quizText}
-                            onChange={(e) => setQuizText(e.target.value)}
-                        />
-                    </div>
-                </div>
+                <button onClick={handleSave} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2">
+                    <Icon name="Save" size={18} /> 儲存並套用
+                </button>
             </div>
-        );
-    };        
-    // ==================== END：課程與小測設定組件 ====================     
+            <div className="card p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
+                <textarea 
+                    className="w-full h-[650px] p-4 text-sm font-mono bg-slate-50 border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 whitespace-pre"
+                    value={syllabusText}
+                    onChange={(e) => setSyllabusText(e.target.value)}
+                    placeholder="請在此貼上您的課程大綱..."
+                />
+            </div>
+        </div>
+    );
+};
+
+// ==================== 2. 小測內容設定組件 ====================
+const QuizSettingsView = () => {
+    const [quizText, setQuizText] = React.useState('');
+
+    React.useEffect(() => {
+        let qText = "小測編號\t小測標題\t題目ID\t題型\t滿分\t難度\t課題編號\t題目描述\n";
+        Object.entries(QUIZ_MAPS).forEach(([quizId, map]) => {
+            if (map.questions) {
+                map.questions.forEach(q => {
+                    qText += `${quizId}\t${map.title}\t${q.id}\t${q.type}\t${q.max}\t${q.level}\t${q.topicId}\t${q.topicDesc}\n`;
+                });
+            }
+        });
+        setQuizText(qText);
+    }, []);
+
+    const handleSave = () => {
+        try {
+            const newQuizMaps = {};
+            const qLines = quizText.trim().split('\n');
+            for (let i = 1; i < qLines.length; i++) {
+                if (!qLines[i].trim()) continue;
+                const cols = qLines[i].split('\t');
+                if (cols.length < 8) continue; 
+                
+                const [quizId, title, qId, type, max, level, topicId, desc] = cols.map(c => c.trim());
+                
+                if (!newQuizMaps[quizId]) {
+                    newQuizMaps[quizId] = { title: title, questions: [] };
+                }
+                newQuizMaps[quizId].questions.push({
+                    id: qId, type: type, max: Number(max), level: level, topicId: topicId, topicDesc: desc
+                });
+            }
+            localStorage.setItem('USER_QUIZ_MAPS', JSON.stringify(newQuizMaps));
+            alert('✅ 小測內容設定已儲存！');
+            window.location.reload();
+        } catch (err) {
+            alert('❌ 儲存失敗！錯誤: ' + err);
+        }
+    };
+
+    return (
+        <div className="p-6 max-w-6xl mx-auto animate-fadeIn">
+            <div className="flex justify-between items-center mb-6">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                        <Icon name="FileEdit" /> 小測內容 (Quiz Maps) 設定
+                    </h1>
+                    <p className="text-sm text-slate-500 mt-1">請貼上包含八欄 (小測編號, 小測標題, 題目ID, 題型, 滿分, 難度, 課題編號, 題目描述) 的 Excel/Google Sheet 資料。</p>
+                </div>
+                <button onClick={handleSave} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2">
+                    <Icon name="Save" size={18} /> 儲存並套用
+                </button>
+            </div>
+            <div className="card p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
+                <textarea 
+                    className="w-full h-[650px] p-4 text-sm font-mono bg-slate-50 border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 whitespace-pre flex-nowrap overflow-x-auto"
+                    wrap="off"
+                    value={quizText}
+                    onChange={(e) => setQuizText(e.target.value)}
+                    placeholder="請在此貼上您的小測設定..."
+                />
+            </div>
+        </div>
+    );
+};
         
 const App = () => {
             // ★ 將這裡換成你剛剛複製的 Google Apps Script 網址 ★
@@ -2074,7 +1731,7 @@ const App = () => {
             const Sidebar = () => (
                 <div className="w-64 bg-slate-800 text-white h-screen fixed left-0 top-0 flex flex-col z-10 shadow-lg">
                     <div className="p-6 border-b border-slate-700"><h1 className="text-lg font-bold">HKDSE Physics</h1><p className="text-xs text-slate-400 mt-1">Quiz Analyzer Pro</p></div>
-                    <nav className="flex-1 p-4 space-y-2">
+                    <nav className="flex-1 p-4 space-y-2 overflow-y-auto pb-20">
                         
                         <div className="p-4 bg-slate-900 border-b border-slate-700">
                         <button 
@@ -2111,9 +1768,13 @@ const App = () => {
                             <Icon name="Table" size={18} /> 班級成績總表 (Excel)
                         </button>
                         <button onClick={() => setView('backup')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'backup' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="Database" size={18} /> 數據備份與還原</button>
-                        {/* 增插這個按鈕 */}
-                        <button onClick={() => setView('settings')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'settings' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}>
-                            <Icon name="Settings" size={18} /> 課程與小測設定
+                        <div className="pt-4 mt-4 border-t border-slate-700"></div> {/* 加一條分隔線 */}
+                        
+                        <button onClick={() => setView('syllabusSettings')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'syllabusSettings' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}>
+                            <Icon name="BookOpen" size={18} /> 課程大綱設定
+                        </button>
+                        <button onClick={() => setView('quizSettings')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'quizSettings' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}>
+                            <Icon name="FileEdit" size={18} /> 小測內容設定
                         </button>
                     </nav>
                 </div>
@@ -2130,6 +1791,8 @@ const App = () => {
                     {view === 'classSummary' && <ClassSummaryView activeStudents={activeStudents} scores={scores} />}
                     {view === 'backup' && <BackupView students={students} setStudents={setStudents} scores={scores} setScores={setScores} />}
                     {view === 'settings' && <SettingsView />}
+                    {view === 'syllabusSettings' && <SyllabusSettingsView />}
+                    {view === 'quizSettings' && <QuizSettingsView />}
                 </div></div>
             );
         };
