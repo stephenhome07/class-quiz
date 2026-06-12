@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.15 Physics Quiz Analyzer</title>
+    <title> V2.16 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -1615,31 +1615,7 @@ const QuizSettingsView = ({ syncToCloud }) => {
     );
 };
 
-    return (
-        <div className="p-6 max-w-6xl mx-auto animate-fadeIn">
-            <div className="flex justify-between items-center mb-6">
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                        <Icon name="FileEdit" /> 小測內容 (Quiz Maps) 設定
-                    </h1>
-                    <p className="text-sm text-slate-500 mt-1">請貼上包含八欄 (小測編號, 小測標題, 題目ID, 題型, 滿分, 難度, 課題編號, 題目描述) 的 Excel/Google Sheet 資料。</p>
-                </div>
-                <button onClick={handleSave} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2">
-                    <Icon name="Save" size={18} /> 儲存並套用
-                </button>
-            </div>
-            <div className="card p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
-                <textarea 
-                    className="w-full h-[650px] p-4 text-sm font-mono bg-slate-50 border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 whitespace-pre flex-nowrap overflow-x-auto"
-                    wrap="off"
-                    value={quizText}
-                    onChange={(e) => setQuizText(e.target.value)}
-                    placeholder="請在此貼上您的小測設定..."
-                />
-            </div>
-        </div>
-    );
-};
+
         
 const App = () => {
             // ★ 將這裡換成你剛剛複製的 Google Apps Script 網址 ★
