@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.12 Physics Quiz Analyzer</title>
+    <title> V2.13 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -1602,48 +1602,59 @@ const ClassSummaryView = ({ activeStudents, scores }) => {
         setIncludedQuizzes(prev => ({ ...prev, [quizName]: !prev[quizName] }));
     };
 
-    // 3. 處理學生資料、動態加總各題分數與計算平均分
-    const computedData = React.useMemo(() => {
-        return activeStudents.map(student => {
-            let totalForAvg = 0;
-            let countForAvg = 0;
-            const quizScores = {};
-
-            allQuizzes.forEach(quiz => {
-                const studentScores = scores[student.id]?.[quiz];
-                let quizTotalScore = null;
-
-                // 檢查該學生是否有這份小測的成績紀錄，且裡面有填寫資料
-                if (studentScores && Object.keys(studentScores).length > 0) {
-                    const map = QUIZ_MAPS[quiz];
-                    if (map) {
-                        let sum = 0;
-                        // 依據 QUIZ_MAPS 裡定義的題目，把每題得分加起來
-                        map.questions.forEach(q => {
-                            sum += (studentScores[q.id] || 0);
-                        });
-                        quizTotalScore = sum;
+    // 3. 處理學生資料、動態加總各題分數與計算平均分 (改為按100滿分計算)
+        const computedData = React.useMemo(() => {
+            return activeStudents.map(student => {
+                let totalForAvg = 0;  // 用來加總各測驗的「百分制分數」
+                let countForAvg = 0;  // 用來計算參與平均的測驗數量
+                const quizScores = {};
+    
+                allQuizzes.forEach(quiz => {
+                    const studentScores = scores[student.id]?.[quiz];
+                    let quizTotalScore = null;  // 原始得分 (用於顯示)
+                    let quizPercentage = null;  // 百分制得分 (用於算平均)
+    
+                    // 檢查該學生是否有這份小測的成績紀錄，且裡面有填寫資料
+                    if (studentScores && Object.keys(studentScores).length > 0) {
+                        const map = QUIZ_MAPS[quiz];
+                        if (map) {
+                            let sum = 0;
+                            let maxScore = 0;
+                            // 依據 QUIZ_MAPS 裡定義的題目，把每題得分和每題滿分都加起來
+                            map.questions.forEach(q => {
+                                sum += (studentScores[q.id] || 0);
+                                maxScore += (q.max || 0); // 累加該小測的滿分
+                            });
+                            
+                            quizTotalScore = sum; // 保留原始總分用於表格顯示
+                            
+                            // 計算該小測的百分制分數 (滿分100)
+                            if (maxScore > 0) {
+                                quizPercentage = (sum / maxScore) * 100;
+                            }
+                        }
                     }
-                }
-
-                quizScores[quiz] = quizTotalScore;
-
-                // 如果該 Quiz 被勾選納入計算，且分數有效（不為 null），則計入平均分
-                if (includedQuizzes[quiz] && quizTotalScore !== null) {
-                    totalForAvg += quizTotalScore;
-                    countForAvg++;
-                }
+    
+                    quizScores[quiz] = quizTotalScore;
+    
+                    // 如果該 Quiz 被勾選納入計算，且分數有效，則將「百分制分數」計入平均分
+                    if (includedQuizzes[quiz] && quizPercentage !== null) {
+                        totalForAvg += quizPercentage;
+                        countForAvg++;
+                    }
+                });
+    
+                // 計算最終平均分
+                const average = countForAvg > 0 ? (totalForAvg / countForAvg).toFixed(1) : '-';
+                
+                return {
+                    ...student,
+                    quizScores,
+                    average
+                };
             });
-
-            const average = countForAvg > 0 ? (totalForAvg / countForAvg).toFixed(1) : '-';
-            return {
-                ...student,
-                quizScores,
-                average
-            };
-        });
-    }, [activeStudents, scores, allQuizzes, includedQuizzes]);
-
+        }, [activeStudents, scores, allQuizzes, includedQuizzes]);
+    
     // 4. 一鍵複製到剪貼簿功能 (Excel 支援的 Tab 分隔格式)
     const handleCopyToExcel = () => {
         if (computedData.length === 0) {
