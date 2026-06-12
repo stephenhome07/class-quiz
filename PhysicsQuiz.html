@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.13 Physics Quiz Analyzer</title>
+    <title> V2.14 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -1578,17 +1578,32 @@
                 return { totalScore, totalMax, analysis, weakTopics };
             };
 
-// ==================== 新增：班級成績總表組件 (修正 NaN 版) ====================
+// ==================== 新增：班級成績總表組件 (加入顏色標示與滿分顯示) ====================
 const ClassSummaryView = ({ activeStudents, scores }) => {
-    // 1. 直接讀取系統定義的所有 Quiz ID (確保 CH09, CH12, CH18 欄位能正常顯示)
+    // 1. 讀取系統定義的所有 Quiz ID
     const allQuizzes = React.useMemo(() => {
         return Object.keys(QUIZ_MAPS || {});
     }, []);
 
-    // 2. 狀態：記錄哪些 Quiz 要納入平均分計算（預設全部勾選）
+    // 2. 計算每個小測的「滿分」總和
+    const quizMaxScores = React.useMemo(() => {
+        const maxScores = {};
+        allQuizzes.forEach(quiz => {
+            let max = 0;
+            const map = QUIZ_MAPS[quiz];
+            if (map && map.questions) {
+                map.questions.forEach(q => {
+                    max += (q.max || 0);
+                });
+            }
+            maxScores[quiz] = max;
+        });
+        return maxScores;
+    }, [allQuizzes]);
+
+    // 3. 狀態：記錄哪些 Quiz 要納入平均分計算（預設全部勾選）
     const [includedQuizzes, setIncludedQuizzes] = React.useState({});
 
-    // 當載入時，預設全部勾選
     React.useEffect(() => {
         const initial = {};
         allQuizzes.forEach(q => {
@@ -1597,65 +1612,61 @@ const ClassSummaryView = ({ activeStudents, scores }) => {
         setIncludedQuizzes(initial);
     }, [allQuizzes]);
 
-    // 切換某個 Quiz 是否參與平均分計算
     const toggleQuiz = (quizName) => {
         setIncludedQuizzes(prev => ({ ...prev, [quizName]: !prev[quizName] }));
     };
 
-    // 3. 處理學生資料、動態加總各題分數與計算平均分 (改為按100滿分計算)
-        const computedData = React.useMemo(() => {
-            return activeStudents.map(student => {
-                let totalForAvg = 0;  // 用來加總各測驗的「百分制分數」
-                let countForAvg = 0;  // 用來計算參與平均的測驗數量
-                const quizScores = {};
-    
-                allQuizzes.forEach(quiz => {
-                    const studentScores = scores[student.id]?.[quiz];
-                    let quizTotalScore = null;  // 原始得分 (用於顯示)
-                    let quizPercentage = null;  // 百分制得分 (用於算平均)
-    
-                    // 檢查該學生是否有這份小測的成績紀錄，且裡面有填寫資料
-                    if (studentScores && Object.keys(studentScores).length > 0) {
-                        const map = QUIZ_MAPS[quiz];
-                        if (map) {
-                            let sum = 0;
-                            let maxScore = 0;
-                            // 依據 QUIZ_MAPS 裡定義的題目，把每題得分和每題滿分都加起來
-                            map.questions.forEach(q => {
-                                sum += (studentScores[q.id] || 0);
-                                maxScore += (q.max || 0); // 累加該小測的滿分
-                            });
-                            
-                            quizTotalScore = sum; // 保留原始總分用於表格顯示
-                            
-                            // 計算該小測的百分制分數 (滿分100)
-                            if (maxScore > 0) {
-                                quizPercentage = (sum / maxScore) * 100;
-                            }
+    // 4. 處理學生資料、動態加總各題分數與計算平均分 (按100滿分計算)
+    const computedData = React.useMemo(() => {
+        return activeStudents.map(student => {
+            let totalForAvg = 0;  
+            let countForAvg = 0;  
+            const quizScores = {};
+
+            allQuizzes.forEach(quiz => {
+                const studentScores = scores[student.id]?.[quiz];
+                let quizTotalScore = null;  
+                let quizPercentage = null;  
+
+                // 檢查該學生是否有這份小測的成績紀錄
+                if (studentScores && Object.keys(studentScores).length > 0) {
+                    const map = QUIZ_MAPS[quiz];
+                    if (map) {
+                        let sum = 0;
+                        map.questions.forEach(q => {
+                            sum += (studentScores[q.id] || 0);
+                        });
+                        
+                        const maxScore = quizMaxScores[quiz];
+                        quizTotalScore = sum; 
+                        
+                        // 計算該小測的百分制分數 (滿分100)
+                        if (maxScore > 0) {
+                            quizPercentage = (sum / maxScore) * 100;
                         }
                     }
-    
-                    quizScores[quiz] = quizTotalScore;
-    
-                    // 如果該 Quiz 被勾選納入計算，且分數有效，則將「百分制分數」計入平均分
-                    if (includedQuizzes[quiz] && quizPercentage !== null) {
-                        totalForAvg += quizPercentage;
-                        countForAvg++;
-                    }
-                });
-    
-                // 計算最終平均分
-                const average = countForAvg > 0 ? (totalForAvg / countForAvg).toFixed(1) : '-';
-                
-                return {
-                    ...student,
-                    quizScores,
-                    average
-                };
+                }
+
+                quizScores[quiz] = quizTotalScore;
+
+                // 納入平均分計算
+                if (includedQuizzes[quiz] && quizPercentage !== null) {
+                    totalForAvg += quizPercentage;
+                    countForAvg++;
+                }
             });
-        }, [activeStudents, scores, allQuizzes, includedQuizzes]);
-    
-    // 4. 一鍵複製到剪貼簿功能 (Excel 支援的 Tab 分隔格式)
+
+            const average = countForAvg > 0 ? (totalForAvg / countForAvg).toFixed(1) : '-';
+            
+            return {
+                ...student,
+                quizScores,
+                average
+            };
+        });
+    }, [activeStudents, scores, allQuizzes, includedQuizzes, quizMaxScores]);
+
+    // 5. 一鍵複製到 Excel 格式
     const handleCopyToExcel = () => {
         if (computedData.length === 0) {
             alert("沒有學生資料可複製");
@@ -1664,6 +1675,8 @@ const ClassSummaryView = ({ activeStudents, scores }) => {
 
         // 表頭
         let tsv = ["班別", "學號", "姓名", ...allQuizzes, "平均分"].join("\t") + "\n";
+        // 滿分行 (方便 Excel 參考)
+        tsv += ["", "", "滿分:", ...allQuizzes.map(quiz => quizMaxScores[quiz] || 0), "100"].join("\t") + "\n";
 
         // 內容行
         computedData.forEach(student => {
@@ -1678,12 +1691,8 @@ const ClassSummaryView = ({ activeStudents, scores }) => {
         });
 
         navigator.clipboard.writeText(tsv)
-            .then(() => {
-                alert("📋 已成功複製表格資料！\n請直接到 Excel 按 Ctrl+V 貼上即可。");
-            })
-            .catch(err => {
-                alert("複製失敗，錯誤: " + err);
-            });
+            .then(() => alert("📋 已成功複製表格資料！\n請直接到 Excel 按 Ctrl+V 貼上即可。"))
+            .catch(err => alert("複製失敗，錯誤: " + err));
     };
 
     return (
@@ -1693,7 +1702,9 @@ const ClassSummaryView = ({ activeStudents, scores }) => {
                     <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
                         <Icon name="Table" /> 班級成績總表 (Excel 匯出)
                     </h1>
-                    <p className="text-sm text-slate-500 mt-1">未入分的 Quiz 會顯示為 -，且不會被計入平均分計算中。</p>
+                    <p className="text-sm text-slate-500 mt-1">
+                        黃底表示得分 40%~60%；<span className="text-red-500 font-semibold">紅底表示低於 40%</span>。
+                    </p>
                 </div>
                 <button 
                     onClick={handleCopyToExcel}
@@ -1728,15 +1739,25 @@ const ClassSummaryView = ({ activeStudents, scores }) => {
                 <table className="w-full text-left border-collapse min-w-[800px]">
                     <thead className="bg-slate-100 sticky top-0 z-10 shadow-[0_1px_0_0_rgba(226,232,240,1)]">
                         <tr>
-                            <th className="p-3 text-sm font-semibold text-slate-600 border-b border-slate-200">班別</th>
-                            <th className="p-3 text-sm font-semibold text-slate-600 border-b border-slate-200">學號</th>
-                            <th className="p-3 text-sm font-semibold text-slate-600 border-b border-slate-200">姓名</th>
+                            <th className="p-3 text-sm font-semibold text-slate-600 border-b border-slate-200 align-bottom">班別</th>
+                            <th className="p-3 text-sm font-semibold text-slate-600 border-b border-slate-200 align-bottom">學號</th>
+                            <th className="p-3 text-sm font-semibold text-slate-600 border-b border-slate-200 align-bottom">姓名</th>
                             {allQuizzes.map(quiz => (
                                 <th key={quiz} className={`p-3 text-sm font-semibold border-b border-slate-200 ${includedQuizzes[quiz] ? 'text-slate-800 bg-blue-50/50' : 'text-slate-400 line-through'}`}>
-                                    {quiz}
+                                    <div className="flex flex-col gap-1">
+                                        <span>{quiz}</span>
+                                        <span className={`text-xs ${includedQuizzes[quiz] ? 'text-blue-500' : 'text-slate-400'}`}>
+                                            滿分: {quizMaxScores[quiz] || 0}
+                                        </span>
+                                    </div>
                                 </th>
                             ))}
-                            <th className="p-3 text-sm font-bold text-blue-600 bg-blue-50 border-b border-slate-200">平均分</th>
+                            <th className="p-3 text-sm font-bold text-blue-600 bg-blue-50 border-b border-slate-200">
+                                <div className="flex flex-col gap-1">
+                                    <span>平均分</span>
+                                    <span className="text-xs text-blue-400 font-normal">滿分: 100</span>
+                                </div>
+                            </th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1750,15 +1771,61 @@ const ClassSummaryView = ({ activeStudents, scores }) => {
                                     <td className="p-3 text-sm text-slate-700 font-medium">{student.class || student.className || '-'}</td>
                                     <td className="p-3 text-sm text-slate-600">{student.number || student.classNumber || '-'}</td>
                                     <td className="p-3 text-sm text-slate-800 font-medium">{student.name || '-'}</td>
+                                    
+                                    {/* 每個 Quiz 的成績顯示與顏色判定 */}
                                     {allQuizzes.map(quiz => {
                                         const score = student.quizScores[quiz];
+                                        const max = quizMaxScores[quiz];
+                                        
+                                        // 預設樣式
+                                        let bgColor = '';
+                                        let textColor = includedQuizzes[quiz] ? 'text-slate-700' : 'text-slate-300';
+                                        let fontWeight = '';
+
+                                        // 判斷是否需要加上警示顏色
+                                        if (includedQuizzes[quiz] && score !== null && max > 0) {
+                                            const percentage = (score / max) * 100;
+                                            if (percentage < 40) {
+                                                bgColor = 'bg-red-100';
+                                                textColor = 'text-red-700';
+                                                fontWeight = 'font-bold';
+                                            } else if (percentage <= 60) {
+                                                bgColor = 'bg-yellow-100';
+                                                textColor = 'text-yellow-800';
+                                                fontWeight = 'font-bold';
+                                            }
+                                        }
+
                                         return (
-                                            <td key={quiz} className={`p-3 text-sm ${!includedQuizzes[quiz] ? 'text-slate-300' : 'text-slate-600'}`}>
-                                                {score !== null ? score : <span className="text-slate-400">-</span>}
+                                            <td key={quiz} className={`p-3 text-sm ${bgColor} ${textColor} ${fontWeight}`}>
+                                                {score !== null ? score : <span className="text-slate-300">-</span>}
                                             </td>
                                         );
                                     })}
-                                    <td className="p-3 text-sm font-bold text-blue-600 bg-blue-50/30">{student.average}</td>
+
+                                    {/* 平均分的成績顯示與顏色判定 */}
+                                    {(() => {
+                                        let avgBgColor = 'bg-blue-50/30';
+                                        let avgTextColor = 'text-blue-600';
+                                        let avgFontWeight = 'font-bold';
+
+                                        if (student.average !== '-') {
+                                            const avgNum = parseFloat(student.average);
+                                            if (avgNum < 40) {
+                                                avgBgColor = 'bg-red-100';
+                                                avgTextColor = 'text-red-700';
+                                            } else if (avgNum <= 60) {
+                                                avgBgColor = 'bg-yellow-100';
+                                                avgTextColor = 'text-yellow-800';
+                                            }
+                                        }
+
+                                        return (
+                                            <td className={`p-3 text-sm ${avgBgColor} ${avgTextColor} ${avgFontWeight}`}>
+                                                {student.average}
+                                            </td>
+                                        );
+                                    })()}
                                 </tr>
                             ))
                         )}
