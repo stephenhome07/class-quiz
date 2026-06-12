@@ -46,7 +46,7 @@
 
 // 新增：官方課題名稱對照表
 // 官方課題名稱對照表 (涵蓋 Core 及 Elective E3, E4)
-        const SYLLABUS_TOPICS = {
+        const DEFAULT_SYLLABUS = {
             // 第1冊 熱和氣體
             '1.1.1': '量度温度',
             '1.1.2': '攝氏温標',
@@ -179,7 +179,7 @@
             'E4.3.4': '致電離輻射成像方法的健康風險'
         };
 
-        const QUIZ_MAPS = {
+        const DEFAULT_QUIZ_MAPS = {
             'CH09': {
                 title: '09 功、能量和功率',
                 questions: [
@@ -392,6 +392,9 @@
         
 
         };
+        // 2. 新增這兩行：優先從瀏覽器儲存讀取，若無則使用預設值
+        const SYLLABUS_TOPICS = JSON.parse(localStorage.getItem('USER_SYLLABUS')) || DEFAULT_SYLLABUS;
+        const QUIZ_MAPS = JSON.parse(localStorage.getItem('USER_QUIZ_MAPS')) || DEFAULT_QUIZ_MAPS;
 
             
             // --- Views Components ---
@@ -1835,6 +1838,124 @@ const ClassSummaryView = ({ activeStudents, scores }) => {
         </div>
     );
 };
+    // ==================== 新增：課程與小測設定組件 ====================
+    const SettingsView = () => {
+        const [syllabusText, setSyllabusText] = React.useState('');
+        const [quizText, setQuizText] = React.useState('');
+    
+        // 初始化：將現有的 JSON 資料轉換成 Excel 可讀的 TSV (Tab分隔) 格式
+        React.useEffect(() => {
+            let sText = "課題編號\t課題名稱\n";
+            Object.entries(SYLLABUS_TOPICS).forEach(([id, name]) => {
+                sText += `${id}\t${name}\n`;
+            });
+            setSyllabusText(sText);
+    
+            let qText = "小測編號\t小測標題\t題目ID\t題型\t滿分\t難度\t課題編號\t題目描述\n";
+            Object.entries(QUIZ_MAPS).forEach(([quizId, map]) => {
+                if (map.questions) {
+                    map.questions.forEach(q => {
+                        qText += `${quizId}\t${map.title}\t${q.id}\t${q.type}\t${q.max}\t${q.level}\t${q.topicId}\t${q.topicDesc}\n`;
+                    });
+                }
+            });
+            setQuizText(qText);
+        }, []);
+    
+        // 儲存並解析貼上的文字
+        const handleSave = () => {
+            try {
+                // 1. 解析 Syllabus
+                const newSyllabus = {};
+                const sLines = syllabusText.trim().split('\n');
+                for (let i = 1; i < sLines.length; i++) { // 從 1 開始跳過表頭
+                    if (!sLines[i].trim()) continue;
+                    const cols = sLines[i].split('\t');
+                    if (cols.length >= 2) newSyllabus[cols[0].trim()] = cols[1].trim();
+                }
+    
+                // 2. 解析 Quiz Maps
+                const newQuizMaps = {};
+                const qLines = quizText.trim().split('\n');
+                for (let i = 1; i < qLines.length; i++) { // 從 1 開始跳過表頭
+                    if (!qLines[i].trim()) continue;
+                    const cols = qLines[i].split('\t');
+                    if (cols.length < 8) continue; 
+                    
+                    const [quizId, title, qId, type, max, level, topicId, desc] = cols.map(c => c.trim());
+                    
+                    if (!newQuizMaps[quizId]) {
+                        newQuizMaps[quizId] = { title: title, questions: [] };
+                    }
+                    newQuizMaps[quizId].questions.push({
+                        id: qId, type: type, max: Number(max), level: level, topicId: topicId, topicDesc: desc
+                    });
+                }
+    
+                // 3. 寫入瀏覽器快取
+                localStorage.setItem('USER_SYLLABUS', JSON.stringify(newSyllabus));
+                localStorage.setItem('USER_QUIZ_MAPS', JSON.stringify(newQuizMaps));
+                
+                alert('✅ 設定已成功儲存！系統將重新載入以套用最新設定。');
+                window.location.reload(); // 重新整理頁面以套用全域變數
+            } catch (err) {
+                alert('❌ 儲存失敗！請確保貼上的資料是從 Excel / Google Sheet 複製的 (包含 Tab 分隔)。\n錯誤細節: ' + err);
+            }
+        };
+    
+        const handleReset = () => {
+            if(window.confirm('確定要清除自訂設定，恢復成系統最初的預設值嗎？')) {
+                localStorage.removeItem('USER_SYLLABUS');
+                localStorage.removeItem('USER_QUIZ_MAPS');
+                window.location.reload();
+            }
+        }
+    
+        return (
+            <div className="p-6 max-w-7xl mx-auto animate-fadeIn">
+                <div className="flex justify-between items-center mb-6">
+                    <div>
+                        <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                            <Icon name="Settings" /> 課程大綱與小測內容設定
+                        </h1>
+                        <p className="text-sm text-slate-500 mt-1">您可以直接在 Google Sheet 編輯資料，然後全選複製 (Ctrl+C)，在此貼上 (Ctrl+V)。</p>
+                    </div>
+                    <div className="flex gap-3">
+                        <button onClick={handleReset} className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition">恢復預設值</button>
+                        <button onClick={handleSave} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2">
+                            <Icon name="Save" size={18} /> 儲存並套用
+                        </button>
+                    </div>
+                </div>
+    
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* 課程大綱設定區 */}
+                    <div className="card p-4 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col">
+                        <h3 className="text-md font-semibold text-slate-700 mb-2">1. 課程大綱 (Syllabus)</h3>
+                        <p className="text-xs text-slate-500 mb-3">Google Sheet 格式需包含兩欄：<b>[課題編號] [課題名稱]</b></p>
+                        <textarea 
+                            className="w-full h-[500px] p-3 text-sm font-mono bg-slate-50 border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 whitespace-pre"
+                            value={syllabusText}
+                            onChange={(e) => setSyllabusText(e.target.value)}
+                        />
+                    </div>
+    
+                    {/* 小測設定區 */}
+                    <div className="card p-4 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col">
+                        <h3 className="text-md font-semibold text-slate-700 mb-2">2. 小測與題目 (Quiz Maps)</h3>
+                        <p className="text-xs text-slate-500 mb-3">Google Sheet 格式需包含八欄：<b>[小測編號] [小測標題] [題目ID] [題型] [滿分] [難度] [課題編號] [題目描述]</b></p>
+                        <textarea 
+                            className="w-full h-[500px] p-3 text-sm font-mono bg-slate-50 border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 whitespace-pre flex-nowrap overflow-x-auto"
+                            wrap="off"
+                            value={quizText}
+                            onChange={(e) => setQuizText(e.target.value)}
+                        />
+                    </div>
+                </div>
+            </div>
+        );
+    };        
+    // ==================== END：課程與小測設定組件 ====================     
         
 const App = () => {
             // ★ 將這裡換成你剛剛複製的 Google Apps Script 網址 ★
@@ -1990,6 +2111,10 @@ const App = () => {
                             <Icon name="Table" size={18} /> 班級成績總表 (Excel)
                         </button>
                         <button onClick={() => setView('backup')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'backup' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="Database" size={18} /> 數據備份與還原</button>
+                        {/* 增插這個按鈕 */}
+                        <button onClick={() => setView('settings')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'settings' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}>
+                            <Icon name="Settings" size={18} /> 課程與小測設定
+                        </button>
                     </nav>
                 </div>
             );
@@ -2004,6 +2129,7 @@ const App = () => {
                     {view === 'topicAnalysis' && <TopicAnalysisView activeStudents={activeStudents} scores={scores} />}
                     {view === 'classSummary' && <ClassSummaryView activeStudents={activeStudents} scores={scores} />}
                     {view === 'backup' && <BackupView students={students} setStudents={setStudents} scores={scores} setScores={setScores} />}
+                    {view === 'settings' && <SettingsView />}
                 </div></div>
             );
         };
