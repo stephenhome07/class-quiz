@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.27 Physics Quiz Analyzer</title>
+    <title> V2.28 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -2768,7 +2768,207 @@ const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress,
             )}
         </div>
     );
-};        
+};   
+
+
+// ==================== 新增：考試成績匯出 (Excel) 與智慧加權計算組件 ====================
+const ExamExportView = ({ activeStudents, examScores }) => {
+    // 預設全選所有考試
+    const [selectedExams, setSelectedExams] = React.useState(Object.keys(EXAM_MAPS || {}));
+
+    const toggleExam = (examId) => {
+        setSelectedExams(prev => 
+            prev.includes(examId) ? prev.filter(id => id !== examId) : [...prev, examId]
+        );
+    };
+
+    // ★ 核心成績計算邏輯 (處理 S3 直接加總 vs S4-S6 的 35/65 佔比)
+    const getCalculatedScores = (studentId, examId) => {
+        const map = EXAM_MAPS[examId];
+        if (!map) return { mc: 0, lq: 0, total: 0 };
+
+        let mcScore = 0, lqScore = 0, mcMax = 0, lqMax = 0;
+        const record = examScores[studentId]?.[examId] || {};
+
+        map.questions.forEach(q => {
+            if (q.type === 'MC') {
+                mcMax += 1; // 依照需求，MC 每 1 題 1 分
+                const val = record[q.id];
+                if (val && q.ans && val.toString().toUpperCase() === q.ans.toUpperCase()) {
+                    mcScore += 1;
+                }
+            } else {
+                lqMax += q.max;
+                const val = record[q.id];
+                if (val !== undefined && val !== '') {
+                    lqScore += parseFloat(val);
+                }
+            }
+        });
+
+        let totalScore = 0;
+        // 透過標題或 ID 偵測是否為高中卷
+        const titleStr = (examId + ' ' + map.title).toUpperCase();
+        
+        if (titleStr.includes('S4') || titleStr.includes('S5') || titleStr.includes('S6')) {
+            // S4, S5, S6: MC 佔 35%, LQ 佔 65%
+            const mcPart = mcMax > 0 ? (mcScore / mcMax) * 35 : 0;
+            const lqPart = lqMax > 0 ? (lqScore / lqMax) * 65 : 0;
+            totalScore = (mcPart + lqPart).toFixed(1); // 四捨五入至 1 位小數
+        } else {
+            // S3 或一般卷: 直接加總
+            totalScore = mcScore + lqScore;
+        }
+
+        return { mc: mcScore, lq: lqScore, total: totalScore };
+    };
+
+    // ★ 匯出 CSV 檔案給 Excel 讀取
+    const exportToCSV = () => {
+        if (selectedExams.length === 0) {
+            alert('⚠️ 請至少選擇一份試卷進行匯出！');
+            return;
+        }
+
+        // 加入 BOM (Byte Order Mark) 讓 Excel 能正確辨識 UTF-8 中文
+        let csvContent = '\uFEFF'; 
+        
+        // 1. 建立標題列 (Headers)
+        let headers = ['班別', '學號', '姓名'];
+        selectedExams.forEach(examId => {
+            const title = EXAM_MAPS[examId]?.title || examId;
+            headers.push(`${title} MC`);
+            headers.push(`${title} LQ`);
+            headers.push(`${title} 總分`);
+        });
+        csvContent += headers.join(',') + '\n';
+
+        // 2. 建立資料列 (Data Rows)
+        activeStudents.forEach(s => {
+            let row = [s.class, s.num, s.name];
+            selectedExams.forEach(examId => {
+                const scores = getCalculatedScores(s.id, examId);
+                row.push(scores.mc, scores.lq, scores.total);
+            });
+            csvContent += row.join(',') + '\n';
+        });
+
+        // 3. 觸發下載
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        const today = new Date().toISOString().slice(0, 10);
+        link.download = `物理科考試成績匯出_${today}.csv`;
+        link.click();
+    };
+
+    return (
+        <div className="p-6 max-w-6xl mx-auto animate-fadeIn">
+            {/* 標頭與下載按鈕 */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 border-b pb-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                        <Icon name="Download" className="text-green-600" /> 考試成績匯出 (Excel)
+                    </h1>
+                    <p className="text-sm text-slate-500 mt-1">選取要匯出的試卷，系統將自動區分 MC 及 LQ，並對 S4-S6 進行 35/65 加權計算。</p>
+                </div>
+                <button 
+                    onClick={exportToCSV}
+                    className={`font-bold py-2.5 px-6 rounded-xl shadow-sm flex items-center justify-center gap-2 transition ${selectedExams.length > 0 ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
+                >
+                    <Icon name="FileSpreadsheet" size={18} /> 下載 CSV (Excel格式)
+                </button>
+            </div>
+
+            {/* 試卷勾選器 */}
+            <div className="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm">
+                <label className="text-xs font-bold text-slate-700 mb-2 block">1. 選擇要匯出的試卷（可多選）：</label>
+                <div className="flex flex-wrap gap-2">
+                    {Object.keys(EXAM_MAPS).map(examId => {
+                        const isSelected = selectedExams.includes(examId);
+                        // 判定是否為高中卷以加上提示標籤
+                        const isSenior = (examId + ' ' + EXAM_MAPS[examId].title).toUpperCase().match(/S[456]/);
+                        return (
+                            <button 
+                                key={examId}
+                                onClick={() => toggleExam(examId)}
+                                className={`px-4 py-2 rounded-lg text-xs font-bold border transition flex items-center gap-2 ${
+                                    isSelected ? 'bg-green-50 border-green-400 text-green-700 shadow-inner' : 'bg-white border-slate-300 text-slate-500 hover:bg-slate-100'
+                                }`}
+                            >
+                                <Icon name={isSelected ? "CheckSquare" : "Square"} size={14} />
+                                {EXAM_MAPS[examId].title || examId}
+                                {isSenior && <span className="bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded text-[10px] ml-1">35/65%</span>}
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
+
+            {/* 報表即時預覽 */}
+            {selectedExams.length > 0 && (
+                <div className="card p-0 border border-slate-200 shadow-sm overflow-hidden flex flex-col max-h-[600px]">
+                    <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                        <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm">
+                            <Icon name="Eye" size={16} className="text-slate-500"/> 匯出資料預覽
+                        </h3>
+                        <span className="text-xs text-slate-400">系統即時試算，確認無誤後點擊右上角下載</span>
+                    </div>
+                    
+                    <div className="overflow-x-auto flex-1">
+                        <table className="w-full text-left border-collapse whitespace-nowrap min-w-max">
+                            <thead className="bg-slate-100/80 text-xs text-slate-600 shadow-sm">
+                                <tr>
+                                    <th className="p-3 border-b border-r border-slate-200 text-center w-12">班別</th>
+                                    <th className="p-3 border-b border-r border-slate-200 text-center w-16">學號</th>
+                                    <th className="p-3 border-b border-r border-slate-200 w-24">姓名</th>
+                                    {selectedExams.map(examId => (
+                                        <th key={examId} colSpan="3" className="p-3 border-b border-r border-slate-200 text-center bg-green-50/50 text-green-800">
+                                            {EXAM_MAPS[examId]?.title || examId}
+                                        </th>
+                                    ))}
+                                </tr>
+                                <tr>
+                                    <th className="p-2 border-b border-r border-slate-200 bg-slate-50"></th>
+                                    <th className="p-2 border-b border-r border-slate-200 bg-slate-50"></th>
+                                    <th className="p-2 border-b border-r border-slate-200 bg-slate-50"></th>
+                                    {selectedExams.map(examId => (
+                                        <React.Fragment key={examId + '_sub'}>
+                                            <th className="p-2 border-b border-slate-200 text-center text-slate-500 font-medium w-16">MC</th>
+                                            <th className="p-2 border-b border-slate-200 text-center text-slate-500 font-medium w-16">LQ</th>
+                                            <th className="p-2 border-b border-r border-slate-200 text-center text-slate-700 font-bold bg-slate-50 w-20">總分</th>
+                                        </React.Fragment>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody className="text-sm divide-y divide-slate-100">
+                                {activeStudents.map(s => (
+                                    <tr key={s.id} className="hover:bg-slate-50 transition">
+                                        <td className="p-2 border-r border-slate-100 text-center text-slate-600 font-mono">{s.class}</td>
+                                        <td className="p-2 border-r border-slate-100 text-center text-slate-600 font-mono">{s.num}</td>
+                                        <td className="p-2 border-r border-slate-200 font-bold text-slate-700">{s.name}</td>
+                                        {selectedExams.map(examId => {
+                                            const scores = getCalculatedScores(s.id, examId);
+                                            return (
+                                                <React.Fragment key={examId + '_scores'}>
+                                                    <td className="p-2 text-center text-slate-600 font-mono bg-white">{scores.mc}</td>
+                                                    <td className="p-2 text-center text-slate-600 font-mono bg-white">{scores.lq}</td>
+                                                    <td className="p-2 border-r border-slate-200 text-center font-bold text-slate-800 bg-slate-50/50">{scores.total}</td>
+                                                </React.Fragment>
+                                            );
+                                        })}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+        
 const App = () => {
             // ★ 將這裡換成你剛剛複製的 Google Apps Script 網址 ★
             const API_URL = 'https://script.google.com/macros/s/AKfycbz1DKuoBED9iaxYRzctOqfpZhLEtJJScjPyqujHWAPoZjHHpX_3z2T0iqtqob3am9WeuQ/exec';
@@ -2975,6 +3175,7 @@ const App = () => {
                                 {navButton('examAnalysis', 'LineChart', '考試弱點分析', 'bg-purple-600')}
                                 {navButton('studentExamAnalysis', 'UserCheck', '個人大考分析', 'bg-purple-600')}
                                 {navButton('remedialPractice', 'ClipboardEdit', '專屬補底練習與進度', 'bg-purple-600')}
+                                {navButton('examExport', 'Download', '考試成績匯出 (Excel)', 'bg-green-600')}
                                 {navButton('examSettings', 'Settings', '考試內容設定', 'bg-purple-600')}
                             </div>
 
@@ -3013,6 +3214,7 @@ const App = () => {
 
                     {view === 'studentExamAnalysis' && <StudentExamAnalysisView activeStudents={activeStudents} examScores={examScores} />} 
                     {view === 'remedialPractice' && <RemedialPracticeView activeStudents={activeStudents} examScores={examScores} remediationProgress={remediationProgress} setRemediationProgress={setRemediationProgress} syncToCloud={syncToCloud} />}
+                    {view === 'examExport' && <ExamExportView activeStudents={activeStudents} examScores={examScores} />}
                 </div></div>
             );
         };
