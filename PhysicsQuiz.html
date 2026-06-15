@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.26 Physics Quiz Analyzer</title>
+    <title> V2.27 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -2459,6 +2459,281 @@ const StudentExamAnalysisView = ({ activeStudents, examScores }) => {
         </div>
     );
 };
+
+// ==================== 新增：專屬補底練習生成與進度連動組件 ====================
+const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress, setRemediationProgress, syncToCloud }) => {
+    const [selectedExam, setSelectedExam] = React.useState(Object.keys(EXAM_MAPS || {})[0] || '');
+    const [selectedStudentId, setSelectedStudentId] = React.useState('');
+
+    // AI 參數設定狀態
+    const [aiLang, setAiLang] = React.useState('雙語 (Bilingual)');
+    const [aiMcCount, setAiMcCount] = React.useState('5'); 
+    const [aiLqCount, setAiLqCount] = React.useState('3'); 
+    const [generatedPrompt, setGeneratedPrompt] = React.useState('');
+
+    const map = EXAM_MAPS[selectedExam];
+    if (!map) return (
+        <div className="p-12 text-center text-slate-500 mt-10">
+            <Icon name="AlertCircle" size={48} className="mx-auto mb-4 text-slate-300" />
+            <h2 className="text-xl font-bold">尚未設定任何考試內容</h2>
+        </div>
+    );
+
+    // 計算特定學生的單題得分
+    const getStudentQScore = (studentId, q) => {
+        const record = examScores[studentId]?.[selectedExam];
+        if (!record) return 0;
+        const val = record[q.id];
+        if (q.type === 'MC') return (val && q.ans && val.toString().toUpperCase() === q.ans.toUpperCase()) ? q.max : 0;
+        return val === '' || val === undefined ? 0 : parseFloat(val);
+    };
+
+    // 取得該生在選定卷目的總分與各課題表現
+    let totalExamScore = 0;
+    let totalExamMax = 0;
+    const topicStats = {};
+
+    if (selectedStudentId) {
+        map.questions.forEach(q => {
+            const score = getStudentQScore(selectedStudentId, q);
+            totalExamScore += score;
+            totalExamMax += q.max;
+
+            if (!topicStats[q.topicId]) {
+                topicStats[q.topicId] = { 
+                    topicId: q.topicId, 
+                    topicName: SYLLABUS_TOPICS[q.topicId] || '未定義課題', 
+                    max: 0, earned: 0, descList: new Set()
+                };
+            }
+            topicStats[q.topicId].max += q.max;
+            topicStats[q.topicId].earned += score;
+            if (q.topicDesc) topicStats[q.topicId].descList.add(q.topicDesc);
+        });
+    }
+
+    // 篩選出掌握度 <= 50% 的危險課題
+    const weakTopics = Object.values(topicStats)
+        .filter(t => (t.max > 0 ? t.earned / t.max : 0) <= 0.5)
+        .sort((a, b) => a.topicId.localeCompare(b.topicId, undefined, { numeric: true, sensitivity: 'base' }))
+        .map(t => ({ ...t, pct: t.earned / t.max, descArray: Array.from(t.descList) }));
+
+    // 切換補底進度打勾狀態 (並自動同步至 Google Sheet)
+    const toggleProgress = (topicId) => {
+        setRemediationProgress(prev => {
+            const currentStatus = prev[selectedStudentId]?.[selectedExam]?.[topicId] || false;
+            const updated = {
+                ...prev,
+                [selectedStudentId]: {
+                    ...(prev[selectedStudentId] || {}),
+                    [selectedExam]: {
+                        ...((prev[selectedStudentId] && prev[selectedStudentId][selectedExam]) || {}),
+                        [topicId]: !currentStatus
+                    }
+                }
+            };
+            return updated;
+        });
+        // 延遲 300ms 後靜默寫入 Google Sheet
+        setTimeout(() => syncToCloud(), 300);
+    };
+
+    // 動態生成 AI Prompt (★ 特色：只針對打勾「未完成」的弱項出題)
+    React.useEffect(() => {
+        if (!selectedStudentId) return;
+        const studentName = activeStudents.find(s => s.id === selectedStudentId)?.name || '該學生';
+        
+        // ★ 核心邏輯：過濾出尚未打勾的弱項
+        const uncompletedWeakTopics = weakTopics.filter(t => !(remediationProgress[selectedStudentId]?.[selectedExam]?.[t.topicId]));
+        
+        const weakTopicsText = uncompletedWeakTopics.map(t => 
+            `- 課題 [${t.topicId} ${t.topicName}]: 考試得分率 ${(t.pct*100).toFixed(0)}%。曾做錯的題型盲點: ${t.descArray.join('; ')}`
+        ).join('\n');
+
+        let newPrompt = '';
+        if (uncompletedWeakTopics.length === 0) {
+            newPrompt = `太棒了！【${studentName}】在本次考試的所有弱點課題皆已完成補底練習。`;
+        } else {
+            newPrompt = `你是一位極具耐心的香港 DSE 物理科導師。我的學生【${studentName}】正在進行大考後的補救教學。以下是他【本次需要進行補底】的物理課題及歷史錯誤盲點，請為他度身訂造一份分段式專屬補底練習。\n\n[基本設定]\n- 語言: ${aiLang}\n- 預期題型與數量:\n  * 多項選擇題 (MC)：${aiMcCount} 題\n  * 長題目 (LQ)：${aiLqCount} 題\n\n[本次目標補底課題與盲點描述]\n${weakTopicsText}\n\n[生成要求]\n1. 針對上述列出的目標課題，設計難度由淺入深、著重釐清核心物理觀念的練習題。\n2. MC 必須包含 4 個選項，並為錯誤選項附帶【陷阱分析】；LQ 必須附帶詳細的【分步思維導引 (Scaffolding Tips)】與【評分標準】。\n3. 請在開頭給予【${studentName}】一段鼓勵，讓他有信心克服這些難關。`;
+        }
+        setGeneratedPrompt(newPrompt);
+    }, [aiLang, aiMcCount, aiLqCount, selectedStudentId, selectedExam, examScores, remediationProgress]);
+
+    return (
+        <div className="p-6 max-w-6xl mx-auto animate-fadeIn">
+            {/* 標頭 */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 border-b pb-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                        <Icon name="ClipboardEdit" className="text-purple-600" /> 專屬補底練習與進度管理
+                    </h1>
+                    <p className="text-sm text-slate-500 mt-1">獨立針對單次大考，勾選課題進度並精準生成未完成的補底練習。</p>
+                </div>
+            </div>
+            
+            {/* 選擇區塊 */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm">
+                <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-bold text-slate-700">1. 選擇要補底的試卷</label>
+                    <select 
+                        value={selectedExam}
+                        onChange={(e) => setSelectedExam(e.target.value)}
+                        className="p-2.5 border border-slate-300 rounded-lg bg-white font-semibold outline-none focus:ring-2 focus:ring-purple-400"
+                    >
+                        {Object.keys(EXAM_MAPS).map(k => (
+                            <option key={k} value={k}>{k} - {EXAM_MAPS[k].title}</option>
+                        ))}
+                    </select>
+                </div>
+                
+                <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-bold text-slate-700">2. 選擇目標學生</label>
+                    <select 
+                        value={selectedStudentId}
+                        onChange={(e) => setSelectedStudentId(e.target.value)}
+                        className="p-2.5 border border-slate-300 rounded-lg bg-white font-semibold outline-none focus:ring-2 focus:ring-purple-400"
+                    >
+                        <option value="">-- 請選擇學生 --</option>
+                        {activeStudents.map(s => {
+                            // 預先計算該生在該卷的總分
+                            let sScore = 0, sMax = 0;
+                            if (EXAM_MAPS[selectedExam]) {
+                                EXAM_MAPS[selectedExam].questions.forEach(q => {
+                                    sScore += getStudentQScore(s.id, q);
+                                    sMax += q.max;
+                                });
+                            }
+                            return (
+                                <option key={s.id} value={s.id}>
+                                    {s.class} ({s.num}) {s.name} - 本卷得分: {sScore}/{sMax}
+                                </option>
+                            );
+                        })}
+                    </select>
+                </div>
+            </div>
+
+            {!selectedStudentId ? (
+                <div className="card p-16 text-center text-slate-400 border border-slate-200 shadow-sm border-dashed">
+                    <Icon name="UserCheck" size={48} className="mx-auto mb-3 opacity-40 text-purple-300" />
+                    <p className="text-sm font-medium text-slate-500">請從上方選擇一位學生以展開補底清單</p>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                    
+                    {/* 左側：危險課題表格與進度打勾 (佔 3 列) */}
+                    <div className="lg:col-span-3 card p-0 border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[700px]">
+                        <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                            <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                                <span className="p-1.5 bg-red-100 text-red-700 rounded"><Icon name="AlertCircle" size={16} /></span>
+                                需補底清單 (得分率 &le; 50%)
+                            </h3>
+                            <span className="text-xs font-bold bg-white border px-2 py-1 rounded text-slate-600 shadow-sm">
+                                本卷總成績: <span className="text-purple-600 text-sm ml-1">{totalExamScore}/{totalExamMax}</span>
+                            </span>
+                        </div>
+                        
+                        <div className="flex-1 overflow-y-auto">
+                            {weakTopics.length === 0 ? (
+                                <div className="p-10 text-center text-emerald-600 font-bold bg-emerald-50 h-full flex flex-col items-center justify-center">
+                                    <Icon name="CheckCircle" size={40} className="mb-2" />
+                                    該學生在本試卷的所有課題得分率皆高於 50%，無需補底！
+                                </div>
+                            ) : (
+                                <table className="w-full text-left border-collapse">
+                                    <thead className="bg-slate-100/80 sticky top-0 z-10 text-xs text-slate-600 shadow-sm">
+                                        <tr>
+                                            <th className="p-3 border-b border-slate-200 w-16">狀態</th>
+                                            <th className="p-3 border-b border-slate-200 w-24">課題 ID</th>
+                                            <th className="p-3 border-b border-slate-200">課題名稱與錯題盲點</th>
+                                            <th className="p-3 border-b border-slate-200 w-20 text-right">得分率</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="text-sm divide-y divide-slate-100">
+                                        {weakTopics.map(t => {
+                                            const isDone = remediationProgress[selectedStudentId]?.[selectedExam]?.[t.topicId] || false;
+                                            return (
+                                                <tr key={t.topicId} className={`transition hover:bg-slate-50 ${isDone ? 'bg-emerald-50/30' : ''}`}>
+                                                    <td className="p-3 text-center">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={isDone}
+                                                            onChange={() => toggleProgress(t.topicId)}
+                                                            className="w-5 h-5 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500 cursor-pointer shadow-sm"
+                                                        />
+                                                    </td>
+                                                    <td className="p-3 font-mono font-bold text-slate-600">{t.topicId}</td>
+                                                    <td className="p-3">
+                                                        <div className={`font-semibold ${isDone ? 'text-slate-400 line-through' : 'text-slate-800'}`}>{t.topicName}</div>
+                                                        <div className="text-[10px] text-slate-400 mt-1 line-clamp-2 leading-tight">
+                                                            盲點: {t.descArray.join('; ')}
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-3 text-right">
+                                                        <span className={`px-2 py-1 rounded text-xs font-bold ${isDone ? 'bg-slate-100 text-slate-400' : 'bg-red-100 text-red-600'}`}>
+                                                            {(t.pct * 100).toFixed(0)}%
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* 右側：動態 AI 練習生成 (佔 2 列) */}
+                    <div className="lg:col-span-2 card p-5 border-2 border-purple-100 bg-gradient-to-br from-purple-50/50 to-white shadow-sm flex flex-col h-[700px]">
+                        <div className="flex items-center gap-2 text-purple-800 font-bold text-base mb-2">
+                            <Icon name="Cpu" className="text-purple-600" />
+                            <span>針對「未打勾」課題生成練習</span>
+                        </div>
+                        <p className="text-xs text-slate-500 mb-4 leading-relaxed">
+                            AI 提示詞會<strong className="text-red-500">自動避開左側已經打勾完成的項目</strong>，只針對剩餘的弱點生成題目，適合多日分段補底！
+                        </p>
+                        
+                        <div className="grid grid-cols-2 gap-3 mb-4">
+                            <div className="flex flex-col gap-1 bg-white p-2 border rounded-lg shadow-sm">
+                                <label className="text-[10px] font-bold text-slate-500">輸出語言</label>
+                                <select className="text-xs p-1 outline-none font-bold text-slate-700 bg-transparent" value={aiLang} onChange={e=>setAiLang(e.target.value)}>
+                                    <option>繁體中文</option>
+                                    <option>English</option>
+                                </select>
+                            </div>
+                            <div className="flex flex-col gap-1 bg-white p-2 border rounded-lg shadow-sm">
+                                <label className="text-[10px] font-bold text-slate-500">題數分配</label>
+                                <div className="flex items-center gap-1 text-xs px-1">
+                                    MC:<input type="number" className="w-10 outline-none font-bold text-purple-700 border-b text-center mx-1 bg-transparent" value={aiMcCount} onChange={e=>setAiMcCount(e.target.value)} min="0" max="20" />
+                                    LQ:<input type="number" className="w-10 outline-none font-bold text-blue-700 border-b text-center mx-1 bg-transparent" value={aiLqCount} onChange={e=>setAiLqCount(e.target.value)} min="0" max="20" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex-1 flex flex-col mb-4">
+                            <label className="text-xs font-bold text-slate-700 mb-1 flex justify-between">
+                                <span>📝 專屬 Prompt 預覽</span>
+                            </label>
+                            <textarea 
+                                className="flex-1 w-full p-3 text-[11px] font-mono bg-white border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-400 outline-none shadow-inner resize-none leading-relaxed"
+                                value={generatedPrompt}
+                                onChange={(e) => setGeneratedPrompt(e.target.value)}
+                            />
+                        </div>
+
+                        <button 
+                            onClick={() => { navigator.clipboard.writeText(generatedPrompt); alert('📋 學生補底專屬 AI 提示詞已複製！'); }}
+                            className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-xl shadow-md flex items-center justify-center gap-2 transition text-sm"
+                        >
+                            <Icon name="Copy" size={16} /> 複製補底 Prompt
+                        </button>
+                    </div>
+
+                </div>
+            )}
+        </div>
+    );
+};
         
 const App = () => {
             // ★ 將這裡換成你剛剛複製的 Google Apps Script 網址 ★
@@ -2471,6 +2746,8 @@ const App = () => {
             // 新增：雲端連線狀態
             const [isLoading, setIsLoading] = React.useState(true);
             const [isSaving, setIsSaving] = React.useState(false);
+    // 在 App 內的 useState 區塊加入以下狀態：
+            const [remediationProgress, setRemediationProgress] = React.useState({});
 
            // 自動從現有學生名單中抓取所有不重複的群組名稱 (加入防護罩)
             const allCohorts = ['所有學生', ...new Set((students || []).map(s => s.cohort || '2024-2027'))];
@@ -2496,7 +2773,8 @@ const App = () => {
                         const validStudents = Array.isArray(data.students) ? data.students : [];
                         const validScores = (typeof data.scores === 'object' && data.scores !== null) ? data.scores : {};
                         const validExamScores = (typeof data.examScores === 'object' && data.examScores !== null) ? data.examScores : {};
-                        
+                        const validRemediation = (typeof data.remediationProgress === 'object' && data.remediationProgress !== null) ? data.remediationProgress : {};
+                        setRemediationProgress(validRemediation);
                         // ★ 新增：如果 Google 雲端有大綱/小測資料，就覆寫到變數中 ★
                         if (data.syllabus && Object.keys(data.syllabus).length > 0) SYLLABUS_TOPICS = data.syllabus;
                         if (data.quizMaps && Object.keys(data.quizMaps).length > 0) QUIZ_MAPS = data.quizMaps;
@@ -2522,7 +2800,8 @@ const App = () => {
                         syllabus: SYLLABUS_TOPICS,
                         quizMaps: QUIZ_MAPS,
                         examScores: examScores, // ★ 修正：直接讀取系統當前的 examScores 狀態
-                        examMaps: EXAM_MAPS
+                        examMaps: EXAM_MAPS,
+                        remediationProgress: remediationProgress
                     })
                 })
                 .then(res => res.json())
@@ -2661,6 +2940,7 @@ const App = () => {
                                 {navButton('examScoresInput', 'CheckSquare', '考試成績輸入', 'bg-purple-600')}
                                 {navButton('examAnalysis', 'LineChart', '考試弱點分析', 'bg-purple-600')}
                                 {navButton('studentExamAnalysis', 'UserCheck', '個人大考分析', 'bg-purple-600')}
+                                {navButton('remedialPractice', 'ClipboardEdit', '專屬補底練習與進度', 'bg-purple-600')}
                                 {navButton('examSettings', 'Settings', '考試內容設定', 'bg-purple-600')}
                             </div>
 
@@ -2697,7 +2977,8 @@ const App = () => {
                     {view === 'examScoresInput' && <ExamScoresInputView activeStudents={activeStudents} examScores={examScores} setExamScores={setExamScores} syncToCloud={syncToCloud} />}
                     {view === 'examAnalysis' && <ExamAnalysisView activeStudents={activeStudents} examScores={examScores} />}
 
-                    {view === 'studentExamAnalysis' && <StudentExamAnalysisView activeStudents={activeStudents} examScores={examScores} />}                
+                    {view === 'studentExamAnalysis' && <StudentExamAnalysisView activeStudents={activeStudents} examScores={examScores} />} 
+                    {view === 'remedialPractice' && <RemedialPracticeView activeStudents={activeStudents} examScores={examScores} remediationProgress={remediationProgress} setRemediationProgress={setRemediationProgress} syncToCloud={syncToCloud} />}
                 </div></div>
             );
         };
