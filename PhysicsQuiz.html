@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.28 Physics Quiz Analyzer</title>
+    <title> V2.29 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -2770,8 +2770,7 @@ const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress,
     );
 };   
 
-
-// ==================== 新增：考試成績匯出 (Excel) 與智慧加權計算組件 ====================
+// ==================== 升級版：考試成績匯出 (Excel) - 支援平均分與不及格紅字提示 ====================
 const ExamExportView = ({ activeStudents, examScores }) => {
     // 預設全選所有考試
     const [selectedExams, setSelectedExams] = React.useState(Object.keys(EXAM_MAPS || {}));
@@ -2782,17 +2781,17 @@ const ExamExportView = ({ activeStudents, examScores }) => {
         );
     };
 
-    // ★ 核心成績計算邏輯 (處理 S3 直接加總 vs S4-S6 的 35/65 佔比)
+    // ★ 核心成績計算邏輯 (回傳分數、滿分及學段標記)
     const getCalculatedScores = (studentId, examId) => {
         const map = EXAM_MAPS[examId];
-        if (!map) return { mc: 0, lq: 0, total: 0 };
+        if (!map) return { mc: 0, lq: 0, total: 0, mcMax: 0, lqMax: 0, totalMax: 0, isSenior: false };
 
         let mcScore = 0, lqScore = 0, mcMax = 0, lqMax = 0;
         const record = examScores[studentId]?.[examId] || {};
 
         map.questions.forEach(q => {
             if (q.type === 'MC') {
-                mcMax += 1; // 依照需求，MC 每 1 題 1 分
+                mcMax += 1; // MC 每題 1 分
                 const val = record[q.id];
                 if (val && q.ans && val.toString().toUpperCase() === q.ans.toUpperCase()) {
                     mcScore += 1;
@@ -2806,34 +2805,74 @@ const ExamExportView = ({ activeStudents, examScores }) => {
             }
         });
 
-        let totalScore = 0;
-        // 透過標題或 ID 偵測是否為高中卷
         const titleStr = (examId + ' ' + map.title).toUpperCase();
+        const isSenior = titleStr.includes('S4') || titleStr.includes('S5') || titleStr.includes('S6');
         
-        if (titleStr.includes('S4') || titleStr.includes('S5') || titleStr.includes('S6')) {
-            // S4, S5, S6: MC 佔 35%, LQ 佔 65%
+        let totalScore = 0;
+        let totalMax = 100;
+        if (isSenior) {
+            // 高中卷：MC 佔 35%, LQ 佔 65%
             const mcPart = mcMax > 0 ? (mcScore / mcMax) * 35 : 0;
             const lqPart = lqMax > 0 ? (lqScore / lqMax) * 65 : 0;
-            totalScore = (mcPart + lqPart).toFixed(1); // 四捨五入至 1 位小數
+            totalScore = parseFloat((mcPart + lqPart).toFixed(1));
+            totalMax = 100;
         } else {
-            // S3 或一般卷: 直接加總
+            // 初中卷 (S3)：直接加總
             totalScore = mcScore + lqScore;
+            totalMax = mcMax + lqMax;
         }
 
-        return { mc: mcScore, lq: lqScore, total: totalScore };
+        return { mc: mcScore, lq: lqScore, total: totalScore, mcMax, lqMax, totalMax, isSenior };
     };
 
-    // ★ 匯出 CSV 檔案給 Excel 讀取
+    // ★ 智慧型樣式判斷：低於標準回傳紅色樣式
+    const getCellStyles = (score, max, isSenior, isTotalColumn = false) => {
+        if (max === 0) return "p-2 text-center text-slate-400 font-mono";
+        
+        // 根據學段決定及格百分比線 (高中 40%, 初中 50%)
+        const passThreshold = isSenior ? 0.4 : 0.5;
+        const isFail = (score / max) < passThreshold;
+
+        if (isTotalColumn) {
+            // 總分欄位：不及格直接亮紅底紅字，極度顯眼
+            return `p-2 border-r border-slate-200 text-center font-bold font-mono transition ${
+                isFail ? 'bg-red-50 text-red-600 font-black' : 'bg-slate-50/50 text-slate-800'
+            }`;
+        }
+        // MC / LQ 分項欄位：不及格僅變紅字
+        return `p-2 text-center font-mono ${isFail ? 'text-red-500 font-semibold' : 'text-slate-600'}`;
+    };
+
+    // ★ 計算某一卷目的班級平均分
+    const getExamAverages = (examId) => {
+        if (activeStudents.length === 0) return { mc: '0.0', lq: '0.0', total: '0.0' };
+        
+        let sumMc = 0, sumLq = 0, sumTotal = 0;
+        activeStudents.forEach(s => {
+            const res = getCalculatedScores(s.id, examId);
+            sumMc += res.mc;
+            sumLq += res.lq;
+            sumTotal += res.total;
+        });
+
+        const count = activeStudents.length;
+        return {
+            mc: (sumMc / count).toFixed(1),
+            lq: (sumLq / count).toFixed(1),
+            total: (sumTotal / count).toFixed(1)
+        };
+    };
+
+    // ★ 匯出 CSV 檔案給 Excel (包含最後一行的平均分)
     const exportToCSV = () => {
         if (selectedExams.length === 0) {
             alert('⚠️ 請至少選擇一份試卷進行匯出！');
             return;
         }
 
-        // 加入 BOM (Byte Order Mark) 讓 Excel 能正確辨識 UTF-8 中文
-        let csvContent = '\uFEFF'; 
+        let csvContent = '\uFEFF'; // 加入 BOM 預防 Excel 開啟時中文亂碼
         
-        // 1. 建立標題列 (Headers)
+        // 1. 建立標題列
         let headers = ['班別', '學號', '姓名'];
         selectedExams.forEach(examId => {
             const title = EXAM_MAPS[examId]?.title || examId;
@@ -2843,7 +2882,7 @@ const ExamExportView = ({ activeStudents, examScores }) => {
         });
         csvContent += headers.join(',') + '\n';
 
-        // 2. 建立資料列 (Data Rows)
+        // 2. 建立學生資料列
         activeStudents.forEach(s => {
             let row = [s.class, s.num, s.name];
             selectedExams.forEach(examId => {
@@ -2853,12 +2892,20 @@ const ExamExportView = ({ activeStudents, examScores }) => {
             csvContent += row.join(',') + '\n';
         });
 
-        // 3. 觸發下載
+        // 3. ★ 新增：在 CSV 最後一行自動注入「全班平均分」
+        let averageRow = ['全班平均分', '', ''];
+        selectedExams.forEach(examId => {
+            const avgs = getExamAverages(examId);
+            averageRow.push(avgs.mc, avgs.lq, avgs.total);
+        });
+        csvContent += averageRow.join(',') + '\n';
+
+        // 4. 觸發下載
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
         const today = new Date().toISOString().slice(0, 10);
-        link.download = `物理科考試成績匯出_${today}.csv`;
+        link.download = `物理科考試成績報表(含平均分)_${today}.csv`;
         link.click();
     };
 
@@ -2870,13 +2917,15 @@ const ExamExportView = ({ activeStudents, examScores }) => {
                     <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
                         <Icon name="Download" className="text-green-600" /> 考試成績匯出 (Excel)
                     </h1>
-                    <p className="text-sm text-slate-500 mt-1">選取要匯出的試卷，系統將自動區分 MC 及 LQ，並對 S4-S6 進行 35/65 加權計算。</p>
+                    <p className="text-sm text-slate-500 mt-1">
+                        自動標記不及格分數（<span className="text-red-600 font-bold">中三 &lt; 50%</span> / <span className="text-red-600 font-bold">高中 &lt; 40%</span>），底部自動生成班級平均分。
+                    </p>
                 </div>
                 <button 
                     onClick={exportToCSV}
                     className={`font-bold py-2.5 px-6 rounded-xl shadow-sm flex items-center justify-center gap-2 transition ${selectedExams.length > 0 ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
                 >
-                    <Icon name="FileSpreadsheet" size={18} /> 下載 CSV (Excel格式)
+                    <Icon name="FileSpreadsheet" size={18} /> 下載報表 (含平均分)
                 </button>
             </div>
 
@@ -2886,7 +2935,6 @@ const ExamExportView = ({ activeStudents, examScores }) => {
                 <div className="flex flex-wrap gap-2">
                     {Object.keys(EXAM_MAPS).map(examId => {
                         const isSelected = selectedExams.includes(examId);
-                        // 判定是否為高中卷以加上提示標籤
                         const isSenior = (examId + ' ' + EXAM_MAPS[examId].title).toUpperCase().match(/S[456]/);
                         return (
                             <button 
@@ -2898,7 +2946,9 @@ const ExamExportView = ({ activeStudents, examScores }) => {
                             >
                                 <Icon name={isSelected ? "CheckSquare" : "Square"} size={14} />
                                 {EXAM_MAPS[examId].title || examId}
-                                {isSenior && <span className="bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded text-[10px] ml-1">35/65%</span>}
+                                <span className="bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded text-[10px] ml-1">
+                                    {isSenior ? '高中40%及格' : '初中50%及格'}
+                                </span>
                             </button>
                         );
                     })}
@@ -2907,23 +2957,22 @@ const ExamExportView = ({ activeStudents, examScores }) => {
 
             {/* 報表即時預覽 */}
             {selectedExams.length > 0 && (
-                <div className="card p-0 border border-slate-200 shadow-sm overflow-hidden flex flex-col max-h-[600px]">
+                <div className="card p-0 border border-slate-200 shadow-sm overflow-hidden flex flex-col max-h-[650px]">
                     <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
                         <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm">
-                            <Icon name="Eye" size={16} className="text-slate-500"/> 匯出資料預覽
+                            <Icon name="Eye" size={16} className="text-slate-500"/> 數據動態預覽
                         </h3>
-                        <span className="text-xs text-slate-400">系統即時試算，確認無誤後點擊右上角下載</span>
                     </div>
                     
                     <div className="overflow-x-auto flex-1">
                         <table className="w-full text-left border-collapse whitespace-nowrap min-w-max">
-                            <thead className="bg-slate-100/80 text-xs text-slate-600 shadow-sm">
+                            <thead className="bg-slate-100/80 text-xs text-slate-600 shadow-sm sticky top-0 z-20">
                                 <tr>
-                                    <th className="p-3 border-b border-r border-slate-200 text-center w-12">班別</th>
-                                    <th className="p-3 border-b border-r border-slate-200 text-center w-16">學號</th>
-                                    <th className="p-3 border-b border-r border-slate-200 w-24">姓名</th>
+                                    <th className="p-3 border-b border-r border-slate-200 text-center w-12 bg-slate-100">班別</th>
+                                    <th className="p-3 border-b border-r border-slate-200 text-center w-16 bg-slate-100">學號</th>
+                                    <th className="p-3 border-b border-r border-slate-200 w-24 bg-slate-100">姓名</th>
                                     {selectedExams.map(examId => (
-                                        <th key={examId} colSpan="3" className="p-3 border-b border-r border-slate-200 text-center bg-green-50/50 text-green-800">
+                                        <th key={examId} colSpan="3" className="p-3 border-b border-r border-slate-200 text-center bg-green-50 text-green-900 font-bold">
                                             {EXAM_MAPS[examId]?.title || examId}
                                         </th>
                                     ))}
@@ -2934,32 +2983,51 @@ const ExamExportView = ({ activeStudents, examScores }) => {
                                     <th className="p-2 border-b border-r border-slate-200 bg-slate-50"></th>
                                     {selectedExams.map(examId => (
                                         <React.Fragment key={examId + '_sub'}>
-                                            <th className="p-2 border-b border-slate-200 text-center text-slate-500 font-medium w-16">MC</th>
-                                            <th className="p-2 border-b border-slate-200 text-center text-slate-500 font-medium w-16">LQ</th>
-                                            <th className="p-2 border-b border-r border-slate-200 text-center text-slate-700 font-bold bg-slate-50 w-20">總分</th>
+                                            <th className="p-2 border-b border-slate-200 text-center text-slate-500 font-medium w-16 bg-slate-50">MC</th>
+                                            <th className="p-2 border-b border-slate-200 text-center text-slate-500 font-medium w-16 bg-slate-50">LQ</th>
+                                            <th className="p-2 border-b border-r border-slate-200 text-center text-slate-700 font-bold bg-slate-100 w-20">總分</th>
                                         </React.Fragment>
                                     ))}
                                 </tr>
                             </thead>
+                            
                             <tbody className="text-sm divide-y divide-slate-100">
+                                {/* 學生分數列表 */}
                                 {activeStudents.map(s => (
                                     <tr key={s.id} className="hover:bg-slate-50 transition">
                                         <td className="p-2 border-r border-slate-100 text-center text-slate-600 font-mono">{s.class}</td>
                                         <td className="p-2 border-r border-slate-100 text-center text-slate-600 font-mono">{s.num}</td>
                                         <td className="p-2 border-r border-slate-200 font-bold text-slate-700">{s.name}</td>
                                         {selectedExams.map(examId => {
-                                            const scores = getCalculatedScores(s.id, examId);
+                                            const res = getCalculatedScores(s.id, examId);
                                             return (
                                                 <React.Fragment key={examId + '_scores'}>
-                                                    <td className="p-2 text-center text-slate-600 font-mono bg-white">{scores.mc}</td>
-                                                    <td className="p-2 text-center text-slate-600 font-mono bg-white">{scores.lq}</td>
-                                                    <td className="p-2 border-r border-slate-200 text-center font-bold text-slate-800 bg-slate-50/50">{scores.total}</td>
+                                                    <td className={getCellStyles(res.mc, res.mcMax, res.isSenior, false)}>{res.mc}</td>
+                                                    <td className={getCellStyles(res.lq, res.lqMax, res.isSenior, false)}>{res.lq}</td>
+                                                    <td className={getCellStyles(res.total, res.totalMax, res.isSenior, true)}>{res.total}</td>
                                                 </React.Fragment>
                                             );
                                         })}
                                     </tr>
                                 ))}
                             </tbody>
+
+                            {/* ★ 底部固定顯示：班級平均分 ★ */}
+                            <tfoot className="sticky bottom-0 z-10 font-bold border-t-2 border-slate-300 bg-slate-100 text-slate-800 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
+                                <tr>
+                                    <td className="p-3 border-r border-slate-200 text-center bg-slate-200" colSpan="3">班級平均分</td>
+                                    {selectedExams.map(examId => {
+                                        const avgs = getExamAverages(examId);
+                                        return (
+                                            <React.Fragment key={examId + '_avg_row'}>
+                                                <td className="p-3 text-center text-purple-700 font-mono font-bold bg-slate-100">{avgs.mc}</td>
+                                                <td className="p-3 text-center text-blue-700 font-mono font-bold bg-slate-100">{avgs.lq}</td>
+                                                <td className="p-3 border-r border-slate-200 text-center text-emerald-700 font-mono font-black bg-emerald-50">{avgs.total}</td>
+                                            </React.Fragment>
+                                        );
+                                    })}
+                                </tr>
+                            </tfoot>
                         </table>
                     </div>
                 </div>
