@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.23 Physics Quiz Analyzer</title>
+    <title> V2.24 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -1846,15 +1846,18 @@ const ExamScoresInputView = ({ activeStudents, examScores, setExamScores, syncTo
     );
 };
 
-// ==================== 新增：大考全班數據診斷與 AI 教案生成組件 ====================
+// ==================== 更新版：大考全班數據診斷與 AI 教案生成組件 ====================
 const ExamAnalysisView = ({ activeStudents, examScores }) => {
     const [selectedExam, setSelectedExam] = React.useState(Object.keys(EXAM_MAPS || {})[0] || '');
     
     // AI 參數設定狀態
     const [aiLang, setAiLang] = React.useState('雙語 (Bilingual)');
     const [aiType, setAiType] = React.useState('MC+LQ');
-    const [aiMcCount, setAiMcCount] = React.useState('5'); // 分開填寫 MC 題數
-    const [aiLqCount, setAiLqCount] = React.useState('5'); // 分開填寫 LQ 題數
+    const [aiMcCount, setAiMcCount] = React.useState('5'); 
+    const [aiLqCount, setAiLqCount] = React.useState('5'); 
+    
+    // ★ 新增：用來儲存與編輯生成的 Prompt
+    const [generatedPrompt, setGeneratedPrompt] = React.useState('');
 
     const map = EXAM_MAPS[selectedExam];
     if (!map) return (
@@ -1865,7 +1868,6 @@ const ExamAnalysisView = ({ activeStudents, examScores }) => {
         </div>
     );
 
-    // 計算單題得分邏輯
     const getStudentQScore = (studentId, examId, q) => {
         const record = examScores[studentId]?.[examId];
         if (!record) return 0;
@@ -1876,7 +1878,7 @@ const ExamAnalysisView = ({ activeStudents, examScores }) => {
         return val === '' || val === undefined ? 0 : parseFloat(val);
     };
 
-    // 1. 試卷難度診斷與單題統計 (計算 P-Value)
+    // 1. 試卷難度診斷與單題統計 (P-Value)
     const qStats = map.questions.map(q => {
         let totalScore = 0;
         activeStudents.forEach(s => {
@@ -1885,9 +1887,8 @@ const ExamAnalysisView = ({ activeStudents, examScores }) => {
         
         const count = activeStudents.length || 1;
         const mean = totalScore / count;
-        const pValue = mean / q.max; // P-Value 難度指數 (得分率)
+        const pValue = mean / q.max; 
         
-        // 難度判斷標準
         let diag = '中等';
         let badgeColor = 'text-amber-600 bg-amber-50 border-amber-200';
         if (pValue < 0.40) { diag = '艱深 (重難點)'; badgeColor = 'text-red-600 bg-red-50 border-red-200'; }
@@ -1913,23 +1914,26 @@ const ExamAnalysisView = ({ activeStudents, examScores }) => {
         });
     });
 
-    // 關鍵排序：依據課程 ID 進行自然數字排序 (例如 1.1.2 -> 1.3.1 -> 2.1.1)
     const sortedTopics = Object.values(topicSummary).sort((a, b) => 
         a.topicId.localeCompare(b.topicId, undefined, { numeric: true, sensitivity: 'base' })
     );
 
-    // 3. 全班試後檢討 AI 提示詞生成器
-    const generateAiPrompt = () => {
-        const hardMC = qStats.filter(q => q.type === 'MC' && q.pValue < 0.5).map(q => `- 題號 ${q.id}: 正確答案 [${q.ans}], P-Value: ${q.pValue.toFixed(2)}。題目敘述: ${q.desc}`).join('\n');
-        const hardLQ = qStats.filter(q => q.type !== 'MC' && q.pValue < 0.5).map(q => `- 題號 ${q.id} (滿分 ${q.max}分): P-Value: ${q.pValue.toFixed(2)}。題目敘述: ${q.desc}`).join('\n');
+    // ★ 新增：當參數或考試變更時，自動重新計算 Prompt 並放入 Textarea
+    React.useEffect(() => {
+        // ★ 修正：將原本的 q.desc 改為正確的 q.topicDesc
+        const hardMC = qStats.filter(q => q.type === 'MC' && q.pValue < 0.5).map(q => `- 題號 ${q.id}: 正確答案 [${q.ans}], P-Value: ${q.pValue.toFixed(2)}。題目敘述: ${q.topicDesc}`).join('\n');
+        const hardLQ = qStats.filter(q => q.type !== 'MC' && q.pValue < 0.5).map(q => `- 題號 ${q.id} (滿分 ${q.max}分): P-Value: ${q.pValue.toFixed(2)}。題目敘述: ${q.topicDesc}`).join('\n');
         const weakTopics = sortedTopics.filter(t => (t.actualEarned/t.maxPossible) < 0.55).map(t => `- 課題 [${t.topicId} ${t.topicName}]: 全班得分率僅 ${(t.actualEarned/t.maxPossible*100).toFixed(1)}%`).join('\n');
 
-        return `你是一位香港 DSE 物理科中學名師。請根據以下這份大考的【全班真實應考數據】，為我編寫一份高質素的【試後檢討與重難點澄清教案】。\n\n[基本設定]\n- 語言: ${aiLang}\n- 預期針對我指定的題型與題數，各編寫全新的衍生鞏固練習題：\n  * 衍生多項選擇題 (MC)：${aiMcCount} 題\n  * 衍生長題目 (LQ)：${aiLqCount} 題\n\n[數據診斷：全班答錯率極高的 MC 難點題目]\n${hardMC || '- 無明顯 MC 難點'}\n\n[數據診斷：全班失分嚴重的 LQ 難點題目]\n${hardLQ || '- 無明顯 LQ 難點'}\n\n[數據診斷：全班掌握度最差的知識點課題]\n${weakTopics || '- 全班各課題發揮均衡'}\n\n[教案與題目編寫要求]:\n1. 錯因深度剖析：針對上述答對率低的 MC 及 LQ 題目，從物理概念角度切入，指出學生最容易混淆的觀念陷阱（例如：分不清施力作功與淨力作功、不理解折射率與光速的逆比關係等）。\n2. 變式題目擴充：根據我設定的 MC 題數 (${aiMcCount} 題) 和 LQ 題數 (${aiLqCount} 題)，分別編寫全新的【同類概念變式衍生題】。題目必須嚴格符合 DSE 考核風格，並為 MC 提供 4 個具備強干擾項的選項，為 LQ 提供詳細的【分步評分標準 (Marking Scheme)】。\n3. 提供下階段課堂複習的補救教學具體策略。`;
-    };
+        const newPrompt = `你是一位香港 DSE 物理科中學名師。請根據以下這份大考的【全班真實應考數據】，為我編寫一份高質素的【試後檢討與重難點澄清教案】。\n\n[基本設定]\n- 語言: ${aiLang}\n- 預期針對我指定的題型與題數，各編寫全新的衍生鞏固練習題：\n  * 衍生多項選擇題 (MC)：${aiMcCount} 題\n  * 衍生長題目 (LQ)：${aiLqCount} 題\n\n[數據診斷：全班答錯率極高的 MC 難點題目]\n${hardMC || '- 無明顯 MC 難點'}\n\n[數據診斷：全班失分嚴重的 LQ 難點題目]\n${hardLQ || '- 無明顯 LQ 難點'}\n\n[數據診斷：全班掌握度最差的知識點課題]\n${weakTopics || '- 全班各課題發揮均衡'}\n\n[教案與題目編寫要求]:\n1. 錯因深度剖析：針對上述答對率低的 MC 及 LQ 題目，從物理概念角度切入，指出學生最容易混淆的觀念陷阱（例如：分不清施力作功與淨力作功、不理解折射率與光速的逆比關係等）。\n2. 變式題目擴充：根據我設定的 MC 題數 (${aiMcCount} 題) 和 LQ 題數 (${aiLqCount} 題)，分別編寫全新的【同類概念變式衍生題】。題目必須嚴格符合 DSE 考核風格，並為 MC 提供 4 個具備強干擾項的選項，為 LQ 提供詳細的【分步評分標準 (Marking Scheme)】。\n3. 提供下階段課堂複習的補救教學具體策略。`;
+        
+        setGeneratedPrompt(newPrompt);
+    }, [aiLang, aiType, aiMcCount, aiLqCount, selectedExam]); 
+    // 注意：因 useEffect 的運作機制，初次載入或更改參數時就會自動執行
 
     const copyPrompt = () => {
-        navigator.clipboard.writeText(generateAiPrompt());
-        alert('📋 全班大考分析 AI 提示詞已複製！請直接貼到 ChatGPT 或 Claude 獲取完整教案。');
+        navigator.clipboard.writeText(generatedPrompt);
+        alert('📋 AI 提示詞已複製！請直接貼到 ChatGPT 或 Claude 獲取完整教案。');
     };
 
     return (
@@ -1956,22 +1960,23 @@ const ExamAnalysisView = ({ activeStudents, examScores }) => {
             {/* 數據看板核心區 */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                 
-                {/* 1. 難點題目診斷 (分開 MC / LQ) */}
-                <div className="card p-5 border border-slate-200 shadow-sm flex flex-col h-[500px]">
+                {/* 1. 難點題目診斷 (分開 MC / LQ，且顯示全部) */}
+                <div className="card p-5 border border-slate-200 shadow-sm flex flex-col h-[600px]">
                     <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2 border-b pb-2 text-sm">
                         <span className="p-1 bg-red-100 text-red-700 rounded"><Icon name="AlertTriangle" size={15} /></span>
-                        🚨 試卷重難點題目診斷 (P-Value 指數)
+                        🚨 試卷所有題目難度排序 (P-Value 指數)
                     </h3>
-                    <div className="flex-1 overflow-y-auto space-y-4 pr-1">
-                        {/* MC 難點 */}
+                    <div className="flex-1 overflow-y-auto space-y-4 pr-2">
+                        {/* MC 難度排序 (★ 移除 slice 以顯示所有) */}
                         <div>
-                            <h4 className="text-xs font-bold text-purple-700 mb-2 bg-purple-50 px-2 py-1 rounded w-fit">Part A: 多項選擇題 (MC) 最難題目</h4>
+                            <h4 className="text-xs font-bold text-purple-700 mb-2 bg-purple-50 px-2 py-1 rounded w-fit sticky top-0 z-10">Part A: 多項選擇題 (MC)</h4>
                             <div className="space-y-2">
-                                {qStats.filter(q => q.type === 'MC').sort((a,b) => a.pValue - b.pValue).slice(0, 3).map(q => (
+                                {qStats.filter(q => q.type === 'MC').sort((a,b) => a.pValue - b.pValue).map(q => (
                                     <div key={q.id} className="p-2.5 border border-slate-100 bg-slate-50/60 rounded-lg text-xs flex justify-between items-start gap-4">
                                         <div className="space-y-0.5">
                                             <div className="font-bold text-slate-800">題號 {q.id} <span className="text-slate-400 font-normal">| 正確答案: {q.ans}</span></div>
-                                            <p className="text-slate-500 line-clamp-1">敘述: {q.desc}</p>
+                                            {/* ★ 修正：q.topicDesc */}
+                                            <p className="text-slate-500 line-clamp-2">敘述: {q.topicDesc}</p>
                                         </div>
                                         <span className={`px-2 py-0.5 font-bold rounded-full border shrink-0 text-[10px] ${q.badgeColor}`}>P: {q.pValue.toFixed(2)}</span>
                                     </div>
@@ -1979,15 +1984,16 @@ const ExamAnalysisView = ({ activeStudents, examScores }) => {
                             </div>
                         </div>
 
-                        {/* LQ 難點 */}
+                        {/* LQ 難度排序 (★ 移除 slice 以顯示所有) */}
                         <div className="pt-2">
-                            <h4 className="text-xs font-bold text-blue-700 mb-2 bg-blue-50 px-2 py-1 rounded w-fit">Part B: 長題目 (LQ) 失分最高</h4>
+                            <h4 className="text-xs font-bold text-blue-700 mb-2 bg-blue-50 px-2 py-1 rounded w-fit sticky top-0 z-10">Part B: 長題目 (LQ)</h4>
                             <div className="space-y-2">
-                                {qStats.filter(q => q.type !== 'MC').sort((a,b) => a.pValue - b.pValue).slice(0, 3).map(q => (
+                                {qStats.filter(q => q.type !== 'MC').sort((a,b) => a.pValue - b.pValue).map(q => (
                                     <div key={q.id} className="p-2.5 border border-slate-100 bg-slate-50/60 rounded-lg text-xs flex justify-between items-start gap-4">
                                         <div className="space-y-0.5">
                                             <div className="font-bold text-slate-800">題號 {q.id} <span className="text-slate-400 font-normal">| 滿分: {q.max}分</span></div>
-                                            <p className="text-slate-500 line-clamp-1">敘述: {q.desc}</p>
+                                            {/* ★ 修正：q.topicDesc */}
+                                            <p className="text-slate-500 line-clamp-2">敘述: {q.topicDesc}</p>
                                         </div>
                                         <span className={`px-2 py-0.5 font-bold rounded-full border shrink-0 text-[10px] ${q.badgeColor}`}>P: {q.pValue.toFixed(2)}</span>
                                     </div>
@@ -1998,7 +2004,7 @@ const ExamAnalysisView = ({ activeStudents, examScores }) => {
                 </div>
 
                 {/* 2. 各知識點全班掌握度 (依課程 ID 排序) */}
-                <div className="card p-5 border border-slate-200 shadow-sm flex flex-col h-[500px]">
+                <div className="card p-5 border border-slate-200 shadow-sm flex flex-col h-[600px]">
                     <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2 border-b pb-2 text-sm">
                         <span className="p-1 bg-emerald-100 text-emerald-700 rounded"><Icon name="BarChart3" size={15} /></span>
                         📚 各知識點物理課題掌握度 (依課程 ID 排序)
@@ -2006,7 +2012,7 @@ const ExamAnalysisView = ({ activeStudents, examScores }) => {
                     <div className="flex-1 overflow-y-auto space-y-3.5 pr-2">
                         {sortedTopics.map(t => {
                             const pct = t.maxPossible > 0 ? (t.actualEarned / t.maxPossible) : 0;
-                            const isWeak = pct < 0.50; // 低於50%表示亮起紅燈
+                            const isWeak = pct < 0.50; 
                             return (
                                 <div key={t.topicId} className="space-y-1">
                                     <div className="flex justify-between text-xs font-medium">
@@ -2029,13 +2035,15 @@ const ExamAnalysisView = ({ activeStudents, examScores }) => {
 
             {/* 3. 全班試後檢討 AI 教案生成控制台 */}
             <div className="card p-5 border-2 border-purple-100 bg-gradient-to-r from-purple-50/40 to-white shadow-sm">
-                <div className="flex items-center gap-2 text-purple-800 font-bold text-base mb-3">
-                    <Icon name="Sparkles" className="text-purple-600 animate-pulse" />
-                    <span>大考過卷檢討 AI 教案生成控制台</span>
+                <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2 text-purple-800 font-bold text-base">
+                        <Icon name="Sparkles" className="text-purple-600 animate-pulse" />
+                        <span>大考過卷檢討 AI 教案生成控制台</span>
+                    </div>
+                    <span className="text-xs text-slate-500">更改下方參數會自動刷新預覽內容</span>
                 </div>
-                <p className="text-xs text-slate-500 mb-4">系統已自動為您統整本班 P-Value 數據與薄弱知識點，設定下方衍生題數參數即可產出高效教案 Prompt。</p>
                 
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-5">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-4">
                     <div className="flex flex-col gap-1 bg-white p-2 border rounded-lg shadow-sm">
                         <label className="text-[11px] font-bold text-slate-500">輸出語言</label>
                         <select className="text-xs p-1 outline-none font-medium text-slate-700 bg-transparent" value={aiLang} onChange={e=>setAiLang(e.target.value)}>
@@ -2062,11 +2070,24 @@ const ExamAnalysisView = ({ activeStudents, examScores }) => {
                     </div>
                 </div>
 
+                {/* ★ 新增：AI Prompt 預覽與編輯文字框 */}
+                <div className="mb-4">
+                    <label className="text-xs font-bold text-slate-700 mb-1 block flex justify-between">
+                        <span>📝 AI Prompt 預覽與編輯框</span>
+                        <span className="text-slate-400 font-normal">您可在此直接手動增減文字後再複製</span>
+                    </label>
+                    <textarea 
+                        className="w-full h-64 p-3 text-xs font-mono bg-white border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-400 outline-none shadow-inner"
+                        value={generatedPrompt}
+                        onChange={(e) => setGeneratedPrompt(e.target.value)}
+                    />
+                </div>
+
                 <button 
                     onClick={copyPrompt}
                     className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-4 rounded-lg shadow flex items-center justify-center gap-2 transition text-sm"
                 >
-                    <Icon name="Copy" size={16} /> 複製「大考班級試後檢討」AI 提示詞
+                    <Icon name="Copy" size={16} /> 複製以上 AI 提示詞
                 </button>
             </div>
 
