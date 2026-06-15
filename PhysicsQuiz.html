@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.22 Physics Quiz Analyzer</title>
+    <title> V2.23 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -2273,6 +2273,7 @@ const App = () => {
                             <div className="flex flex-col gap-1">
                                 <p className="px-3 text-[11px] font-bold text-purple-400 tracking-wider uppercase mb-1">🎯 考試管理區</p>
                                 {navButton('examScoresInput', 'CheckSquare', '考試成績輸入', 'bg-purple-600')}
+                                {navButton('examAnalysis', 'LineChart', '考試弱點分析', 'bg-purple-600')}
                                 {navButton('examSettings', 'Settings', '考試內容設定', 'bg-purple-600')}
                             </div>
 
