@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.20 Physics Quiz Analyzer</title>
+    <title> V2.21 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -1965,7 +1965,7 @@ const App = () => {
             };
 
 
-// ==================== 升級版：分區模塊化 Sidebar (修復群組選擇) ====================
+// ==================== 升級版：分區模塊化 Sidebar (區分小測與考試版) ====================
             const Sidebar = () => {
                 // 輔助函數：用來產生統一風格的按鈕
                 const navButton = (targetView, iconName, label, activeBg = 'bg-blue-600') => {
@@ -1996,7 +1996,7 @@ const App = () => {
                             </div>
                         </div>
 
-                        {/* ★ 修復：加回學生群組選擇器 ★ */}
+                        {/* 學生群組選擇器 */}
                         <div className="mb-4 bg-slate-900/60 p-3 rounded-lg border border-slate-700/50 shadow-inner">
                             <label className="text-xs text-slate-400 mb-1.5 font-bold flex items-center gap-1.5">
                                 <Icon name="Users" size={14} /> 目前檢視群組
@@ -2021,40 +2021,36 @@ const App = () => {
                         </div>
 
                         {/* 導覽選單列表 */}
-                        <nav className="flex-1 flex flex-col gap-5 overflow-y-auto pr-1 pb-6">
+                        <nav className="flex-1 flex flex-col gap-4 overflow-y-auto pr-1 pb-6">
                             
-                            {/* 區塊 1：數據分析與總表 */}
+                            {/* 區塊 1：小測管理與分析區 */}
                             <div className="flex flex-col gap-1">
-                                <p className="px-3 text-[11px] font-bold text-slate-500 tracking-wider uppercase mb-1">📊 數據分析與總表</p>
-                                {navButton('analysis', 'BarChart3', '班級成績分析')}
-                                {navButton('report', 'FileText', '統測 / 大考總表')}
-                                {navButton('chart', 'PieChart', '學生成績分佈圖')}
-                                {navButton('topicAnalysis', 'Target', '跨課題弱點分析')}
-                                {/* 班級總表可能也是你需要的 */}
-                                {navButton('classSummary', 'Table', '班級成績總表')}
-                            </div>
-
-                            <div className="border-t border-slate-700/50 my-0.5 mx-2"></div>
-
-                            {/* 區塊 2：小測管理區 */}
-                            <div className="flex flex-col gap-1">
-                                <p className="px-3 text-[11px] font-bold text-blue-400 tracking-wider uppercase mb-1">📝 小測管理區</p>
+                                <p className="px-3 text-[11px] font-bold text-blue-400 tracking-wider uppercase mb-2">📝 小測管理與分析區</p>
+                                {/* 輸入與設定 */}
                                 {navButton('scores', 'ClipboardList', '小測成績輸入')}
                                 {navButton('quizSettings', 'FileEdit', '小測內容設定')}
+                                
+                                <div className="my-1 border-t border-slate-700/30 mx-3"></div> {/* 區塊內微小分隔線 */}
+                                
+                                {/* 分析與圖表 */}
+                                {navButton('classSummary', 'Table', '小測成績表')}
+                                {navButton('analysis', 'Wand2', '小測弱點分析及補底生成')}
+                                {navButton('chart', 'PieChart', '所有小測成績表現')}
+                                {navButton('topicAnalysis', 'Target', '整班小測弱點分析')}
                             </div>
 
-                            <div className="border-t border-slate-700/50 my-0.5 mx-2"></div>
+                            <div className="border-t border-slate-700/50 my-1 mx-2"></div>
 
-                            {/* 區塊 3：考試管理區 */}
+                            {/* 區塊 2：考試管理區 */}
                             <div className="flex flex-col gap-1">
                                 <p className="px-3 text-[11px] font-bold text-purple-400 tracking-wider uppercase mb-1">🎯 考試管理區</p>
                                 {navButton('examScoresInput', 'CheckSquare', '考試成績輸入', 'bg-purple-600')}
                                 {navButton('examSettings', 'Settings', '考試內容設定', 'bg-purple-600')}
                             </div>
 
-                            <div className="border-t border-slate-700/50 my-0.5 mx-2"></div>
+                            <div className="border-t border-slate-700/50 my-1 mx-2"></div>
 
-                            {/* 區塊 4：系統設定區 */}
+                            {/* 區塊 3：系統設定區 */}
                             <div className="flex flex-col gap-1 mb-4">
                                 <p className="px-3 text-[11px] font-bold text-slate-500 tracking-wider uppercase mb-1">⚙️ 系統基本設定</p>
                                 {navButton('students', 'Users', '學生名單管理', 'bg-slate-600')}
@@ -2072,7 +2068,7 @@ const App = () => {
                     {view === 'students' && <StudentView students={students} setStudents={setStudents} setScores={setScores} />}
                     {view === 'scores' && <ScoreInputView activeStudents={activeStudents} scores={scores} setScores={setScores} />}
                     {view === 'analysis' && <AnalysisView activeStudents={activeStudents} scores={scores} />}
-                    {view === 'report' && <StudentReportView students={students} activeStudents={activeStudents} scores={scores} />}
+      
                     {view === 'chart' && <StudentChartView activeStudents={activeStudents} scores={scores} />}
                     {view === 'topicAnalysis' && <TopicAnalysisView activeStudents={activeStudents} scores={scores} />}
                     {view === 'classSummary' && <ClassSummaryView activeStudents={activeStudents} scores={scores} />}
