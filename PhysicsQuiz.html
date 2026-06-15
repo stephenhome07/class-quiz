@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.16 Physics Quiz Analyzer</title>
+    <title> V2.17 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -48,7 +48,7 @@
         // 直接宣告為全域變數，等待從 Google 雲端載入資料
         let SYLLABUS_TOPICS = {};
         let QUIZ_MAPS = {};
-
+        let EXAM_MAPS = {};
             
             // --- Views Components ---
             
@@ -1547,15 +1547,16 @@ const SyllabusSettingsView = ({ syncToCloud }) => {
 };
 
 // ==================== 2. 小測內容設定組件 ====================
+// ==================== 1. 小測內容設定組件 (升級 9 欄版) ====================
 const QuizSettingsView = ({ syncToCloud }) => {
     const [quizText, setQuizText] = React.useState('');
 
     React.useEffect(() => {
-        let qText = "小測編號\t小測標題\t題目ID\t題型\t滿分\t難度\t課題編號\t題目描述\n";
+        let qText = "小測編號\t小測標題\t題目ID\t題型\t滿分\t難度\t課題編號\t題目描述\t正確答案\n";
         Object.entries(QUIZ_MAPS).forEach(([quizId, map]) => {
             if (map.questions) {
                 map.questions.forEach(q => {
-                    qText += `${quizId}\t${map.title}\t${q.id}\t${q.type}\t${q.max}\t${q.level}\t${q.topicId}\t${q.topicDesc}\n`;
+                    qText += `${quizId}\t${map.title}\t${q.id}\t${q.type}\t${q.max}\t${q.level}\t${q.topicId}\t${q.topicDesc}\t${q.ans || ''}\n`;
                 });
             }
         });
@@ -1571,50 +1572,89 @@ const QuizSettingsView = ({ syncToCloud }) => {
                 const cols = qLines[i].split('\t');
                 if (cols.length < 8) continue; 
                 
-                const [quizId, title, qId, type, max, level, topicId, desc] = cols.map(c => c.trim());
+                // 讀取包含第 9 欄的資料
+                const [quizId, title, qId, type, max, level, topicId, desc, ans] = cols.map(c => c ? c.trim() : '');
                 
                 if (!newQuizMaps[quizId]) {
                     newQuizMaps[quizId] = { title: title, questions: [] };
                 }
                 newQuizMaps[quizId].questions.push({
-                    id: qId, type: type, max: Number(max), level: level, topicId: topicId, topicDesc: desc
+                    id: qId, type: type, max: Number(max), level: level, topicId: topicId, topicDesc: desc, ans: ans || ''
                 });
             }
-            
-            QUIZ_MAPS = newQuizMaps; // 更新變數
-            syncToCloud();           // 觸發雲端儲存
-            alert('✅ 小測內容設定已成功同步到 Google Sheet！\n切換至其他頁面即可生效。');
-        } catch (err) {
-            alert('❌ 儲存失敗！錯誤: ' + err);
-        }
+            QUIZ_MAPS = newQuizMaps;
+            syncToCloud();
+            alert('✅ 小測內容（含正確答案）已同步到 Google Sheet！');
+        } catch (err) { alert('❌ 儲存失敗！' + err); }
     };
 
     return (
         <div className="p-6 max-w-6xl mx-auto animate-fadeIn">
             <div className="flex justify-between items-center mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                        <Icon name="FileEdit" /> 小測內容 (Quiz Maps) 設定
-                    </h1>
-                    <p className="text-sm text-slate-500 mt-1">請從 Excel 複製包含八欄 (小測編號, 小測標題, 題目ID, 題型, 滿分, 難度, 課題編號, 題目描述) 的資料並貼上。</p>
+                    <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><Icon name="FileEdit" /> 小測內容設定 (新增正確答案)</h1>
+                    <p className="text-sm text-slate-500 mt-1">可包含九欄，最後一欄為正確答案 (MC填 A/B/C/D，LQ可留空)。</p>
                 </div>
-                <button onClick={handleSave} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2">
-                    <Icon name="CloudUpload" size={18} /> 儲存至 Google 雲端
-                </button>
+                <button onClick={handleSave} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2"><Icon name="CloudUpload" size={18} /> 儲存至雲端</button>
             </div>
-            <div className="card p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
-                <textarea 
-                    className="w-full h-[650px] p-4 text-sm font-mono bg-slate-50 border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 whitespace-pre flex-nowrap overflow-x-auto"
-                    wrap="off"
-                    value={quizText}
-                    onChange={(e) => setQuizText(e.target.value)}
-                    placeholder="請在此貼上您的小測設定..."
-                />
-            </div>
+            <textarea className="w-full h-[600px] p-4 text-sm font-mono bg-slate-50 border border-slate-200 rounded focus:ring-2 focus:ring-blue-500 overflow-x-auto whitespace-pre" wrap="off" value={quizText} onChange={(e) => setQuizText(e.target.value)} />
         </div>
     );
 };
 
+// ==================== 2. 考試內容設定組件 (全新 9 欄版) ====================
+const ExamSettingsView = ({ syncToCloud }) => {
+    const [examText, setExamText] = React.useState('');
+
+    React.useEffect(() => {
+        let eText = "考試編號\t考試標題\t題目ID\t題型\t滿分\t難度\t課題編號\t題目描述\t正確答案\n";
+        Object.entries(EXAM_MAPS).forEach(([examId, map]) => {
+            if (map.questions) {
+                map.questions.forEach(q => {
+                    eText += `${examId}\t${map.title}\t${q.id}\t${q.type}\t${q.max}\t${q.level}\t${q.topicId}\t${q.topicDesc}\t${q.ans || ''}\n`;
+                });
+            }
+        });
+        setExamText(eText);
+    }, []);
+
+    const handleSave = () => {
+        try {
+            const newExamMaps = {};
+            const eLines = examText.trim().split('\n');
+            for (let i = 1; i < eLines.length; i++) {
+                if (!eLines[i].trim()) continue;
+                const cols = eLines[i].split('\t');
+                if (cols.length < 8) continue; 
+                
+                const [examId, title, qId, type, max, level, topicId, desc, ans] = cols.map(c => c ? c.trim() : '');
+                
+                if (!newExamMaps[examId]) {
+                    newExamMaps[examId] = { title: title, questions: [] };
+                }
+                newExamMaps[examId].questions.push({
+                    id: qId, type: type, max: Number(max), level: level, topicId: topicId, topicDesc: desc, ans: ans || ''
+                });
+            }
+            EXAM_MAPS = newExamMaps;
+            syncToCloud();
+            alert('✅ 考試內容設定已成功同步到 Google Sheet！');
+        } catch (err) { alert('❌ 儲存失敗！' + err); }
+    };
+
+    return (
+        <div className="p-6 max-w-6xl mx-auto animate-fadeIn">
+            <div className="flex justify-between items-center mb-6">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><Icon name="Award" /> 考試內容 (Exam Maps) 設定</h1>
+                    <p className="text-sm text-slate-500 mt-1">欄目：考試編號 | 考試標題 | 題目ID | 題型 | 滿分 | 難度 | 課題編號 | 題目描述 | 正確答案</p>
+                </div>
+                <button onClick={handleSave} className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition flex items-center gap-2"><Icon name="CloudUpload" size={18} /> 儲存至雲端</button>
+            </div>
+            <textarea className="w-full h-[600px] p-4 text-sm font-mono bg-slate-50 border border-slate-200 rounded focus:ring-2 focus:ring-purple-500 overflow-x-auto whitespace-pre" wrap="off" value={examText} onChange={(e) => setExamText(e.target.value)} placeholder="請在此貼上您的考試設定（從 Excel 複製九欄資料）..." />
+        </div>
+    );
+};
 
         
 const App = () => {
@@ -1624,7 +1664,7 @@ const App = () => {
             const [view, setView] = React.useState('students');
             const [students, setStudents] = React.useState([]);
             const [scores, setScores] = React.useState({});
-            
+            const [examScores, setExamScores] = React.useState({});
             // 新增：雲端連線狀態
             const [isLoading, setIsLoading] = React.useState(true);
             const [isSaving, setIsSaving] = React.useState(false);
@@ -1652,13 +1692,16 @@ const App = () => {
                     .then(data => {
                         const validStudents = Array.isArray(data.students) ? data.students : [];
                         const validScores = (typeof data.scores === 'object' && data.scores !== null) ? data.scores : {};
+                        const validExamScores = (typeof data.examScores === 'object' && data.examScores !== null) ? data.examScores : {};
                         
                         // ★ 新增：如果 Google 雲端有大綱/小測資料，就覆寫到變數中 ★
                         if (data.syllabus && Object.keys(data.syllabus).length > 0) SYLLABUS_TOPICS = data.syllabus;
                         if (data.quizMaps && Object.keys(data.quizMaps).length > 0) QUIZ_MAPS = data.quizMaps;
-
+                        if (data.examMaps && Object.keys(data.examMaps).length > 0) EXAM_MAPS = data.examMaps;
+                        
                         setStudents(validStudents);
                         setScores(validScores);
+                        setExamScores(validExamScores);
                         setIsLoading(false);
                     })
                     .catch(err => { console.error("讀取失敗:", err); });
@@ -1673,7 +1716,9 @@ const App = () => {
                         students: students, 
                         scores: scores,
                         syllabus: SYLLABUS_TOPICS, // 打包大綱
-                        quizMaps: QUIZ_MAPS        // 打包小測
+                        quizMaps: QUIZ_MAPS,        // 打包小測
+                        examScores: updatedExamScores || examScores, // ★ 將大考成績一併打包
+                        examMaps: EXAM_MAPS
                     })
                 })
                 .then(res => res.json())
@@ -1778,6 +1823,7 @@ const App = () => {
                         <button onClick={() => setView('quizSettings')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'quizSettings' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}>
                             <Icon name="FileEdit" size={18} /> 小測內容設定
                         </button>
+                        <button onClick={() => setView('examSettings')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'examSettings' ? 'bg-purple-600' : 'hover:bg-slate-700'}`}><Icon name="Settings" size={18} /> 考試內容設定</button>
                     </nav>
                 </div>
             );
@@ -1796,6 +1842,8 @@ const App = () => {
 
                     {view === 'syllabusSettings' && <SyllabusSettingsView syncToCloud={syncToCloud} />}
                     {view === 'quizSettings' && <QuizSettingsView syncToCloud={syncToCloud} />}
+                    {view === 'examSettings' && <ExamSettingsView syncToCloud={syncToCloud} />}
+                    {view === 'examScoresInput' && <div className="p-6"><h2>⚙️ 考試成績輸入介面（準備在下一步建立...）</h2></div>}            
                 </div></div>
             );
         };
