@@ -1964,58 +1964,92 @@ const App = () => {
             };
 
 
-            const Sidebar = () => (
-                <div className="w-64 bg-slate-800 text-white h-screen fixed left-0 top-0 flex flex-col z-10 shadow-lg">
-                    <div className="p-6 border-b border-slate-700"><h1 className="text-lg font-bold">HKDSE Physics</h1><p className="text-xs text-slate-400 mt-1">Quiz Analyzer Pro</p></div>
-                    <nav className="flex-1 p-4 space-y-2 overflow-y-auto pb-20">
-                        
-                        <div className="p-4 bg-slate-900 border-b border-slate-700">
+// ==================== 升級版：分區模塊化 Sidebar ====================
+            const Sidebar = () => {
+                // 輔助函數：用來產生統一風格的按鈕
+                const navButton = (targetView, iconName, label, activeBg = 'bg-blue-600') => {
+                    const isActive = view === targetView;
+                    return (
                         <button 
-                            onClick={syncToCloud} 
-                            disabled={isSaving}
-                            className={`w-full py-3 rounded-lg font-bold flex justify-center items-center gap-2 transition shadow-lg ${isSaving ? 'bg-slate-600 text-slate-300 cursor-not-allowed' : 'bg-green-600 hover:bg-green-500 text-white'}`}
+                            onClick={() => setView(targetView)} 
+                            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                                isActive ? `${activeBg} text-white shadow-md font-semibold` : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
+                            }`}
                         >
-                            {isSaving ? <Icon name="RefreshCw" size={18} className="animate-spin" /> : <Icon name="CloudUpload" size={18} />}
-                            {isSaving ? '正在同步至雲端...' : '💾 儲存並同步至雲端'}
+                            <Icon name={iconName} size={18} className={isActive ? 'opacity-100' : 'opacity-70'} />
+                            {label}
                         </button>
-                        <p className="text-xs text-slate-400 mt-2 text-center">修改資料後請務必點擊同步</p>
+                    );
+                };
+
+                return (
+                    <div className="w-64 bg-slate-800 text-white p-4 flex flex-col h-screen fixed left-0 top-0 shadow-xl overflow-y-auto border-r border-slate-700/50">
+                        {/* 系統標題 */}
+                        <div className="flex items-center gap-3 px-2 py-4 border-b border-slate-700 mb-4">
+                            <div className="p-2 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-lg shadow-inner">
+                                <Icon name="GraduationCap" size={24} className="text-white" />
+                            </div>
+                            <div>
+                                <h2 className="font-bold text-base bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">Physics Analyzer</h2>
+                                <p className="text-xs text-slate-400 font-mono">V2.2 Cloud</p>
+                            </div>
                         </div>
 
-                        <div className="p-4 bg-slate-800 border-b border-slate-700">
-                        <label className="text-xs text-slate-400 mb-1 block font-bold">目前檢視群組 (Cohort)</label>
-                        <select 
-                            value={currentCohort}
-                            onChange={(e) => setCurrentCohort(e.target.value)}
-                            className="w-full p-2 bg-slate-700 text-white rounded border border-slate-600 outline-none font-bold"
-                        >
-                            {allCohorts.map(c => (
-                                <option key={c} value={c}>{c}</option>
-                            ))}
-                        </select>
+                        {/* 雲端儲存狀態小看板 */}
+                        <div className="mx-2 mb-4 p-2.5 bg-slate-900/50 rounded-lg border border-slate-700/30 flex items-center justify-between text-xs text-slate-400">
+                            <span className="flex items-center gap-1.5">
+                                <span className={`w-2 h-2 rounded-full ${isSaving ? 'bg-amber-400 animate-pulse' : 'bg-green-400'}`}></span>
+                                {isSaving ? '雲端同步中...' : '已與雲端同步'}
+                            </span>
                         </div>
-                        
-                        <button onClick={() => setView('students')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'students' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="Users" size={18} /> 學生管理</button>
-                        <button onClick={() => setView('scores')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'scores' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="Edit3" size={18} /> 小測成績輸入</button>
-                        <button onClick={() => setView('analysis')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'analysis' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="BarChart2" size={18} /> 弱點分析 & 補底</button>
-                        <button onClick={() => setView('report')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'report' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="FileText" size={18} /> 統測/大考總表</button>
-                        <button onClick={() => setView('chart')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'chart' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="BarChart2" size={18} /> 課題圖表分析</button>
-                        <button onClick={() => setView('topicAnalysis')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'topicAnalysis' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="Target" size={18} /> 課題綜合分析 (全班)</button>
-                        <button onClick={() => setView('classSummary')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'classSummary' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}>
-                            <Icon name="Table" size={18} /> 班級成績總表 (Excel)
-                        </button>
-                        <button onClick={() => setView('backup')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'backup' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}><Icon name="Database" size={18} /> 數據備份與還原</button>
-                        <div className="pt-4 mt-4 border-t border-slate-700"></div> {/* 加一條分隔線 */}
-                        
-                        <button onClick={() => setView('syllabusSettings')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'syllabusSettings' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}>
-                            <Icon name="BookOpen" size={18} /> 課程大綱設定
-                        </button>
-                        <button onClick={() => setView('quizSettings')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'quizSettings' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}>
-                            <Icon name="FileEdit" size={18} /> 小測內容設定
-                        </button>
-                        <button onClick={() => setView('examSettings')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${view === 'examSettings' ? 'bg-purple-600' : 'hover:bg-slate-700'}`}><Icon name="Settings" size={18} /> 考試內容設定</button>
-                    </nav>
-                </div>
-            );
+
+                        {/* 導覽選單列表 */}
+                        <nav className="flex-1 flex flex-col gap-5 overflow-y-auto pr-1">
+                            
+                            {/* 區塊 1：數據分析與總表 */}
+                            <div className="flex flex-col gap-1">
+                                <p className="px-3 text-[11px] font-bold text-slate-500 tracking-wider uppercase mb-1">📊 數據分析與總表</p>
+                                {navButton('analysis', 'BarChart3', '班級成績分析')}
+                                {navButton('report', 'FileText', '統測 / 大考總表')}
+                                {navButton('chart', 'PieChart', '學生成績分佈圖')}
+                                {navButton('topicAnalysis', 'Target', '跨課題弱點分析')}
+                            </div>
+
+                            {/* 分隔線 1 */}
+                            <div className="border-t border-slate-700/50 my-0.5 mx-2"></div>
+
+                            {/* 區塊 2：小測管理區 */}
+                            <div className="flex flex-col gap-1">
+                                <p className="px-3 text-[11px] font-bold text-blue-400 tracking-wider uppercase mb-1">📝 小測管理區</p>
+                                {navButton('scores', 'ClipboardList', '小測成績輸入')}
+                                {navButton('quizSettings', 'FileEdit', '小測內容設定')}
+                            </div>
+
+                            {/* 分隔線 2 */}
+                            <div className="border-t border-slate-700/50 my-0.5 mx-2"></div>
+
+                            {/* 區塊 3：考試管理區 */}
+                            <div className="flex flex-col gap-1">
+                                <p className="px-3 text-[11px] font-bold text-purple-400 tracking-wider uppercase mb-1">🎯 考試管理區</p>
+                                {navButton('examScoresInput', 'CheckSquare', '考試成績輸入', 'bg-purple-600')}
+                                {navButton('examSettings', 'Settings', '考試內容設定', 'bg-purple-600')}
+                            </div>
+
+                            {/* 分隔線 3 */}
+                            <div className="border-t border-slate-700/50 my-0.5 mx-2"></div>
+
+                            {/* 區塊 4：系統設定區 */}
+                            <div className="flex flex-col gap-1 mb-6">
+                                <p className="px-3 text-[11px] font-bold text-slate-500 tracking-wider uppercase mb-1">⚙️ 系統基本設定</p>
+                                {navButton('students', 'Users', '學生名單管理', 'bg-slate-600')}
+                                {navButton('syllabusSettings', 'BookOpen', '課程大綱設定', 'bg-slate-600')}
+                                {navButton('backup', 'Database', '數據備份與還原', 'bg-slate-600')}
+                            </div>
+
+                        </nav>
+                    </div>
+                );
+            };
 
             return (
                 <div className="flex min-h-screen relative"><Sidebar /><div className="flex-1 ml-64 overflow-hidden">
