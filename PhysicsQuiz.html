@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.33 Physics Quiz Analyzer</title>
+    <title> V2.34 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -3450,14 +3450,16 @@ const HomeworkSettingsView = ({ students, currentCohort, syncToCloud }) => {
     );
 };
 
-// ==================== 一體化更新版：功課批改與狀態追蹤組件 ====================
+// ==================== 更新版：功課批改、入分與狀態追蹤組件 (即時等級+難度顏色) ====================
 const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkScores, setHomeworkScores, syncToCloud }) => {
+    // 只過濾出屬於目前所選群組的功課
     const availableHws = Object.keys(HOMEWORK_MAPS).filter(id => !HOMEWORK_MAPS[id].cohort || HOMEWORK_MAPS[id].cohort === currentCohort);
     
     const [selectedHw, setSelectedHw] = React.useState(availableHws[0] || '');
     const [selectedStudentId, setSelectedStudentId] = React.useState('');
     const [currentEdit, setCurrentEdit] = React.useState(null);
 
+    // 當切換群組時，確保功課選單正確更新
     React.useEffect(() => {
         if (availableHws.length > 0 && !availableHws.includes(selectedHw)) setSelectedHw(availableHws[0]);
         else if (availableHws.length === 0) setSelectedHw('');
@@ -3474,21 +3476,22 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkScores
     const handleSelectStudent = (sId) => {
         setSelectedStudentId(sId);
         const record = homeworkScores[sId]?.[selectedHw] || { scores: {}, remakeStatus: 'MISSING', remarks: '', gradingDate: '', remakeDate: '' };
-        setCurrentEdit(JSON.parse(JSON.stringify(record)));
+        setCurrentEdit(JSON.parse(JSON.stringify(record))); // Deep copy
     };
 
     const handleScoreChange = (qId, val) => {
         setCurrentEdit(prev => ({ ...prev, scores: { ...prev.scores, [qId]: val } }));
     };
 
+    // ★ 輔助函數：取得難度對應的顏色
     const getLevelBadge = (level) => {
-        if (level === '淺') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-        if (level === '中') return 'bg-blue-50 text-blue-700 border-blue-200';
-        if (level === '深') return 'bg-rose-50 text-rose-700 border-rose-200';
-        return 'bg-slate-50 text-slate-600 border-slate-200';
+        if (level === '淺') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+        if (level === '中') return 'bg-blue-100 text-blue-700 border-blue-200';
+        if (level === '深') return 'bg-rose-100 text-rose-700 border-rose-200';
+        return 'bg-slate-100 text-slate-600 border-slate-200'; // 預設
     };
 
-    // 計算即時分數與等級
+    // ★ 即時計算目前的總分與等級 (A-E)
     let liveTotal = 0;
     let liveMax = 0;
     if (currentEdit) {
@@ -3511,12 +3514,13 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkScores
 
     const handleSaveRecord = () => {
         if (!selectedStudentId || !currentEdit) return;
+
         const today = new Date().toISOString().slice(0, 10);
         let newStatus = currentEdit.remakeStatus;
         let gradingDate = currentEdit.gradingDate || today;
 
-        if (liveTotal === liveMax) newStatus = 'PERFECT';
-        else if (newStatus === 'MISSING' || !newStatus) newStatus = 'PENDING';
+        if (liveTotal === liveMax) newStatus = 'PERFECT'; // 滿分不用改
+        else if (newStatus === 'MISSING' || !newStatus) newStatus = 'PENDING'; // 有錯待改
 
         const finalRecord = { ...currentEdit, remakeStatus: newStatus, gradingDate };
         setHomeworkScores(prev => ({
@@ -3553,11 +3557,13 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkScores
             </div>
 
             <div className="flex flex-col md:flex-row gap-6">
-                {/* 左側名單 */}
+                {/* 左側：學生名單 */}
                 <div className="w-full md:w-1/3 card p-0 border border-slate-200 shadow-sm overflow-hidden flex flex-col max-h-[650px]">
                     <div className="p-3 bg-slate-50 border-b font-bold text-sm text-slate-700 flex justify-between items-center">
                         <span>選擇學生</span>
-                        <span className="text-[10px] font-normal text-slate-500 bg-white px-2 py-0.5 rounded border">共 {activeStudents.length} 人</span>
+                        <span className="text-[10px] font-normal text-slate-500 bg-white px-2 py-0.5 rounded border">
+                            共 {activeStudents.length} 人
+                        </span>
                     </div>
                     <div className="flex-1 overflow-y-auto p-2 space-y-1">
                         {activeStudents.map(s => {
@@ -3581,7 +3587,7 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkScores
                     </div>
                 </div>
 
-                {/* 右側批改控制台 */}
+                {/* 右側：批改區 */}
                 <div className="w-full md:w-2/3">
                     {!selectedStudentId || !currentEdit ? (
                         <div className="card p-16 text-center text-slate-400 border border-slate-200 shadow-sm border-dashed h-full flex flex-col justify-center items-center">
@@ -3590,6 +3596,7 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkScores
                         </div>
                     ) : (
                         <div className="card p-5 border border-slate-200 shadow-sm h-full flex flex-col">
+                            {/* ★ 頂部：分數、等級與狀態看板 ★ */}
                             <div className="flex justify-between items-start border-b border-slate-100 pb-4 mb-4">
                                 <div>
                                     <h3 className="font-bold text-lg text-slate-800">
@@ -3597,7 +3604,9 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkScores
                                         <span className="text-sm text-slate-500 font-normal ml-2">的功課批改區</span>
                                     </h3>
                                     {currentEdit.gradingDate && (
-                                        <p className="text-[10px] font-mono text-slate-400 mt-1">批改日: {currentEdit.gradingDate} {currentEdit.remakeDate ? ` | 改正日: ${currentEdit.remakeDate}` : ''}</p>
+                                        <p className="text-[10px] font-mono text-slate-400 mt-1">
+                                            批改日: {currentEdit.gradingDate} {currentEdit.remakeDate ? ` | 改正日: ${currentEdit.remakeDate}` : ''}
+                                        </p>
                                     )}
                                     <div className="mt-2">
                                         {currentEdit.remakeStatus === 'PENDING' && (
@@ -3613,10 +3622,10 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkScores
                                     </div>
                                 </div>
                                 
-                                {/* 頂部計分板 */}
+                                {/* 總分與等級 A-E 顯示徽章 */}
                                 <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-xl border border-slate-100 shadow-inner">
                                     <div className="text-right">
-                                        <div className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">Score</div>
+                                        <div className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">Total Score</div>
                                         <div className="text-xl font-black text-slate-700 leading-none mt-1">{liveTotal} <span className="text-xs text-slate-400 font-bold">/ {liveMax}</span></div>
                                     </div>
                                     <div className={`w-12 h-12 rounded-lg flex items-center justify-center font-black text-2xl border ${gradeColor} shadow-sm`}>
@@ -3625,26 +3634,26 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkScores
                                 </div>
                             </div>
 
-                            {/* 題目分數輸入區 (已隱離描述，大幅放大題目ID) */}
+                            {/* 題目分數輸入區 (只顯示題號與難度) */}
                             <div className="flex-1 overflow-y-auto pr-2 space-y-4 mb-4">
-                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                                     {map.questions.map(q => (
-                                        <div key={q.id} className="bg-slate-50 p-3 rounded-xl border border-slate-200 shadow-inner flex flex-col gap-2 focus-within:border-amber-400 focus-within:ring-1 focus-within:ring-amber-400 transition">
-                                            <div className="flex justify-between items-center border-b border-slate-100 pb-1.5 mb-0.5">
+                                        <div key={q.id} className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 shadow-inner flex flex-col gap-1.5 focus-within:border-amber-400 focus-within:ring-1 focus-within:ring-amber-400 transition">
+                                            <div className="flex justify-between items-center">
                                                 <div className="flex items-center gap-1.5">
-                                                    {/* ★ 題目 ID 變大變粗 */}
-                                                    <span className="text-base font-black text-slate-800 font-mono tracking-tight">{q.id.split('-').pop()}</span>
-                                                    <span className={`text-[10px] px-2 py-0.5 rounded border font-bold ${getLevelBadge(q.level)}`}>{q.level}</span>
+                                                    <span className="text-xs font-bold text-slate-700">{q.id}</span>
+                                                    {/* 難度顏色標籤 */}
+                                                    <span className={`text-[9px] px-1.5 py-0.5 rounded border font-bold ${getLevelBadge(q.level)}`}>{q.level}</span>
                                                 </div>
-                                                <span className="text-amber-600 font-mono text-xs font-bold bg-amber-50 px-1.5 py-0.5 rounded">/{q.max}</span>
+                                                <span className="text-amber-600 font-mono text-[10px] font-bold">/{q.max}</span>
                                             </div>
                                             {q.type === 'MC' ? (
-                                                <input type="text" maxLength="1" className="w-full text-center font-black font-mono text-xl p-1.5 border rounded-lg outline-none uppercase bg-white shadow-sm"
+                                                <input type="text" maxLength="1" className="w-full text-center font-bold font-mono text-lg p-1 border rounded outline-none uppercase bg-white shadow-sm"
                                                     value={currentEdit.scores[q.id] || ''} onChange={(e) => handleScoreChange(q.id, e.target.value)}
                                                     placeholder="A/B/C/D"
                                                 />
                                             ) : (
-                                                <input type="number" step="0.5" min="0" max={q.max} className="w-full text-center font-black text-xl p-1.5 border rounded-lg outline-none bg-white shadow-sm"
+                                                <input type="number" step="0.5" min="0" max={q.max} className="w-full text-center font-bold text-lg p-1 border rounded outline-none bg-white shadow-sm"
                                                     value={currentEdit.scores[q.id] || ''} onChange={(e) => handleScoreChange(q.id, e.target.value)}
                                                 />
                                             )}
@@ -3660,7 +3669,7 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkScores
                                 </label>
                                 <textarea 
                                     className="w-full h-20 p-2.5 text-xs text-slate-700 bg-amber-50/30 border border-amber-200 rounded-lg outline-none focus:ring-2 focus:ring-amber-400 resize-none shadow-inner"
-                                    placeholder="例如：計算題漏寫公式..."
+                                    placeholder="例如：計算題漏寫公式，LQ2(b) 概念不清..."
                                     value={currentEdit.remarks || ''}
                                     onChange={(e) => setCurrentEdit(prev => ({ ...prev, remarks: e.target.value }))}
                                 />
