@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.40 Physics Quiz Analyzer</title>
+    <title> V2.41 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -3805,6 +3805,8 @@ const App = () => {
                         if (data.syllabus && Object.keys(data.syllabus).length > 0) SYLLABUS_TOPICS = data.syllabus;
                         if (data.quizMaps && Object.keys(data.quizMaps).length > 0) QUIZ_MAPS = data.quizMaps;
                         if (data.examMaps && Object.keys(data.examMaps).length > 0) EXAM_MAPS = data.examMaps;
+                        // ★ 補上這行：將雲端的功課藍圖載入系統中 ★
+                        if (data.homeworkMaps && Object.keys(data.homeworkMaps).length > 0) HOMEWORK_MAPS = data.homeworkMaps;
                         
                         setStudents(validStudents);
                         setScores(validScores);
