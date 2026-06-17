@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.37 Physics Quiz Analyzer</title>
+    <title> V2.38 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -56,7 +56,7 @@
         let SYLLABUS_TOPICS = {};
         let QUIZ_MAPS = {};
         let EXAM_MAPS = {};
-        let HOMEWORK_MAPS = {};
+        let _MAPS = {};
             
             // --- Views Components ---
             
@@ -3476,13 +3476,15 @@ const HomeworkSettingsView = ({ students, currentCohort, syncToCloud }) => {
     );
 };
         
-// ==================== 一體化更新版：功課批改與狀態追蹤組件 ====================
+// ==================== 更新版：功課批改與狀態追蹤組件 (優化儲存與過濾) ====================
 const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkScores, setHomeworkScores, syncToCloud }) => {
     const availableHws = Object.keys(HOMEWORK_MAPS).filter(id => !HOMEWORK_MAPS[id].cohort || HOMEWORK_MAPS[id].cohort === currentCohort);
     
     const [selectedHw, setSelectedHw] = React.useState(availableHws[0] || '');
     const [selectedStudentId, setSelectedStudentId] = React.useState('');
     const [currentEdit, setCurrentEdit] = React.useState(null);
+    const [saveStatus, setSaveStatus] = React.useState('idle'); // 'idle' | 'saving' | 'saved'
+    const [filterStatus, setFilterStatus] = React.useState('ALL'); // 'ALL' | 'PENDING' | 'MISSING'
 
     React.useEffect(() => {
         if (availableHws.length > 0 && !availableHws.includes(selectedHw)) setSelectedHw(availableHws[0]);
@@ -3501,6 +3503,7 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkScores
         setSelectedStudentId(sId);
         const record = homeworkScores[sId]?.[selectedHw] || { scores: {}, remakeStatus: 'MISSING', remarks: '', gradingDate: '', remakeDate: '' };
         setCurrentEdit(JSON.parse(JSON.stringify(record)));
+        setSaveStatus('idle'); // 切換學生時重置儲存狀態
     };
 
     const handleScoreChange = (qId, val) => {
@@ -3537,6 +3540,8 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkScores
 
     const handleSaveRecord = () => {
         if (!selectedStudentId || !currentEdit) return;
+        setSaveStatus('saving');
+        
         const today = new Date().toISOString().slice(0, 10);
         let newStatus = currentEdit.remakeStatus;
         let gradingDate = currentEdit.gradingDate || today;
@@ -3549,14 +3554,28 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkScores
             ...prev, [selectedStudentId]: { ...(prev[selectedStudentId] || {}), [selectedHw]: finalRecord }
         }));
 
-        setTimeout(() => syncToCloud(), 300);
-        alert('💾 批改已儲存！');
+        setTimeout(() => {
+            syncToCloud();
+            setSaveStatus('saved');
+            // 1.5秒後恢復原狀
+            setTimeout(() => setSaveStatus('idle'), 1500);
+        }, 300);
     };
 
     const handleMarkAsRemade = () => {
         const today = new Date().toISOString().slice(0, 10);
         setCurrentEdit(prev => ({ ...prev, remakeStatus: 'DONE', remakeDate: today }));
     };
+
+    // 處理過濾邏輯
+    const filteredStudents = activeStudents.filter(s => {
+        const record = homeworkScores[s.id]?.[selectedHw];
+        const status = record?.remakeStatus || 'MISSING';
+        if (filterStatus === 'ALL') return true;
+        if (filterStatus === 'PENDING') return status === 'PENDING';
+        if (filterStatus === 'MISSING') return status === 'MISSING';
+        return true;
+    });
 
     return (
         <div className="p-6 max-w-6xl mx-auto animate-fadeIn">
@@ -3581,12 +3600,23 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkScores
             <div className="flex flex-col md:flex-row gap-6">
                 {/* 左側名單 */}
                 <div className="w-full md:w-1/3 card p-0 border border-slate-200 shadow-sm overflow-hidden flex flex-col max-h-[650px]">
-                    <div className="p-3 bg-slate-50 border-b font-bold text-sm text-slate-700 flex justify-between items-center">
-                        <span>選擇學生</span>
-                        <span className="text-[10px] font-normal text-slate-500 bg-white px-2 py-0.5 rounded border">共 {activeStudents.length} 人</span>
+                    <div className="p-3 bg-slate-50 border-b font-bold text-sm text-slate-700 flex flex-col gap-2">
+                        <div className="flex justify-between items-center">
+                            <span>選擇學生</span>
+                            <span className="text-[10px] font-normal text-slate-500 bg-white px-2 py-0.5 rounded border">共 {filteredStudents.length} 人</span>
+                        </div>
+                        {/* 過濾器按鈕 */}
+                        <div className="flex gap-1 bg-slate-200/50 p-1 rounded-md">
+                            <button onClick={()=>setFilterStatus('ALL')} className={`flex-1 text-[10px] py-1 rounded font-bold transition-colors ${filterStatus==='ALL' ? 'bg-white shadow-sm text-slate-700' : 'text-slate-500 hover:bg-slate-200'}`}>全部</button>
+                            <button onClick={()=>setFilterStatus('PENDING')} className={`flex-1 text-[10px] py-1 rounded font-bold transition-colors ${filterStatus==='PENDING' ? 'bg-white shadow-sm text-red-600' : 'text-slate-500 hover:bg-slate-200'}`}>欠改正</button>
+                            <button onClick={()=>setFilterStatus('MISSING')} className={`flex-1 text-[10px] py-1 rounded font-bold transition-colors ${filterStatus==='MISSING' ? 'bg-white shadow-sm text-slate-600' : 'text-slate-500 hover:bg-slate-200'}`}>未交/未改</button>
+                        </div>
                     </div>
                     <div className="flex-1 overflow-y-auto p-2 space-y-1">
-                        {activeStudents.map(s => {
+                        {filteredStudents.length === 0 && (
+                            <div className="text-center py-8 text-slate-400 text-xs">沒有符合條件的學生 🎉</div>
+                        )}
+                        {filteredStudents.map(s => {
                             const record = homeworkScores[s.id]?.[selectedHw];
                             const status = record?.remakeStatus;
                             let statusIcon = <span className="text-[10px] text-slate-400 border px-1 rounded">未交/未改</span>;
@@ -3627,60 +3657,89 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkScores
                                     )}
                                     <div className="mt-2">
                                         {currentEdit.remakeStatus === 'PENDING' && (
-                                            <button onClick={handleMarkAsRemade} className="bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs font-bold py-1 px-3 rounded shadow-sm flex items-center gap-1 transition border border-blue-200">
-                                                <Icon name="CheckCircle" size={14} /> 點擊確認已收回改正
+                                            <button onClick={handleMarkAsRemade} className="text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 px-3 py-1.5 rounded-full font-bold transition flex items-center gap-1 shadow-sm">
+                                                <Icon name="CheckCircle" size={14} /> 標記為「已完成改正」
                                             </button>
                                         )}
                                         {currentEdit.remakeStatus === 'DONE' && (
-                                            <span className="text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200 px-3 py-1 rounded inline-flex items-center gap-1">
-                                                <Icon name="CheckCheck" size={14} /> 已完成改正
+                                            <span className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-full font-bold flex items-center gap-1 border border-blue-100">
+                                                <Icon name="CheckCircle" size={14} /> 已於 {currentEdit.remakeDate} 完成改正
                                             </span>
                                         )}
                                     </div>
                                 </div>
-                                
-                                {/* 頂部計分板 */}
-                                <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-xl border border-slate-100 shadow-inner">
-                                    <div className="text-right">
-                                        <div className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">Score</div>
-                                        <div className="text-xl font-black text-slate-700 leading-none mt-1">{liveTotal} <span className="text-xs text-slate-400 font-bold">/ {liveMax}</span></div>
-                                    </div>
-                                    <div className={`w-12 h-12 rounded-lg flex items-center justify-center font-black text-2xl border ${gradeColor} shadow-sm`}>
+                                <div className="text-right flex items-end gap-3">
+                                    <div className={`text-3xl font-black ${gradeColor} w-12 h-12 flex items-center justify-center rounded-xl shadow-sm border`}>
                                         {grade}
                                     </div>
-                                </div>
-                            </div>
-
-                            {/* 題目分數輸入區 (已隱離描述，大幅放大題目ID) */}
-                            <div className="flex-1 overflow-y-auto pr-2 space-y-4 mb-4">
-                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                    {map.questions.map(q => (
-                                        <div key={q.id} className="bg-slate-50 p-3 rounded-xl border border-slate-200 shadow-inner flex flex-col gap-2 focus-within:border-amber-400 focus-within:ring-1 focus-within:ring-amber-400 transition">
-                                            <div className="flex justify-between items-center border-b border-slate-100 pb-1.5 mb-0.5">
-                                                <div className="flex items-center gap-1.5">
-                                                    {/* ★ 題目 ID 變大變粗 */}
-                                                    <span className="text-base font-black text-slate-800 font-mono tracking-tight">{q.id.split('-').pop()}</span>
-                                                    <span className={`text-[10px] px-2 py-0.5 rounded border font-bold ${getLevelBadge(q.level)}`}>{q.level}</span>
-                                                </div>
-                                                <span className="text-amber-600 font-mono text-xs font-bold bg-amber-50 px-1.5 py-0.5 rounded">/{q.max}</span>
-                                            </div>
-                                            {q.type === 'MC' ? (
-                                                <input type="text" maxLength="1" className="w-full text-center font-black font-mono text-xl p-1.5 border rounded-lg outline-none uppercase bg-white shadow-sm"
-                                                    value={currentEdit.scores[q.id] || ''} onChange={(e) => handleScoreChange(q.id, e.target.value)}
-                                                    placeholder="A/B/C/D"
-                                                />
-                                            ) : (
-                                                <input type="number" step="0.5" min="0" max={q.max} className="w-full text-center font-black text-xl p-1.5 border rounded-lg outline-none bg-white shadow-sm"
-                                                    value={currentEdit.scores[q.id] || ''} onChange={(e) => handleScoreChange(q.id, e.target.value)}
-                                                />
-                                            )}
+                                    <div>
+                                        <div className="text-3xl font-bold font-mono text-slate-800 tracking-tighter">
+                                            {liveTotal}<span className="text-lg text-slate-400 font-medium">/{liveMax}</span>
                                         </div>
-                                    ))}
+                                        <div className="text-[10px] text-slate-400 font-bold bg-slate-100 px-2 py-0.5 rounded uppercase tracking-wider mt-1">
+                                            Live Score
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
-                            {/* Remarks */}
-                            <div className="mt-auto border-t border-slate-100 pt-4">
+                            <div className="flex-1 overflow-y-auto pr-2 space-y-2 max-h-[400px]">
+                                {map.questions.map((q, idx) => {
+                                    const val = currentEdit.scores[q.id];
+                                    const isCorrect = q.type === 'MC' ? (val && q.ans && val.toString().toUpperCase() === q.ans.toUpperCase()) : (val !== '' && parseFloat(val) === q.max);
+                                    
+                                    return (
+                                        <div key={q.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 border border-transparent hover:border-slate-100 rounded-lg group transition">
+                                            <div className="w-8 text-right text-xs font-bold text-slate-400 group-hover:text-amber-500">{idx + 1}.</div>
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-mono font-bold text-slate-700 text-sm">{q.id}</span>
+                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded border ${getLevelBadge(q.level)}`}>{q.level}</span>
+                                                    {q.type === 'MC' && <span className="text-[10px] bg-indigo-50 text-indigo-600 border border-indigo-200 px-1.5 py-0.5 rounded font-bold">MC</span>}
+                                                </div>
+                                                <div className="text-xs text-slate-500 truncate mt-0.5" title={q.topicDesc}>{q.topicId} - {q.topicDesc}</div>
+                                            </div>
+
+                                            <div className="flex items-center gap-2">
+                                                {q.type === 'MC' ? (
+                                                    <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-lg border border-slate-200">
+                                                        {['A','B','C','D'].map(opt => (
+                                                            <button 
+                                                                key={opt}
+                                                                onClick={() => handleScoreChange(q.id, val === opt ? '' : opt)}
+                                                                className={`w-7 h-7 rounded text-xs font-bold transition shadow-sm border ${
+                                                                    val === opt ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-slate-600 hover:bg-slate-100 border-slate-200'
+                                                                }`}
+                                                            >
+                                                                {opt}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center gap-2">
+                                                        <input 
+                                                            type="number" 
+                                                            min="0" max={q.max} step="0.5"
+                                                            className="w-16 p-1.5 text-center border border-slate-300 rounded font-bold font-mono text-sm bg-white focus:ring-2 focus:ring-amber-400 outline-none shadow-sm"
+                                                            value={val !== undefined ? val : ''}
+                                                            onChange={(e) => handleScoreChange(q.id, e.target.value)}
+                                                            placeholder="-"
+                                                        />
+                                                        <span className="text-xs text-slate-400 font-bold font-mono">/ {q.max}</span>
+                                                    </div>
+                                                )}
+                                                <div className="w-6 flex justify-center">
+                                                    {val !== undefined && val !== '' && (
+                                                        isCorrect ? <Icon name="Check" size={16} className="text-emerald-500" /> : <Icon name="X" size={16} className="text-red-500" />
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            <div className="mt-4 pt-4 border-t border-slate-100">
                                 <label className="text-xs font-bold text-slate-600 mb-1.5 flex items-center gap-1">
                                     <Icon name="MessageSquare" size={14} /> 老師批改備忘 (Remarks)
                                 </label>
@@ -3692,8 +3751,21 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkScores
                                 />
                             </div>
 
-                            <button onClick={handleSaveRecord} className="w-full mt-4 bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 rounded-xl shadow-md transition flex justify-center items-center gap-2">
-                                <Icon name="Save" size={18} /> 儲存批改與狀態
+                            <button 
+                                onClick={handleSaveRecord} 
+                                disabled={saveStatus !== 'idle'}
+                                className={`w-full mt-4 text-white font-bold py-3 rounded-xl shadow-md transition flex justify-center items-center gap-2 ${
+                                    saveStatus === 'saved' ? 'bg-emerald-500 hover:bg-emerald-600' : 
+                                    saveStatus === 'saving' ? 'bg-amber-400 cursor-wait' : 'bg-amber-500 hover:bg-amber-600'
+                                }`}
+                            >
+                                {saveStatus === 'saved' ? (
+                                    <><Icon name="CheckCircle" size={18} /> 已儲存！</>
+                                ) : saveStatus === 'saving' ? (
+                                    <><Icon name="Loader2" className="animate-spin" size={18} /> 儲存中...</>
+                                ) : (
+                                    <><Icon name="Save" size={18} /> 儲存批改與狀態</>
+                                )}
                             </button>
                         </div>
                     )}
