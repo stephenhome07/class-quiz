@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.45 Physics Quiz Analyzer</title>
+    <title> V2.47 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -3662,66 +3662,84 @@ const App = () => {
                 ? (students || [])
                 : (students || []).filter(s => (s.cohort || '2024-2027') === currentCohort);
     
-            // 1. 初次載入時，從 Google 雲端讀取資料
+ // 1. 初次載入時，從 Google 雲端讀取資料
             React.useEffect(() => {
                 fetch(API_URL)
                     .then(res => res.json())
                     .then(data => {
-                        const validStudents = Array.isArray(data.students) ? data.students : [];
-                        const validScores = (typeof data.scores === 'object' && data.scores !== null) ? data.scores : {};
-                        const validExamScores = (typeof data.examScores === 'object' && data.examScores !== null) ? data.examScores : {};
-                        const validRemediation = (typeof data.remediationProgress === 'object' && data.remediationProgress !== null) ? data.remediationProgress : {};
-                        setRemediationProgress(validRemediation);
-                        // ★ 新增：如果 Google 雲端有大綱/小測資料，就覆寫到變數中 ★
-                        if (data.syllabus && Object.keys(data.syllabus).length > 0) SYLLABUS_TOPICS = data.syllabus;
-                        if (data.quizMaps && Object.keys(data.quizMaps).length > 0) QUIZ_MAPS = data.quizMaps;
-                        if (data.examMaps && Object.keys(data.examMaps).length > 0) EXAM_MAPS = data.examMaps;
-                        // ★ 補上這行：將雲端的功課藍圖載入系統中 ★
-                        if (data.homeworkMaps && Object.keys(data.homeworkMaps).length > 0) HOMEWORK_MAPS = data.homeworkMaps;
+                        // ★ 安全賦值：確保大綱與測驗藍圖就算空白，也一定會建立變數，防範系統崩潰
+                        window.SYLLABUS_TOPICS = data.syllabus || {};
+                        window.QUIZ_MAPS = data.quizMaps || {};
+                        window.EXAM_MAPS = data.examMaps || {};
                         
-                        setStudents(validStudents);
-                        setScores(validScores);
-                        setExamScores(validExamScores);
-                        // ★ 讀取功課成績
-                        const validHwScores = (typeof data.homeworkScores === 'object' && data.homeworkScores !== null) ? data.homeworkScores : {};
-                        setHomeworkScores(validHwScores);   
-                        setHomeworkMaps((typeof data.homeworkMaps === 'object' && data.homeworkMaps !== null) ? data.homeworkMaps : {});
+                        // 如果原本有宣告 let 變數就覆寫，如果沒有就存入 window 安全區
+                        if (typeof SYLLABUS_TOPICS !== 'undefined') SYLLABUS_TOPICS = window.SYLLABUS_TOPICS;
+                        if (typeof QUIZ_MAPS !== 'undefined') QUIZ_MAPS = window.QUIZ_MAPS;
+                        if (typeof EXAM_MAPS !== 'undefined') EXAM_MAPS = window.EXAM_MAPS;
+                        
+                        setStudents(Array.isArray(data.students) ? data.students : []);
+                        setScores((typeof data.scores === 'object' && data.scores !== null) ? data.scores : {});
+                        setExamScores((typeof data.examScores === 'object' && data.examScores !== null) ? data.examScores : {});
+                        setRemediationProgress((typeof data.remediationProgress === 'object' && data.remediationProgress !== null) ? data.remediationProgress : {});
+                        
+                        // ★ 核心修復：正確載入功課狀態，重整網頁不再洗白
+                        setHomeworkMaps((typeof data.homeworkMaps === 'object' && data.homeworkMaps !== null) ? data.homeworkMaps : {}); 
+                        setHomeworkScores((typeof data.homeworkScores === 'object' && data.homeworkScores !== null) ? data.homeworkScores : {});
+                        
                         setIsLoading(false);
                     })
-                    .catch(err => { console.error("讀取失敗:", err); });
+                    .catch(err => { 
+                        console.error("讀取失敗:", err); 
+                        setIsLoading(false); 
+                    });
             }, []);
 
-      
-    // 修正版：手動同步到雲端的函數
-            const syncToCloud = () => {
+            // ★ 終極修復：加入 Try-Catch 與絕對安全的打包機制
+            const syncToCloud = (overrideData = {}) => {
                 setIsSaving(true);
-                fetch(API_URL, {
-                    method: 'POST',
-                    body: JSON.stringify({ 
+                
+                try {
+                    // 絕對安全的讀取方式，保證不會因為變數遺失而觸發當機
+                    const safeSyllabus = typeof SYLLABUS_TOPICS !== 'undefined' ? SYLLABUS_TOPICS : (window.SYLLABUS_TOPICS || {});
+                    const safeQuizMaps = typeof QUIZ_MAPS !== 'undefined' ? QUIZ_MAPS : (window.QUIZ_MAPS || {});
+                    const safeExamMaps = typeof EXAM_MAPS !== 'undefined' ? EXAM_MAPS : (window.EXAM_MAPS || {});
+
+                    const payload = { 
                         students: students, 
                         scores: scores,
-                        syllabus: SYLLABUS_TOPICS,
-                        quizMaps: QUIZ_MAPS,
-                        examScores: examScores, // ★ 修正：直接讀取系統當前的 examScores 狀態
-                        examMaps: EXAM_MAPS,
+                        syllabus: safeSyllabus,
+                        quizMaps: safeQuizMaps,
+                        examScores: examScores,
+                        examMaps: safeExamMaps,
                         remediationProgress: remediationProgress,
-                        homeworkMaps: homeworkMaps,      // 使用狀態
-                        homeworkScores: homeworkScores,  // 使用狀態
-                        ...overrideData                  // 強制覆寫最新資料
+                        homeworkMaps: homeworkMaps,      // 來自 React 最新狀態
+                        homeworkScores: homeworkScores,  // 來自 React 最新狀態
+                        ...overrideData                  // 強制使用當下操作的最新資料
+                    };
+
+                    fetch(API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // 避免網路安全阻擋
+                        body: JSON.stringify(payload)
                     })
-                })
-                .then(res => res.json())
-                .then(data => {
+                    .then(res => res.json())
+                    .then(data => {
+                        setIsSaving(false);
+                        if(data.status === 'success') {
+                            console.log("✅ 雲端同步成功");
+                        }
+                    })
+                    .catch(err => {
+                        console.error("存檔網路失敗:", err);
+                        alert("同步到雲端失敗！請檢查網路連線。");
+                        setIsSaving(false);
+                    });
+                } catch (error) {
+                    // 如果打包過程中依然發生未知錯誤，會抓住它，不會讓畫面卡死
+                    console.error("系統打包存檔資料時發生嚴重錯誤:", error);
+                    alert("系統內部錯誤：無法打包上傳資料。");
                     setIsSaving(false);
-                    if(data.status === 'success') {
-                        // 存檔成功的靜默處理，避免每次都彈出視窗打斷操作
-                    }
-                })
-                .catch(err => {
-                    console.error("存檔失敗:", err);
-                    alert("同步到雲端失敗！");
-                    setIsSaving(false);
-                });
+                }
             };
 
             // 當畫面還在載入時，顯示 Loading 畫面
