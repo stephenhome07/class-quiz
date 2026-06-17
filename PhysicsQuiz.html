@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.65 Physics Quiz Analyzer</title>
+    <title> V2.66 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -2556,17 +2556,30 @@ const StudentExamAnalysisView = ({ activeStudents = [], examScores = {} }) => {
         </div>
     );
 };
-        
-// ==================== 更新版：專屬補底練習生成與進度連動組件 (支援多選學生與群組補底) ====================
+// ==================== 更新版：專屬補底練習 (支援學生記憶與 XY 矩陣表格) ====================
 const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress, setRemediationProgress, syncToCloud }) => {
-    // 狀態管理集中區
+    // 狀態管理
     const [selectedExam, setSelectedExam] = React.useState('');
-    const [selectedStudentIds, setSelectedStudentIds] = React.useState([]); // ★ 改為陣列，支援多選
     const [selectedTopicsForPrompt, setSelectedTopicsForPrompt] = React.useState([]);
     const [aiLang, setAiLang] = React.useState('雙語 (Bilingual)');
     const [aiMcCount, setAiMcCount] = React.useState('10'); 
     const [aiLqCount, setAiLqCount] = React.useState('0'); 
     const [generatedPrompt, setGeneratedPrompt] = React.useState('');
+
+    // ★ 優化 1：使用 LocalStorage 記住上次勾選的學生
+    const [selectedStudentIds, setSelectedStudentIds] = React.useState(() => {
+        try {
+            const saved = localStorage.getItem('dse_physics_remedial_students');
+            return saved ? JSON.parse(saved) : [];
+        } catch (e) {
+            return [];
+        }
+    });
+
+    // 當選擇的學生改變時，同步存入 LocalStorage
+    React.useEffect(() => {
+        localStorage.setItem('dse_physics_remedial_students', JSON.stringify(selectedStudentIds));
+    }, [selectedStudentIds]);
 
     // 過濾出目前群組中真正「有輸入分數」的試卷
     const availableExams = React.useMemo(() => {
@@ -2585,16 +2598,14 @@ const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress,
         return Array.from(examsWithScores).sort((a, b) => allExamKeys.indexOf(a) - allExamKeys.indexOf(b));
     }, [activeStudents, examScores]);
 
-    // 自動鎖定第一份可用試卷
     React.useEffect(() => {
         if (availableExams.length > 0 && !availableExams.includes(selectedExam)) {
             setSelectedExam(availableExams[0]);
         }
     }, [availableExams, selectedExam]);
 
-    // 切換試卷時，清空學生與課題選擇
+    // 切換試卷時，清空勾選的課題 (但保留學生的記憶)
     React.useEffect(() => {
-        setSelectedStudentIds([]);
         setSelectedTopicsForPrompt([]);
     }, [selectedExam]);
 
@@ -2617,7 +2628,6 @@ const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress,
         </div>
     );
 
-    // 計算特定學生的單題得分
     const getStudentQScore = (studentId, q) => {
         const record = examScores[studentId]?.[selectedExam];
         if (!record) return 0;
@@ -2626,16 +2636,17 @@ const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress,
         return val === '' || val === undefined ? 0 : parseFloat(val);
     };
 
-    // ★ 核心邏輯：計算「被勾選的所有學生」的綜合弱項課題
-    const groupTopicStats = {};
-    
-    if (selectedStudentIds.length > 0 && map) {
+    // ★ 優化 2：核心邏輯，計算 XY 矩陣資料 (只列出至少有 1 人不及格的課題)
+    const weakTopicsMatrix = React.useMemo(() => {
+        if (selectedStudentIds.length === 0 || !map) return [];
+        
+        const matrixMap = {};
+        
         selectedStudentIds.forEach(sId => {
             const student = activeStudents.find(s => s.id === sId);
             if (!student) return;
-
+            
             const sTopicStats = {};
-            // 先計算該名學生各課題表現
             map.questions.forEach(q => {
                 const score = getStudentQScore(sId, q);
                 if (!sTopicStats[q.topicId]) {
@@ -2645,29 +2656,43 @@ const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress,
                 sTopicStats[q.topicId].earned += score;
                 if (q.topicDesc) sTopicStats[q.topicId].descList.add(q.topicDesc);
             });
-
-            // 如果該生在此課題 <= 50%，將其加入群組弱項清單
+            
             Object.keys(sTopicStats).forEach(tId => {
                 const stat = sTopicStats[tId];
-                if (stat.max > 0 && (stat.earned / stat.max) <= 0.5) {
-                    if (!groupTopicStats[tId]) {
-                        groupTopicStats[tId] = { 
-                            topicId: tId, 
-                            topicName: SYLLABUS_TOPICS[tId] || '未定義課題', 
-                            descList: new Set(),
-                            weakStudents: [] // 記錄哪幾位同學在這題較弱
-                        };
-                    }
-                    groupTopicStats[tId].weakStudents.push(student.name);
-                    stat.descList.forEach(desc => groupTopicStats[tId].descList.add(desc));
+                if (stat.max === 0) return;
+                
+                const pct = stat.earned / stat.max;
+                const isWeak = pct <= 0.5;
+                const isRecorded = remediationProgress[sId]?.[selectedExam]?.[tId] || false;
+                
+                if (!matrixMap[tId]) {
+                    matrixMap[tId] = {
+                        topicId: tId,
+                        topicName: SYLLABUS_TOPICS[tId] || '未定義課題',
+                        studentStats: {},
+                        hasAnyWeak: false,
+                        allWeakDescList: new Set()
+                    };
+                }
+                
+                // 紀錄該學生在此課題的狀態
+                matrixMap[tId].studentStats[sId] = { pct, isWeak, isRecorded, name: student.name };
+                
+                // 如果該生此題較弱，把他的盲點加進綜合盲點清單，並標記此課題需顯示
+                if (isWeak) {
+                    matrixMap[tId].hasAnyWeak = true;
+                    stat.descList.forEach(d => matrixMap[tId].allWeakDescList.add(d));
                 }
             });
         });
-    }
-
-    const weakTopics = Object.values(groupTopicStats)
-        .sort((a, b) => a.topicId.localeCompare(b.topicId, undefined, { numeric: true, sensitivity: 'base' }))
-        .map(t => ({ ...t, descArray: Array.from(t.descList) }));
+        
+        // 過濾出「至少有一人需補底」的課題，並排序
+        return Object.values(matrixMap)
+            .filter(t => t.hasAnyWeak)
+            .sort((a, b) => a.topicId.localeCompare(b.topicId, undefined, { numeric: true, sensitivity: 'base' }))
+            .map(t => ({ ...t, descArray: Array.from(t.allWeakDescList) }));
+            
+    }, [selectedStudentIds, selectedExam, activeStudents, examScores, remediationProgress, map]);
 
     const toggleTopicSelection = (topicId) => {
         setSelectedTopicsForPrompt(prev => 
@@ -2675,7 +2700,7 @@ const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress,
         );
     };
 
-    // ★ 點擊複製按鈕：批次更新所有被選學生的進度
+    // 點擊複製按鈕：批次更新「該課題有弱項的學生」的進度
     const handleCopyAndRecord = () => {
         if (selectedTopicsForPrompt.length === 0) {
             alert('⚠️ 請先在左側勾選至少一個課題！');
@@ -2684,14 +2709,20 @@ const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress,
         
         navigator.clipboard.writeText(generatedPrompt);
         
-        // 批次寫入所有被勾選學生的進度
         setRemediationProgress(prev => {
             const updated = { ...prev };
-            selectedStudentIds.forEach(sId => {
-                if (!updated[sId]) updated[sId] = {};
-                if (!updated[sId][selectedExam]) updated[sId][selectedExam] = {};
-                selectedTopicsForPrompt.forEach(tid => {
-                    updated[sId][selectedExam][tid] = true;
+            selectedTopicsForPrompt.forEach(tid => {
+                const topicData = weakTopicsMatrix.find(x => x.topicId === tid);
+                if (!topicData) return;
+                
+                selectedStudentIds.forEach(sId => {
+                    const stat = topicData.studentStats[sId];
+                    // 只為「在此課題較弱」的學生標記為已補底
+                    if (stat && stat.isWeak) {
+                        if (!updated[sId]) updated[sId] = {};
+                        if (!updated[sId][selectedExam]) updated[sId][selectedExam] = {};
+                        updated[sId][selectedExam][tid] = true;
+                    }
                 });
             });
             return updated;
@@ -2699,47 +2730,51 @@ const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress,
 
         setTimeout(() => syncToCloud(), 300);
         setSelectedTopicsForPrompt([]);
-        alert(`📋 Prompt 已複製！系統已自動為 ${selectedStudentIds.length} 位同學標記進度並同步。`);
+        alert(`📋 Prompt 已複製！系統已針對弱勢學生自動標記進度並同步。`);
     };
 
-    // 動態生成 AI Prompt
+    // 動態生成精準 AI Prompt
     React.useEffect(() => {
         if (selectedStudentIds.length === 0 || selectedTopicsForPrompt.length === 0) {
             setGeneratedPrompt('👈 請先勾選【出席學生】並在左側清單選擇【欲生成練習的課題】。');
             return;
         }
         
-        const studentNames = activeStudents
+        const allTargetStudentNames = activeStudents
             .filter(s => selectedStudentIds.includes(s.id))
-            .map(s => s.name)
-            .join('、');
+            .map(s => s.name).join('、');
         
-        const selectedWeakTopics = weakTopics.filter(t => selectedTopicsForPrompt.includes(t.topicId));
+        const selectedWeakTopics = weakTopicsMatrix.filter(t => selectedTopicsForPrompt.includes(t.topicId));
         
-        const weakTopicsText = selectedWeakTopics.map(t => 
-            `- 課題 [${t.topicId} ${t.topicName}]: 曾做錯的題型盲點: ${t.descArray.join('; ')}`
-        ).join('\n');
+        // ★ 優化 3：明確告訴 AI 每個課題要針對哪些特定學生
+        const weakTopicsText = selectedWeakTopics.map(t => {
+            const weakStudentNames = Object.entries(t.studentStats)
+                .filter(([sId, stat]) => stat.isWeak)
+                .map(([sId, stat]) => stat.name)
+                .join('、');
+                
+            return `- 課題 [${t.topicId} ${t.topicName}]:\n  * 需重點指導學生: ${weakStudentNames}\n  * 曾做錯的題型盲點: ${t.descArray.join('; ')}`;
+        }).join('\n\n');
 
-        const newPrompt = `你是一位極具耐心的香港 DSE 物理科導師。我的學生們【${studentNames}】正在進行大考後的共同補救教學。以下是他們【本次需要進行補底】的物理課題及歷史錯誤盲點，請為他們度身訂造一份分段式專屬補底練習。\n\n[基本設定]\n- 語言: ${aiLang}\n- 預期題型與數量:\n  * 多項選擇題 (MC)：${aiMcCount} 題\n  * 長題目 (LQ)：${aiLqCount} 題\n\n[本次目標補底課題與盲點描述]\n${weakTopicsText}\n\n[生成要求]\n1. 針對上述列出的目標課題，設計難度由淺入深、著重釐清核心物理觀念的練習題。\n2. MC 必須包含 4 個選項，並為錯誤選項附帶【陷阱分析】；LQ (如有) 必須附帶詳細的【分步思維導引 (Scaffolding Tips)】與【評分標準】。\n3. 請在開頭給予【${studentNames}】一段鼓勵，讓他們有信心克服這些難關。`;
+        const newPrompt = `你是一位極具耐心的香港 DSE 物理科導師。我的學生們【${allTargetStudentNames}】正在進行大考後的共同補救教學。以下是他們【本次需要進行補底】的物理課題及對應需重點指導的學生，請為他們度身訂造一份分段式專屬補底練習。\n\n[基本設定]\n- 語言: ${aiLang}\n- 預期題型與數量:\n  * 多項選擇題 (MC)：${aiMcCount} 題\n  * 長題目 (LQ)：${aiLqCount} 題\n\n[本次目標補底課題與對應學生盲點]\n${weakTopicsText}\n\n[生成要求]\n1. 針對上述列出的目標課題，設計難度由淺入深、著重釐清核心物理觀念的練習題。\n2. MC 必須包含 4 個選項，並為錯誤選項附帶【陷阱分析】；LQ (如有) 必須附帶詳細的【分步思維導引 (Scaffolding Tips)】與【評分標準】。\n3. 請在開頭給予這群學生一段鼓勵，讓他們有信心克服這些難關。`;
         
         setGeneratedPrompt(newPrompt);
-    }, [aiLang, aiMcCount, aiLqCount, selectedStudentIds, selectedTopicsForPrompt, weakTopics, activeStudents]);
+    }, [aiLang, aiMcCount, aiLqCount, selectedStudentIds, selectedTopicsForPrompt, weakTopicsMatrix, activeStudents]);
 
     return (
         <div className="p-6 max-w-6xl mx-auto animate-fadeIn">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 border-b pb-4">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                        <Icon name="ClipboardEdit" className="text-purple-600" /> 群組補底練習與進度管理
+                        <Icon name="ClipboardEdit" className="text-purple-600" /> 補底進度管理與智能出題 (矩陣模式)
                     </h1>
-                    <p className="text-sm text-slate-500 mt-1">勾選出席補底的學生，系統將自動整合他們的共同弱項並生成專屬練習。</p>
+                    <p className="text-sm text-slate-500 mt-1">系統已自動記憶您選擇的學生。透過 XY 矩陣可清晰比對每位學生在不同課題的掌握度。</p>
                 </div>
             </div>
             
-            {/* 選擇區塊 */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm">
                 <div className="flex flex-col gap-1.5 h-48">
-                    <label className="text-xs font-bold text-slate-700">1. 選擇要補底的試卷</label>
+                    <label className="text-xs font-bold text-slate-700">1. 選擇要檢視的試卷</label>
                     <select 
                         value={selectedExam}
                         onChange={(e) => setSelectedExam(e.target.value)}
@@ -2755,11 +2790,10 @@ const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress,
                     </select>
                 </div>
                 
-                {/* ★ 改良：多選學生面板 (兼作點名用) */}
                 <div className="flex flex-col gap-1.5 h-48">
                     <div className="flex justify-between items-end">
                         <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                            2. 選擇目標學生 (可多選點名)
+                            2. 選擇出席學生 (已自動記憶)
                             <span className="bg-purple-100 text-purple-700 text-[10px] px-1.5 py-0.5 rounded">已選 {selectedStudentIds.length} 人</span>
                         </label>
                         <button 
@@ -2793,7 +2827,7 @@ const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress,
                                         <span className={`font-semibold ${isChecked ? 'text-purple-800' : 'text-slate-700'}`}>
                                             {s.class} ({s.num}) {s.name}
                                         </span>
-                                        <span className="text-xs text-slate-500 font-mono bg-slate-100 px-1.5 py-0.5 rounded">
+                                        <span className="text-[10px] text-slate-500 font-mono bg-slate-100 px-1.5 py-0.5 rounded">
                                             {sScore}/{sMax}
                                         </span>
                                     </div>
@@ -2807,81 +2841,99 @@ const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress,
             {selectedStudentIds.length === 0 ? (
                 <div className="card p-16 text-center text-slate-400 border border-slate-200 shadow-sm border-dashed">
                     <Icon name="Users" size={48} className="mx-auto mb-3 opacity-40 text-purple-300" />
-                    <p className="text-sm font-medium text-slate-500">請從右上方清單勾選【出席補底班的學生】以計算綜合盲點</p>
+                    <p className="text-sm font-medium text-slate-500">請從右上方勾選學生，系統將為您生成專屬分析矩陣</p>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-                    {/* 左側：綜合危險課題表格 */}
+                    {/* 左側：XY 矩陣表格 (佔 3 列) */}
                     <div className="lg:col-span-3 card p-0 border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[700px]">
                         <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
                             <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                                <span className="p-1.5 bg-red-100 text-red-700 rounded"><Icon name="List" size={16} /></span>
-                                群組共同補底清單 (得分率 &le; 50%)
+                                <span className="p-1.5 bg-red-100 text-red-700 rounded"><Icon name="Grid" size={16} /></span>
+                                弱項分析矩陣
                             </h3>
+                            <div className="text-[10px] flex gap-2 font-semibold">
+                                <span className="text-red-600 bg-red-50 px-1.5 py-0.5 rounded">🔴 需補底</span>
+                                <span className="text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">🟢 已掌握</span>
+                                <span className="text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">✅ 已記錄</span>
+                            </div>
                         </div>
                         
-                        <div className="flex-1 overflow-y-auto">
-                            {weakTopics.length === 0 ? (
+                        <div className="flex-1 overflow-auto custom-scrollbar relative">
+                            {weakTopicsMatrix.length === 0 ? (
                                 <div className="p-10 text-center text-emerald-600 font-bold bg-emerald-50 h-full flex flex-col items-center justify-center">
                                     <Icon name="CheckCircle" size={40} className="mb-2" />
                                     所選學生皆已掌握此卷所有課題，無需補底！
                                 </div>
                             ) : (
-                                <table className="w-full text-left border-collapse">
-                                    <thead className="bg-slate-100/80 sticky top-0 z-10 text-xs text-slate-600 shadow-sm">
+                                <table className="w-full text-left border-collapse min-w-max">
+                                    <thead className="bg-slate-100/95 sticky top-0 z-20 text-xs text-slate-600 shadow-sm backdrop-blur-sm">
                                         <tr>
-                                            <th className="p-3 border-b border-slate-200 w-16 text-center">勾選</th>
-                                            <th className="p-3 border-b border-slate-200 w-20">課題ID</th>
-                                            <th className="p-3 border-b border-slate-200">課題與盲點描述</th>
-                                            <th className="p-3 border-b border-slate-200 w-32 text-right">狀態</th>
+                                            {/* 固定的第一欄：課題與盲點 */}
+                                            <th className="p-3 border-b border-r border-slate-200 min-w-[240px] max-w-[300px] sticky left-0 bg-slate-100/95 z-30">
+                                                <div className="flex items-center gap-2">
+                                                    <span>勾選</span>
+                                                    <span>課題 ID 與共同盲點</span>
+                                                </div>
+                                            </th>
+                                            {/* 動態渲染學生欄位 */}
+                                            {selectedStudentIds.map(sId => {
+                                                const s = activeStudents.find(a => a.id === sId);
+                                                return (
+                                                    <th key={sId} className="p-2 border-b border-r border-slate-200 text-center min-w-[60px] font-bold text-[11px] text-slate-700">
+                                                        <div className="truncate w-16 mx-auto" title={s?.name}>{s?.name}</div>
+                                                    </th>
+                                                );
+                                            })}
                                         </tr>
                                     </thead>
                                     <tbody className="text-sm divide-y divide-slate-100">
-                                        {weakTopics.map(t => {
+                                        {weakTopicsMatrix.map(t => {
                                             const isSelected = selectedTopicsForPrompt.includes(t.topicId);
-                                            // 檢查這題對於「有此弱項的所有勾選學生」是否都已經記錄了
-                                            const isFullyRecorded = selectedStudentIds
-                                                .filter(sId => t.weakStudents.includes(activeStudents.find(a=>a.id===sId)?.name))
-                                                .every(sId => remediationProgress[sId]?.[selectedExam]?.[t.topicId]);
                                             
                                             return (
-                                                <tr key={t.topicId} className={`transition ${isSelected ? 'bg-purple-50' : isFullyRecorded ? 'bg-slate-50/50' : 'hover:bg-slate-50'}`}>
-                                                    <td className="p-3 text-center">
-                                                        <input 
-                                                            type="checkbox" 
-                                                            checked={isSelected}
-                                                            onChange={() => toggleTopicSelection(t.topicId)}
-                                                            className="w-5 h-5 text-purple-600 border-gray-300 rounded focus:ring-purple-500 cursor-pointer shadow-sm"
-                                                        />
-                                                    </td>
-                                                    <td className="p-3 font-mono font-bold text-slate-600">{t.topicId}</td>
-                                                    <td className="p-3">
-                                                        <div className={`font-semibold ${isFullyRecorded ? 'text-slate-500' : 'text-slate-800'}`}>
-                                                            {t.topicName}
-                                                        </div>
-                                                        <div className="text-[10px] text-slate-400 mt-1 line-clamp-2 leading-tight">
-                                                            盲點: {t.descArray.join('; ')}
-                                                        </div>
-                                                        {/* ★ 新增：顯示哪幾位學生需要補這個課題 */}
-                                                        <div className="mt-1.5 flex flex-wrap gap-1">
-                                                            {t.weakStudents.map((wName, idx) => (
-                                                                <span key={idx} className="bg-red-50 text-red-600 border border-red-100 px-1.5 py-0.5 rounded text-[9px] font-bold">
-                                                                    {wName} 需補
-                                                                </span>
-                                                            ))}
+                                                <tr key={t.topicId} className={`transition ${isSelected ? 'bg-purple-50/50' : 'hover:bg-slate-50'}`}>
+                                                    {/* 固定的第一欄 */}
+                                                    <td className={`p-3 border-r border-slate-200 sticky left-0 z-10 transition ${isSelected ? 'bg-purple-50' : 'bg-white'}`}>
+                                                        <div className="flex items-start gap-3">
+                                                            <input 
+                                                                type="checkbox" 
+                                                                checked={isSelected}
+                                                                onChange={() => toggleTopicSelection(t.topicId)}
+                                                                className="mt-0.5 w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500 cursor-pointer shadow-sm flex-shrink-0"
+                                                            />
+                                                            <div>
+                                                                <div className="font-bold text-slate-700 text-xs">{t.topicId} {t.topicName}</div>
+                                                                <div className="text-[10px] text-slate-400 mt-0.5 line-clamp-2 leading-tight" title={t.descArray.join('; ')}>
+                                                                    {t.descArray.join('; ')}
+                                                                </div>
+                                                            </div>
                                                         </div>
                                                     </td>
-                                                    <td className="p-3 text-right">
-                                                        {isFullyRecorded ? (
-                                                            <span className="px-2 py-1 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 flex justify-center items-center gap-1">
-                                                                <Icon name="Check" size={10} /> 均已記錄
-                                                            </span>
-                                                        ) : (
-                                                            <span className="px-2 py-1 rounded text-[10px] font-bold bg-red-100 text-red-600">
-                                                                尚未出題
-                                                            </span>
-                                                        )}
-                                                    </td>
+                                                    
+                                                    {/* 學生狀態儲存格 */}
+                                                    {selectedStudentIds.map(sId => {
+                                                        const stat = t.studentStats[sId];
+                                                        if (!stat) return <td key={sId} className="p-2 border-r border-slate-100 text-center text-slate-300">-</td>;
+                                                        
+                                                        return (
+                                                            <td key={sId} className="p-2 border-r border-slate-100 text-center align-middle">
+                                                                {stat.isRecorded ? (
+                                                                    <span className="text-[10px] bg-slate-100 border border-slate-200 text-slate-500 px-1.5 py-0.5 rounded shadow-sm">
+                                                                        ✅ 已記
+                                                                    </span>
+                                                                ) : stat.isWeak ? (
+                                                                    <span className="text-[11px] font-bold text-red-600 bg-red-50 border border-red-100 px-1.5 py-0.5 rounded shadow-sm">
+                                                                        🔴 {(stat.pct * 100).toFixed(0)}%
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded">
+                                                                        🟢 {(stat.pct * 100).toFixed(0)}%
+                                                                    </span>
+                                                                )}
+                                                            </td>
+                                                        );
+                                                    })}
                                                 </tr>
                                             );
                                         })}
@@ -2895,10 +2947,10 @@ const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress,
                     <div className="lg:col-span-2 card p-5 border-2 border-purple-100 bg-gradient-to-br from-purple-50/50 to-white shadow-sm flex flex-col h-[700px]">
                         <div className="flex items-center gap-2 text-purple-800 font-bold text-base mb-2">
                             <Icon name="Cpu" className="text-purple-600" />
-                            <span>群組批次生成與紀錄</span>
+                            <span>精準分群 AI 出題</span>
                         </div>
-                        <p className="text-xs text-slate-500 mb-4 leading-relaxed">
-                            點擊下方按鈕即可複製 Prompt，系統會<strong className="text-emerald-600">自動將所選課題同步標記為這 {selectedStudentIds.length} 位同學的「✅ 已記錄」</strong>。
+                        <p className="text-[11px] text-slate-500 mb-4 leading-relaxed">
+                            系統會自動提取每個課題對應的<strong className="text-red-500">弱勢學生</strong>放入 Prompt。點擊複製後，將自動為這些學生標記進度。
                         </p>
                         
                         <div className="grid grid-cols-2 gap-3 mb-4">
@@ -2933,7 +2985,7 @@ const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress,
                             onClick={handleCopyAndRecord}
                             className={`w-full font-bold py-3 rounded-xl shadow-md flex items-center justify-center gap-2 transition text-sm ${selectedTopicsForPrompt.length > 0 ? 'bg-purple-600 hover:bg-purple-700 text-white' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
                         >
-                            <Icon name="Copy" size={16} /> 為 {selectedStudentIds.length} 人複製 Prompt 並存檔
+                            <Icon name="Copy" size={16} /> 複製 Prompt 並記錄進度
                         </button>
                     </div>
 
@@ -2942,7 +2994,6 @@ const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress,
         </div>
     );
 };
-
         
 // ==================== 升級版：考試成績匯出 (Excel) - 支援平均分與不及格紅字提示 ====================
 const ExamExportView = ({ activeStudents, examScores }) => {
