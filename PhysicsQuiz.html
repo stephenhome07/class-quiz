@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.43 Physics Quiz Analyzer</title>
+    <title> V2.44 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -4054,9 +4054,9 @@ const App = () => {
                     )}
 
                     
-                    {/* 更新：功課管理頁面傳入 homeworkMaps */}
-                    {view === 'homeworkSettings' && <HomeworkSettingsView students={students} currentCohort={currentCohort} homeworkMaps={HOMEWORK_MAPS} syncToCloud={syncToCloud} />}
-                    {view === 'homeworkScoresInput' && <HomeworkScoresInputView activeStudents={activeStudents} currentCohort={currentCohort} homeworkMaps={HOMEWORK_MAPS} homeworkScores={homeworkScores} setHomeworkScores={setHomeworkScores} syncToCloud={syncToCloud} />}
+                    {/* 更新：功課管理頁面傳入完整的狀態與更新函數 */}
+                    {view === 'homeworkSettings' && <HomeworkSettingsView students={students} currentCohort={currentCohort} homeworkMaps={homeworkMaps} setHomeworkMaps={setHomeworkMaps} syncToCloud={syncToCloud} />}
+                    {view === 'homeworkScoresInput' && <HomeworkScoresInputView activeStudents={activeStudents} currentCohort={currentCohort} homeworkMaps={homeworkMaps} homeworkScores={homeworkScores} setHomeworkScores={setHomeworkScores} syncToCloud={syncToCloud} />}
                 </div></div>
             );
         };
