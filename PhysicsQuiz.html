@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.55 Physics Quiz Analyzer</title>
+    <title> V2.56 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -3071,23 +3071,26 @@ const ExamExportView = ({ activeStudents, examScores }) => {
     );
 };
 
-// ==================== 全新轉型版：學生動態管理與智慧升班組件 (名單識別升級 + 改名功能 + 預覽機制) ====================
+// ==================== 全新轉型版：學生動態管理與智慧升班組件 (名單識別升級 + 改名/改群組 + 篩選器) ====================
 const StudentPromotionView = ({ students, setStudents, scores, setScores, syncToCloud }) => {
     // 取得所有現有群組，並排序
-    const cohorts = Array.from(new Set(students.map(s => s.cohort || '未分組'))).sort();
+    const cohorts = Array.from(new Set(students.map(s => s.cohort || '未分組'))).filter(Boolean).sort();
     
     // 狀態設定
     const [selectedCohort, setSelectedCohort] = React.useState(cohorts[0] || '2025-2028');
     const [newCohort, setNewCohort] = React.useState(selectedCohort);
     const [pasteData, setPasteData] = React.useState('');
     const [previewList, setPreviewList] = React.useState(null);
+    
+    // 👇 新增：用於控制下方表格的學群篩選器狀態 👇
+    const [filterCohort, setFilterCohort] = React.useState('全部');
 
-    // 1. 當選擇的來源群組變更時，自動更新預設的目標群組 (需求2)
+    // 1. 當選擇的來源群組變更時，自動更新預設的目標群組
     React.useEffect(() => { 
         setNewCohort(selectedCohort); 
     }, [selectedCohort]);
 
-    // 預覽與校對功能 (需求3)
+    // 預覽與校對功能
     const handlePreview = () => {
         if (!pasteData.trim()) {
             alert('⚠️ 請先貼上新學期的 Excel 學生資料！');
@@ -3113,11 +3116,9 @@ const StudentPromotionView = ({ students, setStudents, scores, setScores, syncTo
             return;
         }
 
-        // 只針對選定的來源群組進行比對
         const currentStudents = students.filter(s => s.cohort === selectedCohort);
         
         const preview = incoming.map(inc => {
-            // 透過姓名尋找是否有舊生
             const match = currentStudents.find(s => s.name === inc.name);
             return { 
                 ...inc, 
@@ -3128,7 +3129,6 @@ const StudentPromotionView = ({ students, setStudents, scores, setScores, syncTo
             };
         });
 
-        // 找出在原群組中，但沒有出現在新貼上名單中的學生 (可能是退修、轉學或尚未貼上)
         const notFound = currentStudents.filter(s => !incoming.find(i => i.name === s.name));
         
         setPreviewList({ preview, notFound });
@@ -3143,28 +3143,24 @@ const StudentPromotionView = ({ students, setStudents, scores, setScores, syncTo
 
         previewList.preview.forEach(item => {
             const newId = `${item.cls}-${item.num}`;
-            // 尋找全系統中是否有這個學生
             const idx = updatedStudents.findIndex(s => s.name === item.name);
             
             if (idx !== -1) {
-                // 找到舊生，執行更新 (升班/留班)
                 const oldId = updatedStudents[idx].id;
                 updatedStudents[idx] = { 
                     ...updatedStudents[idx], 
                     id: newId, 
                     class: item.cls, 
                     num: item.num, 
-                    cohort: newCohort // 寫入新的或維持舊的群組標籤
+                    cohort: newCohort 
                 };
                 
-                // 自動轉移成績
                 if (oldId !== newId && updatedScores[oldId]) {
                     updatedScores[newId] = updatedScores[oldId];
                     delete updatedScores[oldId];
                 }
                 promoteCount++;
             } else {
-                // 新加入的學生
                 updatedStudents.push({ 
                     id: newId, 
                     class: item.cls, 
@@ -3176,11 +3172,9 @@ const StudentPromotionView = ({ students, setStudents, scores, setScores, syncTo
             }
         });
 
-        // 更新 React 狀態
         setStudents(updatedStudents);
         setScores(updatedScores);
 
-        // ★ 自動同步寫入 PHYSICS DB 雲端金庫
         if (typeof syncToCloud === 'function') {
             syncToCloud({ students: updatedStudents, scores: updatedScores });
         }
@@ -3190,12 +3184,9 @@ const StudentPromotionView = ({ students, setStudents, scores, setScores, syncTo
         alert(`🎉 升班/更新程序已完成！\n\n更新舊生資料：${promoteCount} 人\n新增學生：${newCount} 人\n\n(所有變更已安全寫入 PHYSICS DB 雲端)`);
     };
 
-    // 取消預覽
-    const handleCancelPreview = () => {
-        setPreviewList(null);
-    };
+    const handleCancelPreview = () => setPreviewList(null);
 
-    // 快速修改學生姓名功能 (解決學期中途改名問題)
+    // 快速修改學生姓名
     const handleEditName = (id, currentName) => {
         const newName = window.prompt(`📝 修改學生姓名\n\n請輸入學生 [${currentName}] 的正確新姓名：`, currentName);
         if (newName === null) return; 
@@ -3207,19 +3198,24 @@ const StudentPromotionView = ({ students, setStudents, scores, setScores, syncTo
         }
 
         if (trimmedName !== currentName) {
-            const updatedStudents = students.map(s => {
-                if (s.id === id) {
-                    return { ...s, name: trimmedName };
-                }
-                return s;
-            });
-
+            const updatedStudents = students.map(s => s.id === id ? { ...s, name: trimmedName } : s);
             setStudents(updatedStudents);
-            
-            if (typeof syncToCloud === 'function') {
-                syncToCloud({ students: updatedStudents });
-            }
-            alert(`✅ 姓名已成功更新為 [${trimmedName}] 並同步至雲端！`);
+            if (typeof syncToCloud === 'function') syncToCloud({ students: updatedStudents });
+            alert(`✅ 姓名已更新並同步至雲端！`);
+        }
+    };
+
+    // 👇 新增：單獨修改個別學生的學群 (Cohort) 👇
+    const handleEditCohort = (id, currentName, currentCohort) => {
+        const newCohortVal = window.prompt(`📝 修改學生學群\n\n請輸入學生 [${currentName}] 的新學群 (Cohort)：`, currentCohort || '');
+        if (newCohortVal === null) return; 
+        
+        const trimmedCohort = newCohortVal.trim();
+        if (trimmedCohort !== currentCohort) {
+            const updatedStudents = students.map(s => s.id === id ? { ...s, cohort: trimmedCohort } : s);
+            setStudents(updatedStudents);
+            if (typeof syncToCloud === 'function') syncToCloud({ students: updatedStudents });
+            alert(`✅ 學群已更新並同步至雲端！`);
         }
     };
 
@@ -3234,10 +3230,13 @@ const StudentPromotionView = ({ students, setStudents, scores, setScores, syncTo
         setStudents(updatedStudents);
         setScores(updatedScores);
 
-        if (typeof syncToCloud === 'function') {
-            syncToCloud({ students: updatedStudents, scores: updatedScores });
-        }
+        if (typeof syncToCloud === 'function') syncToCloud({ students: updatedStudents, scores: updatedScores });
     };
+
+    // 👇 新增：計算過濾後的學生名單 👇
+    const filteredStudents = filterCohort === '全部' 
+        ? students 
+        : students.filter(s => s.cohort === filterCohort);
 
     return (
         <div className="p-6 max-w-5xl mx-auto animate-fadeIn">
@@ -3251,8 +3250,6 @@ const StudentPromotionView = ({ students, setStudents, scores, setScores, syncTo
 
             {/* Excel 智慧升班輸入區塊 */}
             <div className="card p-5 mb-6 bg-purple-50/40 border border-purple-100 shadow-sm rounded-xl">
-                
-                {/* 選擇來源與目標群組 */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     <div className="bg-white p-3 rounded-lg border border-purple-100 shadow-sm">
                         <label className="block text-sm font-bold text-purple-900 mb-1">1. 選擇要處理的來源群組 (Cohort)：</label>
@@ -3283,10 +3280,9 @@ const StudentPromotionView = ({ students, setStudents, scores, setScores, syncTo
                     value={pasteData} 
                     onChange={e => setPasteData(e.target.value)} 
                     placeholder="例如新學期的資料：&#10;6A&#9;27&#9;謝宇邦&#10;6B&#9;05&#9;張小明"
-                    disabled={previewList !== null} // 預覽時禁用輸入
+                    disabled={previewList !== null} 
                 />
                 
-                {/* 按鈕區 */}
                 {!previewList ? (
                     <button onClick={handlePreview} className="bg-purple-600 text-white px-6 py-2.5 rounded-lg shadow-md hover:bg-purple-700 font-bold flex items-center gap-2 transition w-full md:w-auto justify-center">
                         <Icon name="Eye" size={18} /> 預覽升班結果
@@ -3354,17 +3350,31 @@ const StudentPromotionView = ({ students, setStudents, scores, setScores, syncTo
 
             {/* 系統現有名冊總覽與改名 */}
             <div className="card p-5 border border-slate-200 shadow-sm bg-white rounded-xl">
-                <div className="flex justify-between items-center mb-4 border-b pb-2">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3 border-b pb-3">
                     <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
                         <Icon name="Users" size={16} className="text-slate-500" /> 
-                        物理科現有學生名冊與更名管理 ({students.length} 人)
+                        物理科現有學生名冊與管理 (符合條件: {filteredStudents.length} 人)
                     </h3>
+                    
+                    {/* 👇 新增：學群篩選器 UI 👇 */}
+                    <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-lg border border-slate-200">
+                        <Icon name="Filter" size={14} className="text-slate-500 ml-1" />
+                        <select 
+                            className="bg-transparent text-sm font-bold text-slate-700 outline-none border-none cursor-pointer"
+                            value={filterCohort}
+                            onChange={e => setFilterCohort(e.target.value)}
+                        >
+                            <option value="全部">顯示全部學群</option>
+                            {cohorts.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                    </div>
                 </div>
+
                 <div className="overflow-x-auto max-h-96 overflow-y-auto border border-slate-100 rounded-lg">
                     <table className="w-full text-left text-sm text-slate-600">
-                        <thead className="text-xs text-slate-500 bg-slate-50 sticky top-0 border-b border-slate-200 shadow-sm">
+                        <thead className="text-xs text-slate-500 bg-slate-50 sticky top-0 border-b border-slate-200 shadow-sm z-10">
                             <tr>
-                                <th className="p-3 font-bold">學群 (Cohort)</th>
+                                <th className="p-3 font-bold">學群 (點擊可修改)</th>
                                 <th className="p-3 font-bold">班別</th>
                                 <th className="p-3 font-bold">座號</th>
                                 <th className="p-3 font-bold">學生姓名 (點擊可更名)</th>
@@ -3372,14 +3382,28 @@ const StudentPromotionView = ({ students, setStudents, scores, setScores, syncTo
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 bg-white">
-                            {students.length === 0 ? (
+                            {filteredStudents.length === 0 ? (
                                 <tr>
-                                    <td colSpan="5" className="p-8 text-center text-slate-400 italic">目前名冊內沒有任何學生資料。</td>
+                                    <td colSpan="5" className="p-8 text-center text-slate-400 italic">目前名冊內沒有符合此條件的學生資料。</td>
                                 </tr>
                             ) : (
-                                [...students].sort((a,b) => (a.cohort || '').localeCompare(b.cohort || '') || (a.class || '').localeCompare(b.class || '') || (a.num || '').localeCompare(b.num || '')).map(s => (
+                                [...filteredStudents].sort((a,b) => (a.cohort || '').localeCompare(b.cohort || '') || (a.class || '').localeCompare(b.class || '') || (a.num || '').localeCompare(b.num || '')).map(s => (
                                     <tr key={s.id} className="hover:bg-slate-50 transition-colors">
-                                        <td className="p-3"><span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-xs rounded border font-mono">{s.cohort || '未設定'}</span></td>
+                                        <td className="p-3">
+                                            {/* 👇 修改：加入修改學群按鈕 👇 */}
+                                            <div className="flex items-center gap-2">
+                                                <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-xs rounded border font-mono">
+                                                    {s.cohort || '未設定'}
+                                                </span>
+                                                <button 
+                                                    onClick={() => handleEditCohort(s.id, s.name, s.cohort)}
+                                                    className="text-emerald-500 hover:text-emerald-700 p-0.5 rounded hover:bg-emerald-50 transition"
+                                                    title="修改學群"
+                                                >
+                                                    <Icon name="Edit2" size={14} />
+                                                </button>
+                                            </div>
+                                        </td>
                                         <td className="p-3 font-medium text-slate-700">{s.class}</td>
                                         <td className="p-3 font-medium text-slate-700">{s.num}</td>
                                         <td className="p-3">
