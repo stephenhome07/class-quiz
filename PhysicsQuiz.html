@@ -3322,7 +3322,7 @@ const StudentPortalView = ({ studentId, students, examScores, homeworkScores }) 
     );
 };
 
-// ==================== 更新版：功課內容與藍圖設定組件 (修復過濾 Bug) ====================
+// ==================== 更新版：功課內容與藍圖設定組件 (終極防呆解析) ====================
 const HomeworkSettingsView = ({ students, currentCohort, syncToCloud }) => {
     const cohorts = Array.from(new Set(students.map(s => s.cohort))).filter(Boolean).sort();
     const [selectedCohort, setSelectedCohort] = React.useState(currentCohort !== '所有學生' ? currentCohort : (cohorts[0] || ''));
@@ -3336,26 +3336,45 @@ const HomeworkSettingsView = ({ students, currentCohort, syncToCloud }) => {
 
         const lines = pasteData.trim().split('\n');
         const questions = lines.map(line => {
-            // 智慧偵測：如果包含 Tab 就用 Tab 切，否則用逗號切
-            let cols = [];
-            if (line.includes('\t')) {
-                cols = line.split('\t');
-            } else if (line.includes(',')) {
-                cols = line.split(',');
-            } else {
-                cols = [line];
+            // 清理前後多餘空白，避免尾巴有不可見的 Tab 導致誤判
+            const cleanLine = line.trim();
+            if (!cleanLine) return null;
+
+            // ★ 終極智慧切割法：先用 Tab 切
+            let cols = cleanLine.split('\t');
+            
+            // 如果 Tab 切出來少於 3 欄，代表真正的分隔符號可能是「逗號」
+            if (cols.length < 3 && cleanLine.includes(',')) {
+                cols = cleanLine.split(',');
             }
+            
+            // 如果連逗號都沒有，試著用「多個連續空白」切 (應付網頁或 PDF 複製)
+            if (cols.length < 3) {
+                cols = cleanLine.split(/\s{2,}/);
+            }
+
+            // 如果還是切不開，試著用「單一空白」切 (拿前 5 個欄位，剩下的全部當作描述)
+            if (cols.length < 3) {
+                const parts = cleanLine.split(/\s+/);
+                if (parts.length >= 6) {
+                    cols = [ parts[0], parts[1], parts[2], parts[3], parts[4], parts.slice(5).join(' ') ];
+                }
+            }
+
+            // 安全轉換滿分：確保一定能準確抓到你設定的數字 (例如 2 分)
+            let maxScore = parseFloat(cols[2]);
+            if (isNaN(maxScore) || maxScore <= 0) maxScore = 1;
 
             return {
                 id: cols[0]?.trim() || '',
                 type: cols[1]?.trim().toUpperCase() || 'LQ',
-                max: !isNaN(parseFloat(cols[2])) ? parseFloat(cols[2]) : 1, 
+                max: maxScore, 
                 level: cols[3]?.trim() || '中',
                 topicId: cols[4]?.trim() || '',
                 topicDesc: cols[5]?.trim() || '',
                 ans: cols[6]?.trim() || ''
             };
-        }).filter(q => q.id && !q.id.includes('題目ID')); // ★ 修正：只過濾包含"題目ID"的標題列，不再誤刪正常的題目
+        }).filter(q => q && q.id && !q.id.includes('題目ID')); 
 
         if (questions.length === 0) return alert('無法解析題目，請檢查格式是否正確。');
 
@@ -3382,7 +3401,7 @@ const HomeworkSettingsView = ({ students, currentCohort, syncToCloud }) => {
                 <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
                     <Icon name="BookType" className="text-amber-500" /> 功課內容與藍圖設定
                 </h1>
-                <p className="text-sm text-slate-500 mt-1">根據不同群組獨立設定功課，支援 Excel 複製或 CSV 格式直接貼上。</p>
+                <p className="text-sm text-slate-500 mt-1">配備終極防呆解析器：支援 Excel Tab、CSV 逗號或空白分隔，不怕格式走位。</p>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -3449,7 +3468,7 @@ const HomeworkSettingsView = ({ students, currentCohort, syncToCloud }) => {
         </div>
     );
 };
-
+        
 // ==================== 一體化更新版：功課批改與狀態追蹤組件 ====================
 const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkScores, setHomeworkScores, syncToCloud }) => {
     const availableHws = Object.keys(HOMEWORK_MAPS).filter(id => !HOMEWORK_MAPS[id].cohort || HOMEWORK_MAPS[id].cohort === currentCohort);
