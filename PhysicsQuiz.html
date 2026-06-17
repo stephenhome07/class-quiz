@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.61 Physics Quiz Analyzer</title>
+    <title> V2.62 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -2559,8 +2559,32 @@ const StudentExamAnalysisView = ({ activeStudents = [], examScores = {} }) => {
         
 // ==================== 更新版：專屬補底練習生成與進度連動組件 (主動勾選出題) ====================
 const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress, setRemediationProgress, syncToCloud }) => {
-    const [selectedExam, setSelectedExam] = React.useState(Object.keys(EXAM_MAPS || {})[0] || '');
+    const [selectedExam, setSelectedExam] = React.useState('');
     const [selectedStudentId, setSelectedStudentId] = React.useState('');
+
+    // ★ 新增：過濾出目前群組中真正「有輸入分數」的試卷
+    const availableExams = React.useMemo(() => {
+        const examsWithScores = new Set();
+        (activeStudents || []).forEach(student => {
+            const studentScores = examScores[student.id];
+            if (studentScores) {
+                Object.keys(studentScores).forEach(examId => {
+                    if (Object.keys(studentScores[examId]).length > 0) {
+                        examsWithScores.add(examId);
+                    }
+                });
+            }
+        });
+        const allExamKeys = Object.keys(EXAM_MAPS || {});
+        return Array.from(examsWithScores).sort((a, b) => allExamKeys.indexOf(a) - allExamKeys.indexOf(b));
+    }, [activeStudents, examScores]);
+
+    // ★ 當可用試卷更新，或者尚未選擇試卷時，自動鎖定第一份可用試卷
+    React.useEffect(() => {
+        if (availableExams.length > 0 && !availableExams.includes(selectedExam)) {
+            setSelectedExam(availableExams[0]);
+        }
+    }, [availableExams, selectedExam]);
 
     // ★ 新增：用來追蹤「目前勾選了哪些課題準備生成 Prompt」
     const [selectedTopicsForPrompt, setSelectedTopicsForPrompt] = React.useState([]);
@@ -2575,7 +2599,7 @@ const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress,
     if (!map) return (
         <div className="p-12 text-center text-slate-500 mt-10">
             <Icon name="AlertCircle" size={48} className="mx-auto mb-4 text-slate-300" />
-            <h2 className="text-xl font-bold">尚未設定任何考試內容</h2>
+            <h2 className="text-xl font-bold">目前群組無任何考試成績記錄</h2>
         </div>
     );
 
@@ -2702,9 +2726,13 @@ const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress,
                         onChange={(e) => setSelectedExam(e.target.value)}
                         className="p-2.5 border border-slate-300 rounded-lg bg-white font-semibold outline-none focus:ring-2 focus:ring-purple-400"
                     >
-                        {Object.keys(EXAM_MAPS).map(k => (
-                            <option key={k} value={k}>{k} - {EXAM_MAPS[k].title}</option>
-                        ))}
+                        {availableExams.length === 0 ? (
+                            <option value="">無符合條件的試卷</option>
+                        ) : (
+                            availableExams.map(k => (
+                                <option key={k} value={k}>{k} - {EXAM_MAPS[k]?.title}</option>
+                            ))
+                        )}
                     </select>
                 </div>
                 
@@ -2865,7 +2893,7 @@ const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress,
             )}
         </div>
     );
-};   
+};
 
 // ==================== 升級版：考試成績匯出 (Excel) - 支援平均分與不及格紅字提示 ====================
 const ExamExportView = ({ activeStudents, examScores }) => {
