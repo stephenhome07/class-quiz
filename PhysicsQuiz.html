@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.75 Physics Quiz Analyzer</title>
+    <title> V2.77 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -191,10 +191,11 @@
             };
 
     
-                const ScoreInputView = ({ activeStudents, scores, setScores }) => {
+            const ScoreInputView = ({ activeStudents, scores, setScores }) => {
                 const [selectedQuiz, setSelectedQuiz] = React.useState(Object.keys(QUIZ_MAPS)[0]);
                 const [selectedStudentId, setSelectedStudentId] = React.useState('');
                 const map = QUIZ_MAPS[selectedQuiz];
+                const inputRefs = React.useRef({});
 
                 const handleScoreChange = (studentId, quizId, qId, val) => {
                 const numVal = val === '' ? '' : parseFloat(val);
@@ -227,7 +228,20 @@
                         alert('紀錄已成功清除！');
                     }
                 };
-
+                    
+                    const handleAutoAdvance = (qId, newVal, qMax) => {
+                        if (newVal.length >= 1 && qMax < 10) {
+                            const currentIndex = map.questions.findIndex(item => item.id === qId);
+                            // 確保不是最後一題
+                            if (currentIndex >= 0 && currentIndex < map.questions.length - 1) {
+                                const nextQ = map.questions[currentIndex + 1];
+                                if (inputRefs.current[nextQ.id]) {
+                                    inputRefs.current[nextQ.id].focus();
+                                    inputRefs.current[nextQ.id].select(); // 自動全選，方便覆蓋
+                                }
+                            }
+                        }
+                    };
                 return (
                     <div className="p-6 flex flex-col md:flex-row gap-6">
                         {/* 左側：學生選擇區 */}
@@ -1699,7 +1713,7 @@ const ExamScoresInputView = ({ activeStudents, examScores, setExamScores, syncTo
     const [selectedExam, setSelectedExam] = React.useState(Object.keys(EXAM_MAPS || {})[0] || '');
     const [selectedStudentId, setSelectedStudentId] = React.useState('');
     const map = EXAM_MAPS[selectedExam];
-
+    const inputRefs = React.useRef({});
     // 處理分數/答案變更
     const handleScoreChange = (studentId, examId, qId, qType, val) => {
         let processedVal = val;
@@ -1741,6 +1755,35 @@ const ExamScoresInputView = ({ activeStudents, examScores, setExamScores, syncTo
                 delete newScores[selectedStudentId][selectedExam];
                 return newScores;
             });
+        }
+    };
+
+    // ★ 新增：自動跳轉邏輯抽離成獨立函數
+    const handleAutoAdvance = (qId, newVal, qType, qMax) => {
+        let shouldAdvance = false;
+        
+        if (qType === 'MC') {
+            // MC 題只要輸入了有效的 A/B/C/D 就跳轉
+            const valid = newVal.toUpperCase().trim();
+            if (['A', 'B', 'C', 'D'].includes(valid)) {
+                shouldAdvance = true;
+            }
+        } else {
+            // LQ 題如果是單位數，輸入第一個數字就跳轉
+            if (newVal.length >= 1 && qMax < 10) {
+                shouldAdvance = true;
+            }
+        }
+
+        if (shouldAdvance) {
+            const currentIndex = map.questions.findIndex(item => item.id === qId);
+            if (currentIndex >= 0 && currentIndex < map.questions.length - 1) {
+                const nextQ = map.questions[currentIndex + 1];
+                if (inputRefs.current[nextQ.id]) {
+                    inputRefs.current[nextQ.id].focus();
+                    inputRefs.current[nextQ.id].select(); // 自動全選
+                }
+            }
         }
     };
 
@@ -3963,7 +4006,7 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkMaps, 
                             </div>
                             <div className="flex-1 overflow-y-auto pr-2 space-y-2 max-h-[400px]">
 
-                                    // 替換原有的 map.questions.map 渲染區塊：
+                                   
                                     {map.questions.map((q, idx) => {
                                         const val = currentEdit.scores[q.id];
                                         const isCorrect = q.type === 'MC' ? (val && q.ans && val.toString().toUpperCase() === q.ans.toUpperCase()) : (val !== '' && parseFloat(val) === q.max);
