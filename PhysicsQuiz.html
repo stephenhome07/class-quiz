@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.58 Physics Quiz Analyzer</title>
+    <title> V2.59 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -2182,9 +2182,9 @@ const ExamAnalysisView = ({ activeStudents, examScores, currentCohort, getReleva
     );
 };
         
-// ==================== 智慧連動過濾版：學生個人成績分析組件 ====================
-const StudentExamAnalysisView = ({ students, scores }) => {
-    // 1. 自動從 scores 資料庫中，抽取出全系統所有已存在的分數欄位 (考試/小測名稱)
+// ==================== 智慧連動過濾版：學生個人成績分析組件 (加入防當機保護) ====================
+const StudentExamAnalysisView = ({ students = [], scores = {} }) => {
+    // 1. 自動從 scores 資料庫中，抽取出全系統所有已存在的分數欄位 (防呆保護 scores)
     const examKeys = React.useMemo(() => {
         const keysSet = new Set();
         Object.values(scores || {}).forEach(studentScores => {
@@ -2205,13 +2205,13 @@ const StudentExamAnalysisView = ({ students, scores }) => {
         if (!selectedExam) return [];
         const activeCohortSet = new Set();
         
-        students.forEach(s => {
+        // 加入 (students || []) 保護機制
+        (students || []).forEach(s => {
             const cohortName = s.cohort || '未分組';
-            // 檢查該學生是否有這場考試的分數 (排除 undefined, null 和 空字串)
-            const hasScore = scores[s.id] && 
-                             scores[s.id][selectedExam] !== undefined && 
-                             scores[s.id][selectedExam] !== null && 
-                             scores[s.id][selectedExam] !== '';
+            const hasScore = (scores || {})[s.id] && 
+                             (scores || {})[s.id][selectedExam] !== undefined && 
+                             (scores || {})[s.id][selectedExam] !== null && 
+                             (scores || {})[s.id][selectedExam] !== '';
             
             if (hasScore) {
                 activeCohortSet.add(cohortName);
@@ -2234,12 +2234,13 @@ const StudentExamAnalysisView = ({ students, scores }) => {
     // 🔥 核心智慧過濾邏輯 B：根據選定的「考試」與「學群」，找出有哪些學生有分數
     const availableStudents = React.useMemo(() => {
         if (!selectedExam || !selectedCohort) return [];
-        return students.filter(s => {
+        
+        return (students || []).filter(s => {
             const matchesCohort = (s.cohort || '未分組') === selectedCohort;
-            const hasScore = scores[s.id] && 
-                             scores[s.id][selectedExam] !== undefined && 
-                             scores[s.id][selectedExam] !== null && 
-                             scores[s.id][selectedExam] !== '';
+            const hasScore = (scores || {})[s.id] && 
+                             (scores || {})[s.id][selectedExam] !== undefined && 
+                             (scores || {})[s.id][selectedExam] !== null && 
+                             (scores || {})[s.id][selectedExam] !== '';
             return matchesCohort && hasScore;
         }).sort((a, b) => (a.class || '').localeCompare(b.class || '') || (a.num || '').localeCompare(b.num || ''));
     }, [selectedExam, selectedCohort, students, scores]);
@@ -2255,14 +2256,13 @@ const StudentExamAnalysisView = ({ students, scores }) => {
         }
     }, [availableStudents, selectedStudentId]);
 
-    // 3. 計算該學群在該場考試的統計數據 (用作個人表現的對比參照)
+    // 3. 計算該學群在該場考試的統計數據
     const cohortStats = React.useMemo(() => {
         if (!selectedExam || !selectedCohort) return null;
         
-        // 找出該學群內所有有分數的同學的分數
-        const validScores = students
+        const validScores = (students || [])
             .filter(s => (s.cohort || '未分組') === selectedCohort)
-            .map(s => scores[s.id]?.[selectedExam])
+            .map(s => (scores || {})[s.id]?.[selectedExam])
             .filter(val => val !== undefined && val !== null && val !== '')
             .map(Number);
 
@@ -2276,9 +2276,9 @@ const StudentExamAnalysisView = ({ students, scores }) => {
         return { avg, max, min, count: validScores.length };
     }, [selectedExam, selectedCohort, students, scores]);
 
-    // 取得當前被選中學生的完整資料與分數
-    const currentStudent = students.find(s => s.id === selectedStudentId);
-    const currentStudentScore = currentStudent ? scores[selectedStudentId]?.[selectedExam] : null;
+    // 取得當前被選中學生的完整資料與分數 (加入陣列保護)
+    const currentStudent = (students || []).find(s => s.id === selectedStudentId);
+    const currentStudentScore = currentStudent ? (scores || {})[selectedStudentId]?.[selectedExam] : null;
 
     return (
         <div className="p-6 max-w-5xl mx-auto animate-fadeIn">
@@ -2481,7 +2481,7 @@ const StudentExamAnalysisView = ({ students, scores }) => {
         </div>
     );
 };
-
+        
 // ==================== 更新版：專屬補底練習生成與進度連動組件 (主動勾選出題) ====================
 const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress, setRemediationProgress, syncToCloud }) => {
     const [selectedExam, setSelectedExam] = React.useState(Object.keys(EXAM_MAPS || {})[0] || '');
