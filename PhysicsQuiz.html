@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.78 Physics Quiz Analyzer</title>
+    <title> V2.79 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -191,138 +191,164 @@
             };
 
     
-            const ScoreInputView = ({ activeStudents, scores, setScores }) => {
-                const [selectedQuiz, setSelectedQuiz] = React.useState(Object.keys(QUIZ_MAPS)[0]);
-                const [selectedStudentId, setSelectedStudentId] = React.useState('');
-                const map = QUIZ_MAPS[selectedQuiz];
-                const inputRefs = React.useRef({});
+// ==================== 升級版：小測成績輸入組件 (完美支援自動跳轉) ====================
+const ScoreInputView = ({ activeStudents, scores, setScores }) => {
+    const [selectedQuiz, setSelectedQuiz] = React.useState(Object.keys(QUIZ_MAPS || {})[0] || '');
+    const [selectedStudentId, setSelectedStudentId] = React.useState('');
+    const map = QUIZ_MAPS[selectedQuiz];
+    
+    // ★ 關鍵：用來記錄所有輸入框的實體位置
+    const inputRefs = React.useRef({});
 
-                const handleScoreChange = (studentId, quizId, qId, val) => {
-                const numVal = val === '' ? '' : parseFloat(val);
-                setScores(prev => ({
-                    ...prev, [studentId]: { ...(prev[studentId] || {}), [quizId]: { ...((prev[studentId] && prev[studentId][quizId]) || {}), [qId]: numVal } }
-                }));
-                };
+    const handleScoreChange = (studentId, quizId, qId, val) => {
+        const numVal = val === '' ? '' : parseFloat(val);
+        setScores(prev => ({
+            ...prev, [studentId]: { ...(prev[studentId] || {}), [quizId]: { ...((prev[studentId] && prev[studentId][quizId]) || {}), [qId]: numVal } }
+        }));
+    };
 
+    // 清除單一學生特定小測的所有成績紀錄
+    const deleteRecord = () => {
+        if (!selectedStudentId || !selectedQuiz) return;
+        
+        const studentScores = scores[selectedStudentId];
+        if (!studentScores || !studentScores[selectedQuiz] || Object.keys(studentScores[selectedQuiz]).length === 0) {
+            alert('此同學尚未有這份小測的成績紀錄。');
+            return;
+        }
 
-                // 新增：清除單一學生特定小測的所有成績紀錄
-                const deleteRecord = () => {
-                    if (!selectedStudentId || !selectedQuiz) return;
-                    
-                    // 檢查該學生是否有這份小測的成績
-                    const studentScores = scores[selectedStudentId];
-                    if (!studentScores || !studentScores[selectedQuiz] || Object.keys(studentScores[selectedQuiz]).length === 0) {
-                        alert('此同學尚未有這份小測的成績紀錄。');
-                        return;
+        if (window.confirm('確定要完全清除這位同學在此小測的分數紀錄嗎？這會將他從這份小測的數據分析中移除。')) {
+            setScores(prev => {
+                const newScores = { ...prev };
+                if (newScores[selectedStudentId]) {
+                    delete newScores[selectedStudentId][selectedQuiz];
+                }
+                return newScores;
+            });
+            alert('紀錄已成功清除！');
+        }
+    };
+        
+    // ★ 自動跳轉邏輯：只要輸入，且滿分小於10，立刻跳下一題
+    const handleAutoAdvance = (qId, newVal, qMax) => {
+        // 如果是清空內容（例如按 Backspace），則不跳轉
+        if (newVal === '' || newVal === null) return;
+
+        const maxScore = qMax || 1; 
+        if (newVal.toString().length >= 1 && maxScore < 10) {
+            const currentIndex = map.questions.findIndex(item => item.id === qId);
+            // 確保不是最後一題
+            if (currentIndex >= 0 && currentIndex < map.questions.length - 1) {
+                const nextQ = map.questions[currentIndex + 1];
+                // 微小延遲確保 React 已經記錄了分數才移動游標
+                setTimeout(() => {
+                    if (inputRefs.current[nextQ.id]) {
+                        inputRefs.current[nextQ.id].focus();
+                        inputRefs.current[nextQ.id].select(); 
                     }
+                }, 10);
+            }
+        }
+    };
 
-                    if (window.confirm('確定要完全清除這位同學在此小測的分數紀錄嗎？這會將他從這份小測的數據分析中移除。')) {
-                        // 使用 setScores 更新狀態，useEffect 會自動幫忙儲存到 LocalStorage
-                        setScores(prev => {
-                            const newScores = { ...prev };
-                            if (newScores[selectedStudentId]) {
-                                delete newScores[selectedStudentId][selectedQuiz];
-                            }
-                            return newScores;
-                        });
-                        alert('紀錄已成功清除！');
-                    }
-                };
-                    
-                    // ★ 升級版自動跳轉：加入防呆與 setTimeout 避免渲染衝突
-                    const handleAutoAdvance = (qId, newVal, qMax) => {
-                        const maxScore = qMax || 1; // 避免某些題目沒設定滿分導致出錯
-                        if (newVal.length >= 1 && maxScore < 10) {
-                            const currentIndex = map.questions.findIndex(item => item.id === qId);
-                            // 確保不是最後一題
-                            if (currentIndex >= 0 && currentIndex < map.questions.length - 1) {
-                                const nextQ = map.questions[currentIndex + 1];
-                                // 加入微小延遲，確保 React 完成 state 更新後才跳轉
-                                setTimeout(() => {
-                                    if (inputRefs.current[nextQ.id]) {
-                                        inputRefs.current[nextQ.id].focus();
-                                        inputRefs.current[nextQ.id].select(); // 自動全選，方便覆蓋
-                                    }
-                                }, 10);
-                            }
-                        }
-                    };
-                return (
-                    <div className="p-6 flex flex-col md:flex-row gap-6">
-                        {/* 左側：學生選擇區 */}
-                        <div className="w-full md:w-1/4 card p-4 max-h-[80vh] overflow-y-auto">
-                            <h3 className="font-bold mb-4">選擇學生</h3>
-                            {activeStudents.map(s => {
-                                const ana = getStudentAnalysis(s.id, selectedQuiz, scores);
-                                const isFail = ana && (ana.totalScore / ana.totalMax < 0.5);
-                                return (
-                                    <div key={s.id} onClick={() => setSelectedStudentId(s.id)}
-                                        className={`p-2 mb-1 rounded cursor-pointer border ${selectedStudentId === s.id ? 'bg-blue-100 border-blue-400' : 'hover:bg-gray-50 border-transparent'} flex justify-between`}>
-                                        <span>{s.class}({s.num}) {s.name}</span>
-                                        {ana && <span className={`text-xs font-bold ${isFail ? 'text-red-500' : 'text-green-600'}`}>{ana.totalScore} / {ana.totalMax}</span>}
-                                    </div>
-                                )
-                            })}
+    if (!map) return <div className="p-6 text-center text-slate-500">找不到小測資料</div>;
+
+    return (
+        <div className="p-6 flex flex-col md:flex-row gap-6">
+            {/* 左側：學生選擇區 */}
+            <div className="w-full md:w-1/4 card p-4 max-h-[80vh] overflow-y-auto">
+                <h3 className="font-bold mb-4">選擇學生</h3>
+                {activeStudents.map(s => {
+                    const ana = getStudentAnalysis(s.id, selectedQuiz, scores);
+                    const isFail = ana && (ana.totalScore / ana.totalMax < 0.5);
+                    return (
+                        <div key={s.id} onClick={() => setSelectedStudentId(s.id)}
+                            className={`p-2 mb-1 rounded cursor-pointer border ${selectedStudentId === s.id ? 'bg-blue-100 border-blue-400' : 'hover:bg-gray-50 border-transparent'} flex justify-between`}>
+                            <span>{s.class}({s.num}) {s.name}</span>
+                            {ana && <span className={`text-xs font-bold ${isFail ? 'text-red-500' : 'text-green-600'}`}>{ana.totalScore} / {ana.totalMax}</span>}
                         </div>
-                        
-                        {/* 右側：成績輸入區 */}
-                        <div className="flex-1 card p-6">
-                            <div className="flex justify-between items-center border-b pb-4 mb-4">
-                                <h2 className="text-xl font-bold">成績輸入</h2>
-                                
-                                {/* 小測選擇下拉表單 */}
-                                <select 
-                                    className="p-2 border rounded-md shadow-sm outline-none font-bold text-blue-700 bg-blue-50"
-                                    value={selectedQuiz} 
-                                    onChange={(e) => setSelectedQuiz(e.target.value)}
-                                >
-                                    {Object.keys(QUIZ_MAPS).map(key => (
-                                        <option key={key} value={key}>{QUIZ_MAPS[key].title}</option>
-                                    ))}
-                                </select>
-                            </div>
+                    )
+                })}
+            </div>
+            
+            {/* 右側：成績輸入區 */}
+            <div className="flex-1 card p-6">
+                <div className="flex justify-between items-center border-b pb-4 mb-4">
+                    <h2 className="text-xl font-bold">成績輸入</h2>
+                    
+                    {/* 小測選擇下拉表單 */}
+                    <select 
+                        className="p-2 border rounded-md shadow-sm outline-none font-bold text-blue-700 bg-blue-50"
+                        value={selectedQuiz} 
+                        onChange={(e) => setSelectedQuiz(e.target.value)}
+                    >
+                        {Object.keys(QUIZ_MAPS).map(key => (
+                            <option key={key} value={key}>{QUIZ_MAPS[key].title}</option>
+                        ))}
+                    </select>
+                </div>
 
-                            {selectedStudentId ? (
-                                <div>
-                                    <h3 className="font-bold text-blue-700 mb-2">MC 選擇題</h3>
-                                    <div className="grid grid-cols-6 gap-2 mb-6">
-                                        {map.questions.filter(q => q.type === 'MC').map(q => (
-                                            <div key={q.id} className="flex flex-col items-center p-2 bg-gray-50 border rounded">
-                                                <label className="text-xs font-bold mb-1">{q.id}</label>
-                                                <input type="number" min="0" max={q.max} className="score-input"
-                                                    value={((scores[selectedStudentId] || {})[selectedQuiz] || {})[q.id] ?? ''}
-                                                    onChange={(e) => handleScoreChange(selectedStudentId, selectedQuiz, q.id, e.target.value)} />
-                                            </div>
-                                        ))}
-                                    </div>
-                                    <h3 className="font-bold text-green-700 mb-2">LQ 長題目</h3>
-                                    <div className="grid grid-cols-4 gap-2">
-                                        {map.questions.filter(q => q.type === 'LQ').map(q => (
-                                            <div key={q.id} className="flex flex-col items-center p-2 bg-gray-50 border rounded">
-                                                <label className="text-sm font-bold mb-1">{q.id} <span className="text-gray-400 font-normal">/{q.max}</span></label>
-                                                <input type="number" min="0" max={q.max} className="score-input w-16"
-                                                    value={((scores[selectedStudentId] || {})[selectedQuiz] || {})[q.id] ?? ''}
-                                                    onChange={(e) => handleScoreChange(selectedStudentId, selectedQuiz, q.id, e.target.value)} />
-                                            </div>
-                                        ))}
-                                    </div>
-
-                                    {/* 新增：刪除按鈕區塊 */}
-                                    <div className="mt-8 pt-4 border-t border-gray-100 flex justify-end">
-                                        <button 
-                                            onClick={deleteRecord} 
-                                            disabled={!(scores[selectedStudentId] && scores[selectedStudentId][selectedQuiz] && Object.keys(scores[selectedStudentId][selectedQuiz]).length > 0)}
-                                            className="px-4 py-2 bg-red-50 text-red-600 rounded-lg shadow-sm hover:bg-red-100 font-bold transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                            <Icon name="Trash2" size={18} /> 清除此卷紀錄
-                                        </button>
-                                    </div>
+                {selectedStudentId ? (
+                    <div>
+                        <h3 className="font-bold text-blue-700 mb-2">MC 選擇題</h3>
+                        <div className="grid grid-cols-6 gap-2 mb-6">
+                            {map.questions.filter(q => q.type === 'MC').map(q => (
+                                <div key={q.id} className="flex flex-col items-center p-2 bg-gray-50 border rounded">
+                                    <label className="text-xs font-bold mb-1">{q.id}</label>
+                                    <input 
+                                        ref={el => inputRefs.current[q.id] = el} // ★ 綁定 DOM 位置
+                                        type="number" 
+                                        min="0" 
+                                        max={q.max} 
+                                        className="score-input"
+                                        value={((scores[selectedStudentId] || {})[selectedQuiz] || {})[q.id] ?? ''}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            handleScoreChange(selectedStudentId, selectedQuiz, q.id, val);
+                                            handleAutoAdvance(q.id, val, q.max); // ★ 呼叫跳轉邏輯
+                                        }} 
+                                    />
                                 </div>
-                            ) : (<div className="text-center text-gray-500 py-10">請從左側選擇學生</div>)}
+                            ))}
+                        </div>
+                        <h3 className="font-bold text-green-700 mb-2">LQ 長題目</h3>
+                        <div className="grid grid-cols-4 gap-2">
+                            {map.questions.filter(q => q.type === 'LQ').map(q => (
+                                <div key={q.id} className="flex flex-col items-center p-2 bg-gray-50 border rounded">
+                                    <label className="text-sm font-bold mb-1">{q.id} <span className="text-gray-400 font-normal">/{q.max}</span></label>
+                                    <input 
+                                        ref={el => inputRefs.current[q.id] = el} // ★ 綁定 DOM 位置
+                                        type="number" 
+                                        min="0" 
+                                        max={q.max} 
+                                        className="score-input w-16"
+                                        value={((scores[selectedStudentId] || {})[selectedQuiz] || {})[q.id] ?? ''}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            handleScoreChange(selectedStudentId, selectedQuiz, q.id, val);
+                                            handleAutoAdvance(q.id, val, q.max); // ★ 呼叫跳轉邏輯
+                                        }} 
+                                    />
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* 刪除按鈕區塊 */}
+                        <div className="mt-8 pt-4 border-t border-gray-100 flex justify-end">
+                            <button 
+                                onClick={deleteRecord} 
+                                disabled={!(scores[selectedStudentId] && scores[selectedStudentId][selectedQuiz] && Object.keys(scores[selectedStudentId][selectedQuiz]).length > 0)}
+                                className="px-4 py-2 bg-red-50 text-red-600 rounded-lg shadow-sm hover:bg-red-100 font-bold transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <Icon name="Trash2" size={18} /> 清除此卷紀錄
+                            </button>
                         </div>
                     </div>
-                );
-            };
+                ) : (<div className="text-center text-gray-500 py-10">請從左側選擇學生</div>)}
+            </div>
+        </div>
+    );
+};
 
              // 弱點分析與 AI 補底卷生成視圖
             const AnalysisView = ({ activeStudents, scores }) => {
