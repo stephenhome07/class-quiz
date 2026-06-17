@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.70 Physics Quiz Analyzer</title>
+    <title> V2.71 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -4000,7 +4000,121 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkMaps, 
     );
 };
 
-        
+
+// ==================== 升級版：分區模塊化 Sidebar (區分小測與考試版) ====================
+            const Sidebar = () => {
+                // 輔助函數：用來產生統一風格的按鈕
+                const navButton = (targetView, iconName, label, activeBg = 'bg-blue-600') => {
+                    const isActive = view === targetView;
+                    return (
+                        <button 
+                            onClick={() => setView(targetView)} 
+                            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                                isActive ? `${activeBg} text-white shadow-md font-semibold` : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
+                            }`}
+                        >
+                            <Icon name={iconName} size={18} className={isActive ? 'opacity-100' : 'opacity-70'} />
+                            {label}
+                        </button>
+                    );
+                };
+
+                return (
+                    <div className="w-64 bg-slate-800 text-white p-4 flex flex-col h-screen fixed left-0 top-0 shadow-xl overflow-y-auto border-r border-slate-700/50">
+                        {/* 系統標題 */}
+                        <div className="flex items-center gap-3 px-2 py-4 border-b border-slate-700 mb-3">
+                            <div className="p-2 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-lg shadow-inner">
+                                <Icon name="GraduationCap" size={24} className="text-white" />
+                            </div>
+                            <div>
+                                <h2 className="font-bold text-base bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">Physics Analyzer</h2>
+                                <p className="text-xs text-slate-400 font-mono">V2.2 Cloud</p>
+                            </div>
+                        </div>
+
+                        {/* 學生群組選擇器 */}
+                        <div className="mb-4 bg-slate-900/60 p-3 rounded-lg border border-slate-700/50 shadow-inner">
+                            <label className="text-xs text-slate-400 mb-1.5 font-bold flex items-center gap-1.5">
+                                <Icon name="Users" size={14} /> 目前檢視群組
+                            </label>
+                            <select 
+                                value={currentCohort}
+                                onChange={(e) => setCurrentCohort(e.target.value)}
+                                className="w-full p-2 bg-slate-800 text-slate-200 rounded-md border border-slate-600 outline-none font-semibold text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition cursor-pointer"
+                            >
+                                {allCohorts.map(c => (
+                                    <option key={c} value={c}>{c}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* 雲端儲存狀態小看板 */}
+                        <div className="mb-4 p-2.5 bg-slate-900/50 rounded-lg border border-slate-700/30 flex items-center justify-between text-xs text-slate-400">
+                            <span className="flex items-center gap-1.5">
+                                <span className={`w-2 h-2 rounded-full ${isSaving ? 'bg-amber-400 animate-pulse' : 'bg-green-400'}`}></span>
+                                {isSaving ? '雲端同步中...' : '已與雲端同步'}
+                            </span>
+                        </div>
+
+                        {/* 導覽選單列表 */}
+                        <nav className="flex-1 flex flex-col gap-4 overflow-y-auto pr-1 pb-6">
+
+                            {/* ================= 新增：功課管理區 ================= */}
+                            <div className="flex flex-col gap-1">
+                                <p className="px-3 text-[11px] font-bold text-amber-500 tracking-wider uppercase mb-1">📚 日常功課管理區</p>
+                                {navButton('homeworkScoresInput', 'BookOpenCheck', '功課批改與狀態跟進', 'bg-amber-600')}
+                                {navButton('homeworkSettings', 'BookType', '功課內容與藍圖設定', 'bg-amber-600')}
+                            </div>
+
+                            <div className="border-t border-slate-700/50 my-1 mx-2"></div>
+
+                                                        
+                            {/* 區塊 1：小測管理與分析區 */}
+                            <div className="flex flex-col gap-1">
+                                <p className="px-3 text-[11px] font-bold text-blue-400 tracking-wider uppercase mb-2">📝 小測管理與分析區</p>
+                                {/* 輸入與設定 */}
+                                {navButton('scores', 'ClipboardList', '小測成績輸入')}
+                                {navButton('quizSettings', 'FileEdit', '小測內容設定')}
+                                
+                                <div className="my-1 border-t border-slate-700/30 mx-3"></div> {/* 區塊內微小分隔線 */}
+                                
+                                {/* 分析與圖表 */}
+                                {navButton('classSummary', 'Table', '小測成績表')}
+                                {navButton('analysis', 'Wand2', '個人分析/補底')}
+                                {navButton('chart', 'PieChart', '所有小測成績表現')}
+                                {navButton('topicAnalysis', 'Target', '整班小測弱點分析')}
+                            </div>
+
+                            <div className="border-t border-slate-700/50 my-1 mx-2"></div>
+
+                            {/* 區塊 2：考試管理區 */}
+                            <div className="flex flex-col gap-1">
+                                <p className="px-3 text-[11px] font-bold text-purple-400 tracking-wider uppercase mb-1">🎯 考試管理區</p>
+                                {navButton('examScoresInput', 'CheckSquare', '考試成績輸入', 'bg-purple-600')}
+                                {navButton('examAnalysis', 'LineChart', '考試弱點分析', 'bg-purple-600')}
+                                {navButton('studentExamAnalysis', 'UserCheck', '個人大考分析', 'bg-purple-600')}
+                                {navButton('remedialPractice', 'ClipboardEdit', '專屬補底練習與進度', 'bg-purple-600')}
+                                {navButton('examExport', 'Download', '考試成績匯出 (Excel)', 'bg-green-600')}
+                                {navButton('examSettings', 'Settings', '考試內容設定', 'bg-purple-600')}
+                            </div>
+
+                            <div className="border-t border-slate-700/50 my-1 mx-2"></div>
+
+                            {/* 區塊 3：系統設定區 */}
+                            <div className="flex flex-col gap-1 mb-4">
+                                <p className="px-3 text-[11px] font-bold text-slate-500 tracking-wider uppercase mb-1">⚙️ 系統基本設定</p>
+                                {navButton('students', 'Users', '學生名單管理', 'bg-slate-600')}
+                                {navButton('syllabusSettings', 'BookOpen', '課程大綱設定', 'bg-slate-600')}
+                                {navButton('studentPromotion', 'UserCheck', '新學年智慧升班/更新', 'bg-blue-600')}
+                                {navButton('backup', 'Database', '數據備份與還原', 'bg-slate-600')}
+                            </div>
+
+                        </nav>
+                    </div>
+                );
+            };
+
+    
 const App = () => {
             // ★ 1. 偵測網址是否有帶入學生 ID (例如: ?sid=S5A-26)
             const urlParams = new URLSearchParams(window.location.search);
@@ -4190,118 +4304,7 @@ const App = () => {
             };
 
 
-// ==================== 升級版：分區模塊化 Sidebar (區分小測與考試版) ====================
-            const Sidebar = () => {
-                // 輔助函數：用來產生統一風格的按鈕
-                const navButton = (targetView, iconName, label, activeBg = 'bg-blue-600') => {
-                    const isActive = view === targetView;
-                    return (
-                        <button 
-                            onClick={() => setView(targetView)} 
-                            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                                isActive ? `${activeBg} text-white shadow-md font-semibold` : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
-                            }`}
-                        >
-                            <Icon name={iconName} size={18} className={isActive ? 'opacity-100' : 'opacity-70'} />
-                            {label}
-                        </button>
-                    );
-                };
 
-                return (
-                    <div className="w-64 bg-slate-800 text-white p-4 flex flex-col h-screen fixed left-0 top-0 shadow-xl overflow-y-auto border-r border-slate-700/50">
-                        {/* 系統標題 */}
-                        <div className="flex items-center gap-3 px-2 py-4 border-b border-slate-700 mb-3">
-                            <div className="p-2 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-lg shadow-inner">
-                                <Icon name="GraduationCap" size={24} className="text-white" />
-                            </div>
-                            <div>
-                                <h2 className="font-bold text-base bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">Physics Analyzer</h2>
-                                <p className="text-xs text-slate-400 font-mono">V2.2 Cloud</p>
-                            </div>
-                        </div>
-
-                        {/* 學生群組選擇器 */}
-                        <div className="mb-4 bg-slate-900/60 p-3 rounded-lg border border-slate-700/50 shadow-inner">
-                            <label className="text-xs text-slate-400 mb-1.5 font-bold flex items-center gap-1.5">
-                                <Icon name="Users" size={14} /> 目前檢視群組
-                            </label>
-                            <select 
-                                value={currentCohort}
-                                onChange={(e) => setCurrentCohort(e.target.value)}
-                                className="w-full p-2 bg-slate-800 text-slate-200 rounded-md border border-slate-600 outline-none font-semibold text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition cursor-pointer"
-                            >
-                                {allCohorts.map(c => (
-                                    <option key={c} value={c}>{c}</option>
-                                ))}
-                            </select>
-                        </div>
-
-                        {/* 雲端儲存狀態小看板 */}
-                        <div className="mb-4 p-2.5 bg-slate-900/50 rounded-lg border border-slate-700/30 flex items-center justify-between text-xs text-slate-400">
-                            <span className="flex items-center gap-1.5">
-                                <span className={`w-2 h-2 rounded-full ${isSaving ? 'bg-amber-400 animate-pulse' : 'bg-green-400'}`}></span>
-                                {isSaving ? '雲端同步中...' : '已與雲端同步'}
-                            </span>
-                        </div>
-
-                        {/* 導覽選單列表 */}
-                        <nav className="flex-1 flex flex-col gap-4 overflow-y-auto pr-1 pb-6">
-
-                            {/* ================= 新增：功課管理區 ================= */}
-                            <div className="flex flex-col gap-1">
-                                <p className="px-3 text-[11px] font-bold text-amber-500 tracking-wider uppercase mb-1">📚 日常功課管理區</p>
-                                {navButton('homeworkScoresInput', 'BookOpenCheck', '功課批改與狀態跟進', 'bg-amber-600')}
-                                {navButton('homeworkSettings', 'BookType', '功課內容與藍圖設定', 'bg-amber-600')}
-                            </div>
-
-                            <div className="border-t border-slate-700/50 my-1 mx-2"></div>
-
-                                                        
-                            {/* 區塊 1：小測管理與分析區 */}
-                            <div className="flex flex-col gap-1">
-                                <p className="px-3 text-[11px] font-bold text-blue-400 tracking-wider uppercase mb-2">📝 小測管理與分析區</p>
-                                {/* 輸入與設定 */}
-                                {navButton('scores', 'ClipboardList', '小測成績輸入')}
-                                {navButton('quizSettings', 'FileEdit', '小測內容設定')}
-                                
-                                <div className="my-1 border-t border-slate-700/30 mx-3"></div> {/* 區塊內微小分隔線 */}
-                                
-                                {/* 分析與圖表 */}
-                                {navButton('classSummary', 'Table', '小測成績表')}
-                                {navButton('analysis', 'Wand2', '個人分析/補底')}
-                                {navButton('chart', 'PieChart', '所有小測成績表現')}
-                                {navButton('topicAnalysis', 'Target', '整班小測弱點分析')}
-                            </div>
-
-                            <div className="border-t border-slate-700/50 my-1 mx-2"></div>
-
-                            {/* 區塊 2：考試管理區 */}
-                            <div className="flex flex-col gap-1">
-                                <p className="px-3 text-[11px] font-bold text-purple-400 tracking-wider uppercase mb-1">🎯 考試管理區</p>
-                                {navButton('examScoresInput', 'CheckSquare', '考試成績輸入', 'bg-purple-600')}
-                                {navButton('examAnalysis', 'LineChart', '考試弱點分析', 'bg-purple-600')}
-                                {navButton('studentExamAnalysis', 'UserCheck', '個人大考分析', 'bg-purple-600')}
-                                {navButton('remedialPractice', 'ClipboardEdit', '專屬補底練習與進度', 'bg-purple-600')}
-                                {navButton('examExport', 'Download', '考試成績匯出 (Excel)', 'bg-green-600')}
-                                {navButton('examSettings', 'Settings', '考試內容設定', 'bg-purple-600')}
-                            </div>
-
-                            <div className="border-t border-slate-700/50 my-1 mx-2"></div>
-
-                            {/* 區塊 3：系統設定區 */}
-                            <div className="flex flex-col gap-1 mb-4">
-                                <p className="px-3 text-[11px] font-bold text-slate-500 tracking-wider uppercase mb-1">⚙️ 系統基本設定</p>
-                                {navButton('students', 'Users', '學生名單管理', 'bg-slate-600')}
-                                {navButton('syllabusSettings', 'BookOpen', '課程大綱設定', 'bg-slate-600')}
-                                {navButton('studentPromotion', 'UserCheck', '新學年智慧升班/更新', 'bg-blue-600')}
-                                {navButton('backup', 'Database', '數據備份與還原', 'bg-slate-600')}
-                            </div>
-
-                        </nav>
-                    </div>
-                );
-            };
 
                   
                 if (isLoading) return <div className="flex h-screen items-center justify-center text-xl font-bold text-slate-500 animate-pulse">載入雲端資料中...</div>;
@@ -4319,7 +4322,18 @@ const App = () => {
                 }
 
             return (
+                <div className="flex h-screen w-full overflow-hidden">
+                    {/* 1. Sidebar 獨立佔據左邊，擁有自己的捲軸 */}
+                    <Sidebar 
+                        view={view} 
+                        setView={setView} 
+                        currentCohort={currentCohort} 
+                        setCurrentCohort={setCurrentCohort}
+                        allCohorts={allCohorts}
+                        isSaving={isSaving}
+                    />
                 <div className="flex min-h-screen relative"><Sidebar /><div className="flex-1 ml-64 overflow-hidden">
+                    
                     {/* 更新：傳入 scores 和 syncToCloud，實現自動存檔 */}
                     {view === 'students' && <StudentView students={students} setStudents={setStudents} scores={scores} setScores={setScores} syncToCloud={syncToCloud} />}
                     {view === 'scores' && <ScoreInputView activeStudents={activeStudents} scores={scores} setScores={setScores} />}
