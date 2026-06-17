@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.56 Physics Quiz Analyzer</title>
+    <title> V2.58 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -2182,313 +2182,300 @@ const ExamAnalysisView = ({ activeStudents, examScores, currentCohort, getReleva
     );
 };
         
-// ==================== 更新版：個人大考分析、跨卷進度（分開 3 大趨勢版塊）與補底生成 ====================
-const StudentExamAnalysisView = ({ activeStudents, examScores }) => {
-    const [selectedStudentId, setSelectedStudentId] = React.useState('');
-    const [selectedExams, setSelectedExams] = React.useState(Object.keys(EXAM_MAPS || {}));
-
-    // ★ 新增：左側課題追蹤的趨勢版塊切換狀態 ('down': 退步, 'up': 進步, 'stable': 平穩)
-    const [trendTab, setTrendTab] = React.useState('down');
-
-    // AI 參數設定狀態
-    const [aiLang, setAiLang] = React.useState('雙語 (Bilingual)');
-    const [aiMcCount, setAiMcCount] = React.useState('5'); 
-    const [aiLqCount, setAiLqCount] = React.useState('3'); 
-    const [generatedPrompt, setGeneratedPrompt] = React.useState('');
-
-    const toggleExam = (examId) => {
-        setSelectedExams(prev => 
-            prev.includes(examId) ? prev.filter(id => id !== examId) : [...prev, examId]
-        );
-    };
-
-    const getStudentQScore = (studentId, examId, q) => {
-        const record = examScores[studentId]?.[examId];
-        if (!record) return 0;
-        const val = record[q.id];
-        if (q.type === 'MC') {
-            return (val && q.ans && val.toString().toUpperCase() === q.ans.toUpperCase()) ? q.max : 0;
-        }
-        return val === '' || val === undefined ? 0 : parseFloat(val);
-    };
-
-    // 核心數據運算
-    const topicStats = {};
-    if (selectedStudentId && selectedExams.length > 0) {
-        selectedExams.forEach(examId => {
-            const map = EXAM_MAPS[examId];
-            if (!map) return;
-            
-            map.questions.forEach(q => {
-                if (!topicStats[q.topicId]) {
-                    topicStats[q.topicId] = { 
-                        topicId: q.topicId, 
-                        topicName: SYLLABUS_TOPICS[q.topicId] || '未定義課題', 
-                        totalMax: 0, 
-                        totalEarned: 0,
-                        examDetails: {},
-                        descList: new Set()
-                    };
-                }
-                
-                if (!topicStats[q.topicId].examDetails[examId]) {
-                    topicStats[q.topicId].examDetails[examId] = { max: 0, earned: 0 };
-                }
-
-                const score = getStudentQScore(selectedStudentId, examId, q);
-                topicStats[q.topicId].totalMax += q.max;
-                topicStats[q.topicId].totalEarned += score;
-                topicStats[q.topicId].examDetails[examId].max += q.max;
-                topicStats[q.topicId].examDetails[examId].earned += score;
-                if (q.topicDesc) topicStats[q.topicId].descList.add(q.topicDesc);
+// ==================== 智慧連動過濾版：學生個人成績分析組件 ====================
+const StudentExamAnalysisView = ({ students, scores }) => {
+    // 1. 自動從 scores 資料庫中，抽取出全系統所有已存在的分數欄位 (考試/小測名稱)
+    const examKeys = React.useMemo(() => {
+        const keysSet = new Set();
+        Object.values(scores || {}).forEach(studentScores => {
+            Object.keys(studentScores || {}).forEach(key => {
+                if (key) keysSet.add(key);
             });
         });
-    }
+        return Array.from(keysSet).sort();
+    }, [scores]);
 
-    // 將資料預先計算並分類趨勢
-    const processedTopics = Object.values(topicStats).sort((a, b) => 
-        a.topicId.localeCompare(b.topicId, undefined, { numeric: true, sensitivity: 'base' })
-    ).map(t => {
-        const descArray = Array.from(t.descList);
-        const overallPct = t.totalMax > 0 ? (t.totalEarned / t.totalMax) : 0;
+    // 狀態設定
+    const [selectedExam, setSelectedExam] = React.useState(examKeys[0] || '');
+    const [selectedCohort, setSelectedCohort] = React.useState('');
+    const [selectedStudentId, setSelectedStudentId] = React.useState('');
+
+    // 🔥 核心智慧過濾邏輯 A：根據選擇的「考試」，找出哪些「學群」內有人有分數
+    const availableCohorts = React.useMemo(() => {
+        if (!selectedExam) return [];
+        const activeCohortSet = new Set();
         
-        // 取出該課題在各份卷的表現
-        const examPcts = selectedExams.map(examId => {
-            const details = t.examDetails[examId];
-            if (!details || details.max === 0) return null;
-            return { examId, pct: details.earned / details.max };
-        }).filter(Boolean);
+        students.forEach(s => {
+            const cohortName = s.cohort || '未分組';
+            // 檢查該學生是否有這場考試的分數 (排除 undefined, null 和 空字串)
+            const hasScore = scores[s.id] && 
+                             scores[s.id][selectedExam] !== undefined && 
+                             scores[s.id][selectedExam] !== null && 
+                             scores[s.id][selectedExam] !== '';
+            
+            if (hasScore) {
+                activeCohortSet.add(cohortName);
+            }
+        });
+        return Array.from(activeCohortSet).sort();
+    }, [selectedExam, students, scores]);
 
-        // ★ 計算趨勢
-        let trend = 'stable'; 
-        if (examPcts.length >= 2) {
-            const last = examPcts[examPcts.length - 1].pct;
-            const prev = examPcts[examPcts.length - 2].pct;
-            if (last - prev > 0.1) trend = 'up';
-            else if (prev - last > 0.1) trend = 'down';
-        }
-
-        return { ...t, descArray, overallPct, examPcts, trend };
-    });
-
-    // 分流三個版塊的陣列
-    const downTopics = processedTopics.filter(t => t.trend === 'down');
-    const upTopics = processedTopics.filter(t => t.trend === 'up');
-    const stableTopics = processedTopics.filter(t => t.trend === 'stable');
-
-    // 依據目前點選的版塊決定要顯示的陣列
-    const currentDisplayedTopics = 
-        trendTab === 'down' ? downTopics : 
-        trendTab === 'up' ? upTopics : stableTopics;
-
-    // AI Prompt 生成邏輯 (保持全局診斷，抓出總得分率低於 50% 的所有弱項)
+    // 當考試改變時，自動將群組切換到第一個「有分數的群組」
     React.useEffect(() => {
-        if (!selectedStudentId) return;
-        const studentName = activeStudents.find(s => s.id === selectedStudentId)?.name || '該學生';
-        
-        const weakTopics = processedTopics.filter(t => t.overallPct < 0.5);
-        const weakTopicsText = weakTopics.map(t => 
-            `- 課題 [${t.topicId} ${t.topicName}]: 綜合得分率 ${(t.overallPct*100).toFixed(0)}%。曾考過的題型盲點包括: ${t.descArray.join('; ')}`
-        ).join('\n');
+        if (availableCohorts.length > 0) {
+            if (!availableCohorts.includes(selectedCohort)) {
+                setSelectedCohort(availableCohorts[0]);
+            }
+        } else {
+            setSelectedCohort('');
+        }
+    }, [availableCohorts, selectedCohort]);
 
-        const newPrompt = `你是一位香港 DSE 物理科專屬導師。我的學生【${studentName}】在近期的物理考試中表現需要提升。以下是他在所選考試範圍內【掌握度低於 50%】的物理課題及對應的題型盲點，請為他度身訂造一份專屬補底練習。\n\n[基本設定]\n- 語言: ${aiLang}\n- 預期題型與數量:\n  * 多項選擇題 (MC)：${aiMcCount} 題\n  * 長題目 (LQ)：${aiLqCount} 題\n\n[學生薄弱課題與盲點描述]\n${weakTopicsText || '- 該學生目前無明顯弱項課題，請生成進階挑戰題。'}\n\n[生成要求]\n1. 針對上述薄弱課題，設計難度由淺入深、著重釐清核心觀念的練習題。\n2. MC 必須包含 4 個選項，並為錯誤選項附帶【陷阱分析】（指出為何學生容易選錯）；LQ 必須附帶詳細的【分步評分標準 (Marking Scheme)】。\n3. 請在開頭給予【${studentName}】一段鼓勵性的評語，並指出他在這些課題中最需要優先克服的思維盲區。`;
+    // 🔥 核心智慧過濾邏輯 B：根據選定的「考試」與「學群」，找出有哪些學生有分數
+    const availableStudents = React.useMemo(() => {
+        if (!selectedExam || !selectedCohort) return [];
+        return students.filter(s => {
+            const matchesCohort = (s.cohort || '未分組') === selectedCohort;
+            const hasScore = scores[s.id] && 
+                             scores[s.id][selectedExam] !== undefined && 
+                             scores[s.id][selectedExam] !== null && 
+                             scores[s.id][selectedExam] !== '';
+            return matchesCohort && hasScore;
+        }).sort((a, b) => (a.class || '').localeCompare(b.class || '') || (a.num || '').localeCompare(b.num || ''));
+    }, [selectedExam, selectedCohort, students, scores]);
+
+    // 當有效群組或學生名單改變時，自動鎖定第一位同學
+    React.useEffect(() => {
+        if (availableStudents.length > 0) {
+            if (!availableStudents.some(s => s.id === selectedStudentId)) {
+                setSelectedStudentId(availableStudents[0].id);
+            }
+        } else {
+            setSelectedStudentId('');
+        }
+    }, [availableStudents, selectedStudentId]);
+
+    // 3. 計算該學群在該場考試的統計數據 (用作個人表現的對比參照)
+    const cohortStats = React.useMemo(() => {
+        if (!selectedExam || !selectedCohort) return null;
         
-        setGeneratedPrompt(newPrompt);
-    }, [aiLang, aiMcCount, aiLqCount, selectedStudentId, selectedExams, examScores]);
+        // 找出該學群內所有有分數的同學的分數
+        const validScores = students
+            .filter(s => (s.cohort || '未分組') === selectedCohort)
+            .map(s => scores[s.id]?.[selectedExam])
+            .filter(val => val !== undefined && val !== null && val !== '')
+            .map(Number);
+
+        if (validScores.length === 0) return null;
+
+        const total = validScores.reduce((sum, v) => sum + v, 0);
+        const avg = (total / validScores.length).toFixed(1);
+        const max = Math.max(...validScores);
+        const min = Math.min(...validScores);
+
+        return { avg, max, min, count: validScores.length };
+    }, [selectedExam, selectedCohort, students, scores]);
+
+    // 取得當前被選中學生的完整資料與分數
+    const currentStudent = students.find(s => s.id === selectedStudentId);
+    const currentStudentScore = currentStudent ? scores[selectedStudentId]?.[selectedExam] : null;
 
     return (
-        <div className="p-6 max-w-6xl mx-auto animate-fadeIn">
-            {/* 標頭與過濾器 */}
-            <div className="flex flex-col gap-4 mb-6 border-b border-slate-200 pb-5">
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                        <Icon name="UserCheck" className="text-purple-600" /> 個人大考進度追蹤與專屬補底
-                    </h1>
-                    <p className="text-sm text-slate-500 mt-1">追蹤學生在多份試卷中的進退步情況，並一鍵產出弱點補強練習。</p>
-                </div>
-                
-                <div className="flex flex-col md:flex-row gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                    <div className="flex-1">
-                        <label className="text-xs font-bold text-slate-700 mb-1.5 block">1. 選擇學生</label>
+        <div className="p-6 max-w-5xl mx-auto animate-fadeIn">
+            {/* 頂部標頭 */}
+            <div className="mb-6 border-b pb-4">
+                <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                    <Icon name="TrendingUp" className="text-indigo-600" /> 學生個人大考/小測表現分析
+                </h1>
+                <p className="text-sm text-slate-500 mt-1">選擇特定評估，系統將自動過濾出具備有效分數紀錄的學群，助您快速追蹤同學的個人學術發展曲線。</p>
+            </div>
+
+            {/* 三極連動智慧篩選控制台 */}
+            <div className="card p-4 mb-6 bg-slate-50 border border-slate-200 rounded-xl shadow-sm">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* 控制項 1: 選擇評估名稱 */}
+                    <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1 flex items-center gap-1">
+                            <Icon name="BookOpen" size={14} className="text-indigo-500" /> 1. 選擇大考/小測評估
+                        </label>
                         <select 
-                            value={selectedStudentId}
-                            onChange={(e) => { setSelectedStudentId(e.target.value); }}
-                            className="w-full p-2.5 border border-slate-300 rounded-lg bg-white font-semibold outline-none focus:ring-2 focus:ring-purple-400"
+                            className="w-full p-2 border border-slate-200 rounded-lg bg-white text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-400"
+                            value={selectedExam}
+                            onChange={e => setSelectedExam(e.target.value)}
                         >
-                            <option value="">-- 請選擇學生 --</option>
-                            {activeStudents.map(s => (
-                                <option key={s.id} value={s.id}>{s.class} ({s.num}) {s.name}</option>
-                            ))}
+                            {examKeys.length === 0 ? (
+                                <option value="">(系統內目前無任何分數紀錄)</option>
+                            ) : (
+                                examKeys.map(k => <option key={k} value={k}>{k}</option>)
+                            )}
                         </select>
                     </div>
-                    
-                    <div className="flex-[2]">
-                        <label className="text-xs font-bold text-slate-700 mb-1.5 block flex justify-between">
-                            <span>2. 選擇要納入分析的試卷 (預設全選)</span>
-                            <span className="text-purple-600 font-bold">{selectedExams.length} 份已選</span>
+
+                    {/* 控制項 2: 智慧過濾後的學群選單 */}
+                    <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1 flex items-center gap-1">
+                            <Icon name="Layers" size={14} className="text-purple-500" /> 2. 具備分數的群組 (Cohort)
                         </label>
-                        <div className="flex flex-wrap gap-2">
-                            {Object.keys(EXAM_MAPS).map(examId => {
-                                const isSelected = selectedExams.includes(examId);
-                                return (
-                                    <button 
-                                        key={examId}
-                                        onClick={() => toggleExam(examId)}
-                                        className={`px-3 py-1.5 rounded-full text-xs font-bold border transition ${
-                                            isSelected ? 'bg-purple-100 border-purple-400 text-purple-700 shadow-inner' : 'bg-white border-slate-300 text-slate-500 hover:bg-slate-100'
-                                        }`}
-                                    >
-                                        {isSelected && <Icon name="Check" size={12} className="inline mr-1" />}
-                                        {examId}
-                                    </button>
-                                );
-                            })}
-                        </div>
+                        <select 
+                            className="w-full p-2 border border-slate-200 rounded-lg bg-white text-sm font-bold text-purple-700 outline-none focus:ring-2 focus:ring-purple-400"
+                            value={selectedCohort}
+                            onChange={e => setSelectedCohort(e.target.value)}
+                            disabled={availableCohorts.length === 0}
+                        >
+                            {availableCohorts.length === 0 ? (
+                                <option value="">❌ 該考試無任何群組數據</option>
+                            ) : (
+                                availableCohorts.map(c => <option key={c} value={c}>{c}</option>)
+                            )}
+                        </select>
+                    </div>
+
+                    {/* 控制項 3: 智慧過濾後的學生名單 */}
+                    <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1 flex items-center gap-1">
+                            <Icon name="User" size={14} className="text-emerald-500" /> 3. 選擇學生名單
+                        </label>
+                        <select 
+                            className="w-full p-2 border border-slate-200 rounded-lg bg-white text-sm font-bold text-emerald-700 outline-none focus:ring-2 focus:ring-emerald-400"
+                            value={selectedStudentId}
+                            onChange={e => setSelectedStudentId(e.target.value)}
+                            disabled={availableStudents.length === 0}
+                        >
+                            {availableStudents.length === 0 ? (
+                                <option value="">❌ 無符合條件的學生</option>
+                            ) : (
+                                availableStudents.map(s => (
+                                    <option key={s.id} value={s.id}>
+                                        {s.class}-{String(s.num).padStart(2, '0')} {s.name}
+                                    </option>
+                                ))
+                            )}
+                        </select>
                     </div>
                 </div>
             </div>
 
-            {!selectedStudentId ? (
-                <div className="card p-16 text-center text-slate-400 border border-slate-200 shadow-sm border-dashed">
-                    <Icon name="User" size={48} className="mx-auto mb-3 opacity-40 text-purple-300" />
-                    <p className="text-sm font-medium text-slate-500">請先從上方選擇一位學生以檢視其個人分析報告</p>
-                </div>
-            ) : selectedExams.length === 0 ? (
-                <div className="card p-16 text-center text-slate-400 border border-slate-200 shadow-sm border-dashed">
-                    <Icon name="Layers" size={48} className="mx-auto mb-3 opacity-40 text-amber-300" />
-                    <p className="text-sm font-medium text-slate-500">請至少勾選一份試卷來進行分析</p>
+            {/* 分析報告展示區塊 */}
+            {currentStudent && currentStudentScore !== null && cohortStats ? (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    
+                    {/* 左側：學生個人資訊與名次摘要卡片 */}
+                    <div className="card p-5 bg-white border border-slate-200 rounded-xl shadow-sm md:col-span-1 flex flex-col justify-between">
+                        <div>
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="w-12 h-12 bg-indigo-100 text-indigo-700 font-black rounded-full flex items-center justify-center text-lg shadow-inner">
+                                    {currentStudent.class}
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-slate-800">{currentStudent.name}</h3>
+                                    <p className="text-xs text-slate-400 font-mono">學號 ID: {currentStudent.id} | 座號: {currentStudent.num} 號</p>
+                                </div>
+                            </div>
+
+                            <div className="border-t border-b py-3 my-4 divide-y divide-slate-100">
+                                <div className="flex justify-between py-1.5 text-sm">
+                                    <span className="text-slate-500">所屬學群 (Cohort)</span>
+                                    <span className="font-bold text-slate-700 font-mono">{currentStudent.cohort || '未分組'}</span>
+                                </div>
+                                <div className="flex justify-between py-1.5 text-sm">
+                                    <span className="text-slate-500">評估項目</span>
+                                    <span className="font-bold text-indigo-600">{selectedExam}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 核心大分數看板 */}
+                        <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-4 text-center shadow-inner">
+                            <span className="text-xs font-bold text-indigo-700 block uppercase tracking-wider">本次考卷得分</span>
+                            <span className="text-4xl font-black text-indigo-600 font-mono block my-1">
+                                {currentStudentScore}
+                            </span>
+                            <span className="text-xs text-slate-500">
+                                對比學群平均：
+                                <span className="font-bold ml-1 font-mono">
+                                    {(Number(currentStudentScore) - Number(cohortStats.avg)) >= 0 ? '+' : ''}
+                                    {(Number(currentStudentScore) - Number(cohortStats.avg)).toFixed(1)}
+                                </span>
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* 右側：學群常模對比與圖表可視化 */}
+                    <div className="card p-5 bg-white border border-slate-200 rounded-xl shadow-sm md:col-span-2">
+                        <h4 className="font-bold text-slate-800 text-sm mb-4 flex items-center gap-2">
+                            <Icon name="Award" className="text-amber-500" size={18} /> 
+                            學群常模對比與表現分析 (樣本數: {cohortStats.count} 人)
+                        </h4>
+
+                        {/* 四方統計指標數據牆 */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
+                            <div className="bg-slate-50 p-3 rounded-lg border text-center">
+                                <span className="text-xs text-slate-400 block">學群最高分</span>
+                                <span className="text-xl font-bold text-slate-700 font-mono">{cohortStats.max}</span>
+                            </div>
+                            <div className="bg-slate-50 p-3 rounded-lg border text-center">
+                                <span className="text-xs text-slate-400 block">學群平均分</span>
+                                <span className="text-xl font-bold text-indigo-600 font-mono">{cohortStats.avg}</span>
+                            </div>
+                            <div className="bg-slate-50 p-3 rounded-lg border text-center">
+                                <span className="text-xs text-slate-400 block">學群最低分</span>
+                                <span className="text-xl font-bold text-slate-700 font-mono">{cohortStats.min}</span>
+                            </div>
+                        </div>
+
+                        {/* CSS 原生動態水平統計對比圖表 */}
+                        <div className="space-y-4 bg-slate-50/50 p-4 rounded-xl border border-slate-100 shadow-inner">
+                            <span className="text-xs font-bold text-slate-500 block">📊 個人得分與學群落點可視化：</span>
+                            
+                            {/* 學生分數長條 */}
+                            <div>
+                                <div className="flex justify-between text-xs mb-1">
+                                    <span className="font-bold text-indigo-700">{currentStudent.name} 的實際得分</span>
+                                    <span className="font-mono font-bold text-indigo-700">{currentStudentScore} 分</span>
+                                </div>
+                                <div className="w-full bg-slate-200 h-3 rounded-full overflow-hidden">
+                                    <div 
+                                        className="bg-indigo-500 h-full rounded-full transition-all duration-500 shadow"
+                                        style={{ width: `${Math.min(100, Math.max(5, Number(currentStudentScore)))}%` }}
+                                    ></div>
+                                </div>
+                            </div>
+
+                            {/* 學群平均長條 */}
+                            <div>
+                                <div className="flex justify-between text-xs mb-1">
+                                    <span className="text-slate-500">學群平均常模線</span>
+                                    <span className="font-mono font-medium text-slate-600">{cohortStats.avg} 分</span>
+                                </div>
+                                <div className="w-full bg-slate-200 h-3 rounded-full overflow-hidden">
+                                    <div 
+                                        className="bg-slate-400 h-full rounded-full transition-all duration-500"
+                                        style={{ width: `${Math.min(100, Math.max(5, Number(cohortStats.avg)))}%` }}
+                                    ></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 智慧評語與診斷建議 */}
+                        <div className="mt-5 p-3.5 rounded-xl text-xs border bg-amber-50/40 border-amber-100 text-slate-700 flex gap-2.5">
+                            <Icon name="AlertCircle" className="text-amber-500 shrink-0 mt-0.5" size={16} />
+                            <div>
+                                <p className="font-bold text-amber-900 mb-0.5">💡 教學導向診斷建議：</p>
+                                {Number(currentStudentScore) >= Number(cohortStats.max) ? (
+                                    <p className="text-amber-800">該生本次成績位居學群最頂尖位置！物理觀念掌握極其紮實，建議提供進階奧林匹克或 DSE 5** 拔尖延伸題型以維持挑戰心態。</p>
+                                ) : Number(currentStudentScore) >= Number(cohortStats.avg) ? (
+                                    <p className="text-amber-800">該生表現高於學群平均水準，基本物理概念理解良好。下一階段可重點加強實驗題型的論述嚴謹度，爭取突破至頂尖梯隊。</p>
+                                ) : (
+                                    <p className="text-amber-800">該生成績未達學群平均值。請教師協助檢視基礎公式推導是否存在盲點，建議將此評估同步至「補底練習系統 (RemedialPracticeView)」進行針對性的錯題重練。</p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
-                    
-                    {/* 左側：綜合課題掌握度（分為 3 個切換版塊） */}
-                    <div className="lg:col-span-3 card p-5 border border-slate-200 shadow-sm flex flex-col h-[700px]">
-                        <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2 border-b border-slate-100 pb-2 text-sm">
-                            <span className="p-1 bg-blue-100 text-blue-700 rounded"><Icon name="TrendingUp" size={15} /></span>
-                            課題表現與跨卷趨勢分類
-                        </h3>
-
-                        {/* ★ 新增：內部 3 大趨勢切換版塊按鈕 */}
-                        <div className="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-lg mb-4 text-xs font-bold">
-                            <button 
-                                onClick={() => setTrendTab('down')}
-                                className={`py-2 rounded-md transition flex items-center justify-center gap-1.5 ${trendTab === 'down' ? 'bg-red-500 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'}`}
-                            >
-                                <span>🚨 退步關注</span>
-                                <span className={`px-1.5 py-0.2 text-[10px] rounded-full ${trendTab === 'down' ? 'bg-white text-red-600' : 'bg-red-100 text-red-700'}`}>{downTopics.length}</span>
-                            </button>
-                            <button 
-                                onClick={() => setTrendTab('up')}
-                                className={`py-2 rounded-md transition flex items-center justify-center gap-1.5 ${trendTab === 'up' ? 'bg-emerald-500 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'}`}
-                            >
-                                <span>🎉 看到進步</span>
-                                <span className={`px-1.5 py-0.2 text-[10px] rounded-full ${trendTab === 'up' ? 'bg-white text-emerald-600' : 'bg-emerald-100 text-emerald-700'}`}>{upTopics.length}</span>
-                            </button>
-                            <button 
-                                onClick={() => setTrendTab('stable')}
-                                className={`py-2 rounded-md transition flex items-center justify-center gap-1.5 ${trendTab === 'stable' ? 'bg-slate-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'}`}
-                            >
-                                <span>➖ 表現平穩</span>
-                                <span className={`px-1.5 py-0.2 text-[10px] rounded-full ${trendTab === 'stable' ? 'bg-white text-slate-700' : 'bg-slate-200 text-slate-700'}`}>{stableTopics.length}</span>
-                            </button>
-                        </div>
-                        
-                        {/* 課題動態列表 */}
-                        <div className="flex-1 overflow-y-auto space-y-3.5 pr-2">
-                            {currentDisplayedTopics.length === 0 ? (
-                                <div className="text-center py-20 text-slate-400 text-xs border border-dashed rounded-xl bg-slate-50/50">
-                                    <Icon name="Inbox" size={32} className="mx-auto mb-2 opacity-30" />
-                                    目前版塊下無對應課題
-                                </div>
-                            ) : (
-                                currentDisplayedTopics.map(t => {
-                                    const isWeak = t.overallPct < 0.50; 
-                                    let trendBadge = null;
-                                    if (t.trend === 'up') trendBadge = <span className="text-emerald-600 font-bold text-[10px] bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded flex items-center gap-0.5">⬆️ 進步</span>;
-                                    if (t.trend === 'down') trendBadge = <span className="text-red-600 font-bold text-[10px] bg-red-50 border border-red-200 px-1.5 py-0.5 rounded flex items-center gap-0.5">🚨 退步</span>;
-                                    if (t.trend === 'stable') trendBadge = <span className="text-slate-500 font-bold text-[10px] bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded flex items-center gap-0.5">➖ 平穩</span>;
-
-                                    return (
-                                        <div key={t.topicId} className={`p-3 border rounded-xl transition ${isWeak ? 'bg-red-50/20 border-red-100' : 'bg-white border-slate-200 shadow-sm'}`}>
-                                            <div className="flex justify-between items-start mb-2">
-                                                <div>
-                                                    <span className="text-slate-800 font-mono font-bold text-xs bg-slate-100 px-1.5 py-0.5 rounded mr-1.5">課題 {t.topicId}</span>
-                                                    <span className="text-slate-700 text-xs font-semibold">{t.topicName}</span>
-                                                </div>
-                                                <div className="flex items-center gap-2 shrink-0">
-                                                    {trendBadge}
-                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${isWeak ? 'bg-red-100 border-red-200 text-red-700' : 'bg-emerald-100 border-emerald-200 text-emerald-700'}`}>
-                                                        綜合: {(t.overallPct*100).toFixed(0)}%
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            
-                                            {/* 跨卷歷程 */}
-                                            <div className="flex flex-wrap gap-1.5 mt-2">
-                                                {t.examPcts.map((ep) => (
-                                                    <div key={ep.examId} className="flex items-center text-[10px] bg-white border border-slate-200 rounded overflow-hidden shadow-inner">
-                                                        <span className="bg-slate-50 text-slate-500 px-1.5 py-0.5 border-r border-slate-100 font-mono text-[9px]">{ep.examId}</span>
-                                                        <span className={`px-1.5 py-0.5 font-bold ${ep.pct < 0.5 ? 'text-red-500' : 'text-emerald-600'}`}>{(ep.pct*100).toFixed(0)}%</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                            
-                                            <p className="text-[10px] text-slate-400 mt-2 line-clamp-1 border-t border-slate-100 pt-1.5">
-                                                🔍 歷史考點盲區：{t.descArray.join(' ; ')}
-                                            </p>
-                                        </div>
-                                    );
-                                })
-                            )}
-                        </div>
-                    </div>
-
-                    {/* 右側：專屬 AI 補底練習工廠 */}
-                    <div className="lg:col-span-2 card p-5 border-2 border-purple-100 bg-gradient-to-br from-purple-50/50 to-white shadow-sm flex flex-col h-[700px]">
-                        <div className="flex items-center gap-2 text-purple-800 font-bold text-base mb-2">
-                            <Icon name="Cpu" className="text-purple-600" />
-                            <span>針對性弱點補強 Prompt 生成</span>
-                        </div>
-                        <p className="text-xs text-slate-500 mb-4 leading-relaxed">
-                            系統已自動整合該學生在所選試卷中，所有<strong className="text-red-500">掌握度低於 50%</strong>的課題與歷史盲點（不受左側版塊切換影響）。
-                        </p>
-                        
-                        <div className="grid grid-cols-2 gap-3 mb-4">
-                            <div className="flex flex-col gap-1 bg-white p-2 border rounded-lg shadow-sm">
-                                <label className="text-[10px] font-bold text-slate-500">輸出語言</label>
-                                <select className="text-xs p-1 outline-none font-bold text-slate-700 bg-transparent" value={aiLang} onChange={e=>setAiLang(e.target.value)}>
-                                    <option>繁體中文</option>
-                                    <option>English</option>
-                                </select>
-                            </div>
-                            <div className="flex flex-col gap-1 bg-white p-2 border rounded-lg shadow-sm">
-                                <label className="text-[10px] font-bold text-slate-500">MC / LQ 題數</label>
-                                <div className="flex items-center gap-1 text-xs px-1">
-                                    MC:<input type="number" className="w-10 outline-none font-bold text-purple-700 border-b text-center mx-1 bg-transparent" value={aiMcCount} onChange={e=>setAiMcCount(e.target.value)} min="0" max="20" />
-                                    LQ:<input type="number" className="w-10 outline-none font-bold text-blue-700 border-b text-center mx-1 bg-transparent" value={aiLqCount} onChange={e=>setAiLqCount(e.target.value)} min="0" max="20" />
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="flex-1 flex flex-col mb-4">
-                            <label className="text-xs font-bold text-slate-700 mb-1 flex justify-between">
-                                <span>📝 專屬 Prompt 預覽</span>
-                            </label>
-                            <textarea 
-                                className="flex-1 w-full p-3 text-[11px] font-mono bg-white border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-400 outline-none shadow-inner resize-none leading-relaxed"
-                                value={generatedPrompt}
-                                onChange={(e) => setGeneratedPrompt(e.target.value)}
-                            />
-                        </div>
-
-                        <button 
-                            onClick={() => { navigator.clipboard.writeText(generatedPrompt); alert('📋 學生專屬 AI 提示詞已複製！'); }}
-                            className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-xl shadow-md flex items-center justify-center gap-2 transition text-sm"
-                        >
-                            <Icon name="Copy" size={16} /> shadow 複製專屬補底 Prompt
-                        </button>
-                    </div>
-
+                <div className="card p-12 text-center text-slate-400 italic border border-dashed rounded-xl bg-white shadow-sm">
+                    <Icon name="Inbox" size={36} className="mx-auto mb-2 text-slate-300" />
+                    系統目前無足夠的連動數據可以生成分析報告。請先確認已選擇有效的考試項目。
                 </div>
             )}
         </div>
