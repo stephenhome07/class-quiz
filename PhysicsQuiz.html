@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.77 Physics Quiz Analyzer</title>
+    <title> V2.78 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -229,16 +229,21 @@
                     }
                 };
                     
+                    // ★ 升級版自動跳轉：加入防呆與 setTimeout 避免渲染衝突
                     const handleAutoAdvance = (qId, newVal, qMax) => {
-                        if (newVal.length >= 1 && qMax < 10) {
+                        const maxScore = qMax || 1; // 避免某些題目沒設定滿分導致出錯
+                        if (newVal.length >= 1 && maxScore < 10) {
                             const currentIndex = map.questions.findIndex(item => item.id === qId);
                             // 確保不是最後一題
                             if (currentIndex >= 0 && currentIndex < map.questions.length - 1) {
                                 const nextQ = map.questions[currentIndex + 1];
-                                if (inputRefs.current[nextQ.id]) {
-                                    inputRefs.current[nextQ.id].focus();
-                                    inputRefs.current[nextQ.id].select(); // 自動全選，方便覆蓋
-                                }
+                                // 加入微小延遲，確保 React 完成 state 更新後才跳轉
+                                setTimeout(() => {
+                                    if (inputRefs.current[nextQ.id]) {
+                                        inputRefs.current[nextQ.id].focus();
+                                        inputRefs.current[nextQ.id].select(); // 自動全選，方便覆蓋
+                                    }
+                                }, 10);
                             }
                         }
                     };
@@ -1758,19 +1763,20 @@ const ExamScoresInputView = ({ activeStudents, examScores, setExamScores, syncTo
         }
     };
 
-    // ★ 新增：自動跳轉邏輯抽離成獨立函數
+  // ★ 升級版自動跳轉邏輯
     const handleAutoAdvance = (qId, newVal, qType, qMax) => {
         let shouldAdvance = false;
         
         if (qType === 'MC') {
-            // MC 題只要輸入了有效的 A/B/C/D 就跳轉
+            // MC 題只要輸入了 A/B/C/D 任何一個字就跳轉
             const valid = newVal.toUpperCase().trim();
             if (['A', 'B', 'C', 'D'].includes(valid)) {
                 shouldAdvance = true;
             }
         } else {
             // LQ 題如果是單位數，輸入第一個數字就跳轉
-            if (newVal.length >= 1 && qMax < 10) {
+            const maxScore = qMax || 1;
+            if (newVal.length >= 1 && maxScore < 10) {
                 shouldAdvance = true;
             }
         }
@@ -1779,10 +1785,13 @@ const ExamScoresInputView = ({ activeStudents, examScores, setExamScores, syncTo
             const currentIndex = map.questions.findIndex(item => item.id === qId);
             if (currentIndex >= 0 && currentIndex < map.questions.length - 1) {
                 const nextQ = map.questions[currentIndex + 1];
-                if (inputRefs.current[nextQ.id]) {
-                    inputRefs.current[nextQ.id].focus();
-                    inputRefs.current[nextQ.id].select(); // 自動全選
-                }
+                // 加入 setTimeout 防渲染衝突
+                setTimeout(() => {
+                    if (inputRefs.current[nextQ.id]) {
+                        inputRefs.current[nextQ.id].focus();
+                        inputRefs.current[nextQ.id].select();
+                    }
+                }, 10);
             }
         }
     };
