@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.53 Physics Quiz Analyzer</title>
+    <title> V2.55 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -3071,68 +3071,112 @@ const ExamExportView = ({ activeStudents, examScores }) => {
     );
 };
 
-// ==================== 全新轉型版：學生動態管理與智慧升班組件 (名單識別升級 + 改名功能) ====================
+// ==================== 全新轉型版：學生動態管理與智慧升班組件 (名單識別升級 + 改名功能 + 預覽機制) ====================
 const StudentPromotionView = ({ students, setStudents, scores, setScores, syncToCloud }) => {
-    const [newCohort, setNewCohort] = React.useState('2025-2028'); // 設定新學年的新群組標籤
+    // 取得所有現有群組，並排序
+    const cohorts = Array.from(new Set(students.map(s => s.cohort || '未分組'))).sort();
+    
+    // 狀態設定
+    const [selectedCohort, setSelectedCohort] = React.useState(cohorts[0] || '2025-2028');
+    const [newCohort, setNewCohort] = React.useState(selectedCohort);
     const [pasteData, setPasteData] = React.useState('');
+    const [previewList, setPreviewList] = React.useState(null);
 
-    // 執行 Excel 貼上並自動識別升班
-    const handleExcelPromotion = () => {
+    // 1. 當選擇的來源群組變更時，自動更新預設的目標群組 (需求2)
+    React.useEffect(() => { 
+        setNewCohort(selectedCohort); 
+    }, [selectedCohort]);
+
+    // 預覽與校對功能 (需求3)
+    const handlePreview = () => {
         if (!pasteData.trim()) {
             alert('⚠️ 請先貼上新學期的 Excel 學生資料！');
             return;
         }
 
         const lines = pasteData.trim().split('\n');
+        const incoming = [];
+        
+        lines.forEach(line => {
+            const parts = line.split('\t');
+            if (parts.length >= 3) {
+                incoming.push({
+                    cls: parts[0].trim(),
+                    num: parts[1].trim(),
+                    name: parts[2].trim()
+                });
+            }
+        });
+
+        if (incoming.length === 0) {
+            alert('⚠️ 無法解析資料，請確認格式為：班別 (Tab) 座號 (Tab) 姓名');
+            return;
+        }
+
+        // 只針對選定的來源群組進行比對
+        const currentStudents = students.filter(s => s.cohort === selectedCohort);
+        
+        const preview = incoming.map(inc => {
+            // 透過姓名尋找是否有舊生
+            const match = currentStudents.find(s => s.name === inc.name);
+            return { 
+                ...inc, 
+                exists: !!match, 
+                oldId: match?.id, 
+                oldClass: match?.class,
+                oldNum: match?.num
+            };
+        });
+
+        // 找出在原群組中，但沒有出現在新貼上名單中的學生 (可能是退修、轉學或尚未貼上)
+        const notFound = currentStudents.filter(s => !incoming.find(i => i.name === s.name));
+        
+        setPreviewList({ preview, notFound });
+    };
+
+    // 執行正式升班/留班寫入
+    const handleCommitPromotion = () => {
         let updatedStudents = [...students];
         let updatedScores = { ...scores };
         let promoteCount = 0;
         let newCount = 0;
 
-        lines.forEach(line => {
-            const parts = line.split('\t');
-            if (parts.length >= 3) {
-                const cls = parts[0].trim();  // 例如: 6A
-                const num = parts[1].trim();  // 例如: 27
-                const name = parts[2].trim(); // 例如: 謝宇邦
-                const newId = `${cls}-${num}`; // 組成新學號 ID: 6A-27
-
-                // 🔥 核心機制：利用「姓名」去搜尋系統內有沒有這個舊生
-                const existingIndex = updatedStudents.findIndex(s => s.name === name);
-
-                if (existingIndex !== -1) {
-                    // 1. 找到舊生了！執行自動資料升級
-                    const oldId = updatedStudents[existingIndex].id; // 舊 ID (例如 5A-26)
-
-                    updatedStudents[existingIndex] = {
-                        ...updatedStudents[existingIndex],
-                        id: newId,
-                        class: cls,
-                        num: num,
-                        cohort: newCohort // 變更為新學年群組標籤
-                    };
-
-                    // ★ 自動成績遷移：如果新舊 ID 不同，將歷史成績完整移過去新 ID，避免 F5 後資料遺失
-                    if (oldId !== newId && updatedScores[oldId]) {
-                        updatedScores[newId] = updatedScores[oldId];
-                        delete updatedScores[oldId];
-                    }
-                    promoteCount++;
-                } else {
-                    // 2. 沒找到這個名字，視為新學年全新加入物理科的學生
-                    updatedStudents.push({
-                        id: newId,
-                        class: cls,
-                        num: num,
-                        name: name,
-                        cohort: newCohort
-                    });
-                    newCount++;
+        previewList.preview.forEach(item => {
+            const newId = `${item.cls}-${item.num}`;
+            // 尋找全系統中是否有這個學生
+            const idx = updatedStudents.findIndex(s => s.name === item.name);
+            
+            if (idx !== -1) {
+                // 找到舊生，執行更新 (升班/留班)
+                const oldId = updatedStudents[idx].id;
+                updatedStudents[idx] = { 
+                    ...updatedStudents[idx], 
+                    id: newId, 
+                    class: item.cls, 
+                    num: item.num, 
+                    cohort: newCohort // 寫入新的或維持舊的群組標籤
+                };
+                
+                // 自動轉移成績
+                if (oldId !== newId && updatedScores[oldId]) {
+                    updatedScores[newId] = updatedScores[oldId];
+                    delete updatedScores[oldId];
                 }
+                promoteCount++;
+            } else {
+                // 新加入的學生
+                updatedStudents.push({ 
+                    id: newId, 
+                    class: item.cls, 
+                    num: item.num, 
+                    name: item.name, 
+                    cohort: newCohort 
+                });
+                newCount++;
             }
         });
 
-        // 更新畫面 React 狀態
+        // 更新 React 狀態
         setStudents(updatedStudents);
         setScores(updatedScores);
 
@@ -3141,14 +3185,20 @@ const StudentPromotionView = ({ students, setStudents, scores, setScores, syncTo
             syncToCloud({ students: updatedStudents, scores: updatedScores });
         }
 
+        setPreviewList(null);
         setPasteData('');
-        alert(`🎉 新學年名單處理完畢！\n\n識別舊生並自動升班：${promoteCount} 人\n全新加入物理科學生：${newCount} 人\n\n(所有變更已安全寫入 PHYSICS DB 雲端，重整不消失)`);
+        alert(`🎉 升班/更新程序已完成！\n\n更新舊生資料：${promoteCount} 人\n新增學生：${newCount} 人\n\n(所有變更已安全寫入 PHYSICS DB 雲端)`);
+    };
+
+    // 取消預覽
+    const handleCancelPreview = () => {
+        setPreviewList(null);
     };
 
     // 快速修改學生姓名功能 (解決學期中途改名問題)
     const handleEditName = (id, currentName) => {
         const newName = window.prompt(`📝 修改學生姓名\n\n請輸入學生 [${currentName}] 的正確新姓名：`, currentName);
-        if (newName === null) return; // 使用者按取消
+        if (newName === null) return; 
         
         const trimmedName = newName.trim();
         if (!trimmedName) {
@@ -3166,7 +3216,6 @@ const StudentPromotionView = ({ students, setStudents, scores, setScores, syncTo
 
             setStudents(updatedStudents);
             
-            // 同步雲端
             if (typeof syncToCloud === 'function') {
                 syncToCloud({ students: updatedStudents });
             }
@@ -3197,39 +3246,117 @@ const StudentPromotionView = ({ students, setStudents, scores, setScores, syncTo
                 <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
                     <Icon name="UserCheck" className="text-purple-600" /> 學生動態管理與智慧升班 (新學年轉換)
                 </h1>
-                <p className="text-sm text-slate-500 mt-1">在新學年直接貼上新名單，系統會自動根據「姓名」對應舊生進行班級座號升級，並完美遷移所有分數紀錄。</p>
+                <p className="text-sm text-slate-500 mt-1">在新學年貼上新名單進行預覽，系統會自動根據「姓名」對應舊生進行班級座號升級，並完美遷移所有分數紀錄。</p>
             </div>
 
             {/* Excel 智慧升班輸入區塊 */}
             <div className="card p-5 mb-6 bg-purple-50/40 border border-purple-100 shadow-sm rounded-xl">
-                <div className="mb-4 flex flex-wrap items-center gap-4 bg-white p-3 rounded-lg border border-purple-100 shadow-sm w-fit">
-                    <label className="font-bold text-purple-900 text-sm">📌 將此批貼上的學生設定為新學群 (Cohort)：</label>
-                    <input 
-                        type="text" 
-                        className="p-1 border-b-2 border-purple-300 font-bold text-purple-700 outline-none focus:border-purple-600 bg-transparent font-mono" 
-                        value={newCohort} 
-                        onChange={e => setNewCohort(e.target.value)} 
-                        placeholder="例: 2025-2028"
-                    />
+                
+                {/* 選擇來源與目標群組 */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div className="bg-white p-3 rounded-lg border border-purple-100 shadow-sm">
+                        <label className="block text-sm font-bold text-purple-900 mb-1">1. 選擇要處理的來源群組 (Cohort)：</label>
+                        <select 
+                            className="w-full p-2 border border-purple-200 rounded text-sm text-slate-700 outline-none focus:border-purple-500"
+                            value={selectedCohort} 
+                            onChange={e => setSelectedCohort(e.target.value)}
+                        >
+                            {cohorts.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                    </div>
+                    
+                    <div className="bg-white p-3 rounded-lg border border-purple-100 shadow-sm">
+                        <label className="block text-sm font-bold text-purple-900 mb-1">2. 升級後的目標群組 (可手動修改/留班)：</label>
+                        <input 
+                            type="text" 
+                            className="w-full p-2 border-b-2 border-purple-300 font-bold text-purple-700 outline-none focus:border-purple-600 bg-transparent font-mono text-sm" 
+                            value={newCohort} 
+                            onChange={e => setNewCohort(e.target.value)} 
+                            placeholder="例: 2025-2028"
+                        />
+                    </div>
                 </div>
 
-                <p className="text-xs text-slate-600 mb-2 font-medium">請從 Excel 複製新學期的名單（3 欄：<b>班別 (Tab) 座號 (Tab) 姓名</b>）並貼在下方：</p>
+                <p className="text-xs text-slate-600 mb-2 font-medium">3. 請從 Excel 複製新學期的名單（3 欄：<b>班別 (Tab) 座號 (Tab) 姓名</b>）並貼在下方：</p>
                 <textarea 
                     className="w-full h-36 p-3 border border-slate-200 rounded-lg text-sm mb-3 outline-none focus:ring-2 focus:ring-purple-400 shadow-inner bg-white font-mono" 
                     value={pasteData} 
                     onChange={e => setPasteData(e.target.value)} 
                     placeholder="例如新學期的資料：&#10;6A&#9;27&#9;謝宇邦&#10;6B&#9;05&#9;張小明"
+                    disabled={previewList !== null} // 預覽時禁用輸入
                 />
-                <button onClick={handleExcelPromotion} className="bg-purple-600 text-white px-6 py-2.5 rounded-lg shadow-md hover:bg-purple-700 font-bold flex items-center gap-2 transition">
-                    <Icon name="RefreshCw" size={18} /> 執行名單識別與智慧升班 (自動同步)
-                </button>
+                
+                {/* 按鈕區 */}
+                {!previewList ? (
+                    <button onClick={handlePreview} className="bg-purple-600 text-white px-6 py-2.5 rounded-lg shadow-md hover:bg-purple-700 font-bold flex items-center gap-2 transition w-full md:w-auto justify-center">
+                        <Icon name="Eye" size={18} /> 預覽升班結果
+                    </button>
+                ) : (
+                    <div className="flex gap-3">
+                        <button onClick={handleCommitPromotion} className="bg-green-600 text-white px-6 py-2.5 rounded-lg shadow-md hover:bg-green-700 font-bold flex items-center gap-2 transition flex-1 justify-center">
+                            <Icon name="CheckCircle" size={18} /> 確認無誤，正式寫入並同步
+                        </button>
+                        <button onClick={handleCancelPreview} className="bg-slate-400 text-white px-6 py-2.5 rounded-lg shadow hover:bg-slate-500 font-bold flex items-center gap-2 transition">
+                            返回修改
+                        </button>
+                    </div>
+                )}
             </div>
+
+            {/* 預覽清單區塊 */}
+            {previewList && (
+                <div className="card p-5 mb-6 border-2 border-green-200 shadow-md bg-green-50/30 rounded-xl animate-fadeIn">
+                    <h3 className="font-bold text-green-800 mb-3 flex items-center gap-2">
+                        <Icon name="ListChecks" size={18} /> 升班/更新清單預覽校對
+                    </h3>
+                    <div className="overflow-x-auto max-h-64 overflow-y-auto border border-green-100 rounded-lg bg-white mb-4">
+                        <table className="w-full text-left text-sm text-slate-700">
+                            <thead className="text-xs text-slate-500 bg-slate-50 sticky top-0 border-b">
+                                <tr>
+                                    <th className="p-3 font-bold">學生姓名</th>
+                                    <th className="p-3 font-bold text-center">狀態分析</th>
+                                    <th className="p-3 font-bold">原本資料</th>
+                                    <th className="p-3 font-bold">變更為</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {previewList.preview.map((p, i) => (
+                                    <tr key={i} className="hover:bg-slate-50">
+                                        <td className="p-3 font-bold">{p.name}</td>
+                                        <td className="p-3 text-center">
+                                            {p.exists 
+                                                ? <span className="text-green-600 font-bold bg-green-100 px-2 py-1 rounded text-xs">🔄 舊生更新</span> 
+                                                : <span className="text-blue-600 font-bold bg-blue-100 px-2 py-1 rounded text-xs">✨ 全新加入</span>}
+                                        </td>
+                                        <td className="p-3 text-slate-400 font-mono text-xs">
+                                            {p.exists ? `${p.oldClass}-${p.oldNum}` : '-'}
+                                        </td>
+                                        <td className="p-3 font-mono font-bold text-purple-700">
+                                            {p.cls}-{p.num}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    {previewList.notFound.length > 0 && (
+                        <div className="bg-orange-50 border border-orange-200 p-3 rounded-lg text-sm">
+                            <p className="font-bold text-orange-800 mb-1 flex items-center gap-1"><Icon name="AlertTriangle" size={16} /> 提醒：以下學生在原群組中，但未出現在新名單裡</p>
+                            <p className="text-orange-700 text-xs">這些學生將保留在系統中，但資料不會被更新（可能是退修、轉學或您分批貼上）。</p>
+                            <div className="mt-2 text-xs text-orange-900 font-medium">
+                                {previewList.notFound.map(s => `${s.name} (${s.class}-${s.num})`).join(', ')}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* 系統現有名冊總覽與改名 */}
             <div className="card p-5 border border-slate-200 shadow-sm bg-white rounded-xl">
                 <div className="flex justify-between items-center mb-4 border-b pb-2">
                     <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                        <Icon name="List" size={16} className="text-slate-500" /> 
+                        <Icon name="Users" size={16} className="text-slate-500" /> 
                         物理科現有學生名冊與更名管理 ({students.length} 人)
                     </h3>
                 </div>
