@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.71 Physics Quiz Analyzer</title>
+    <title> V2.72 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -4322,18 +4322,20 @@ const App = () => {
                 }
 
             return (
-                <div className="flex h-screen w-full overflow-hidden">
-                    {/* 1. Sidebar 獨立佔據左邊，擁有自己的捲軸 */}
-                    <Sidebar 
-                        view={view} 
-                        setView={setView} 
-                        currentCohort={currentCohort} 
-                        setCurrentCohort={setCurrentCohort}
-                        allCohorts={allCohorts}
-                        isSaving={isSaving}
-                    />
-                <div className="flex min-h-screen relative"><Sidebar /><div className="flex-1 ml-64 overflow-hidden">
-                    
+                     <div className="flex h-screen w-full overflow-hidden">
+                            {/* 1. Sidebar 獨立佔據左邊，擁有自己的捲軸 */}
+                            <Sidebar 
+                                view={view} 
+                                setView={setView} 
+                                currentCohort={currentCohort} 
+                                setCurrentCohort={setCurrentCohort}
+                                allCohorts={allCohorts}
+                                isSaving={isSaving}
+                            />
+                            
+                            {/* 2. 主內容區域獨立佔據右邊，擁有自己的捲軸 */}
+                            <div className="flex-1 h-screen overflow-y-auto bg-slate-100">
+                                <div className="p-8">
                     {/* 更新：傳入 scores 和 syncToCloud，實現自動存檔 */}
                     {view === 'students' && <StudentView students={students} setStudents={setStudents} scores={scores} setScores={setScores} syncToCloud={syncToCloud} />}
                     {view === 'scores' && <ScoreInputView activeStudents={activeStudents} scores={scores} setScores={setScores} />}
@@ -4369,7 +4371,9 @@ const App = () => {
                     {/* 更新：功課管理頁面傳入完整的狀態與更新函數 */}
                     {view === 'homeworkSettings' && <HomeworkSettingsView students={students} currentCohort={currentCohort} homeworkMaps={homeworkMaps} setHomeworkMaps={setHomeworkMaps} syncToCloud={syncToCloud} />}
                     {view === 'homeworkScoresInput' && <HomeworkScoresInputView activeStudents={activeStudents} currentCohort={currentCohort} homeworkMaps={homeworkMaps} homeworkScores={homeworkScores} setHomeworkScores={setHomeworkScores} syncToCloud={syncToCloud} />}
-                </div></div>
+                            </div>
+                    </div>
+                </div>
             );
         };
 
