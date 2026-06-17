@@ -3823,6 +3823,7 @@ const HomeworkSettingsView = ({ students, currentCohort, homeworkMaps, setHomewo
 
 // ==================== 升級版：功課批改與狀態追蹤組件 ====================
 const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkMaps, homeworkScores, setHomeworkScores, syncToCloud }) => {
+    const inputRefs = React.useRef({});
     const availableHws = Object.keys(homeworkMaps || {}).filter(id => !homeworkMaps[id].cohort || homeworkMaps[id].cohort === currentCohort);
     const [selectedHw, setSelectedHw] = React.useState(availableHws[0] || '');
     const [selectedStudentId, setSelectedStudentId] = React.useState('');
@@ -3961,29 +3962,58 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkMaps, 
                                 </div>
                             </div>
                             <div className="flex-1 overflow-y-auto pr-2 space-y-2 max-h-[400px]">
-                                {map.questions.map((q, idx) => {
-                                    const val = currentEdit.scores[q.id];
-                                    const isCorrect = q.type === 'MC' ? (val && q.ans && val.toString().toUpperCase() === q.ans.toUpperCase()) : (val !== '' && parseFloat(val) === q.max);
-                                    return (
-                                        <div key={q.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 border border-transparent hover:border-slate-100 rounded-lg group transition">
-                                            <div className="w-8 text-right text-xs font-bold text-slate-400 group-hover:text-amber-500">{idx + 1}.</div>
-                                            <div className="flex-1">
-                                                <div className="flex items-center gap-2"><span className="font-mono font-bold text-slate-700 text-sm">{q.id}</span><span className={`text-[10px] px-1.5 py-0.5 rounded border ${getLevelBadge(q.level)}`}>{q.level}</span></div>
-                                                <div className="text-xs text-slate-500 truncate mt-0.5" title={q.topicDesc}>{q.topicId} - {q.topicDesc}</div>
+
+                                    // 替換原有的 map.questions.map 渲染區塊：
+                                    {map.questions.map((q, idx) => {
+                                        const val = currentEdit.scores[q.id];
+                                        const isCorrect = q.type === 'MC' ? (val && q.ans && val.toString().toUpperCase() === q.ans.toUpperCase()) : (val !== '' && parseFloat(val) === q.max);
+                                        
+                                        return (
+                                            <div key={q.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 border border-transparent hover:border-slate-100 rounded-lg group transition">
+                                                <div className="w-8 text-right text-xs font-bold text-slate-400 group-hover:text-amber-500">{idx + 1}.</div>
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-2"><span className="font-mono font-bold text-slate-700 text-sm">{q.id}</span><span className={`text-[10px] px-1.5 py-0.5 rounded border ${getLevelBadge(q.level)}`}>{q.level}</span></div>
+                                                    <div className="text-xs text-slate-500 truncate mt-0.5" title={q.topicDesc}>{q.topicId} - {q.topicDesc}</div>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    {q.type === 'MC' ? (
+                                                        <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-lg border border-slate-200">
+                                                            {['A','B','C','D'].map(opt => <button key={opt} onClick={() => handleScoreChange(q.id, val === opt ? '' : opt)} className={`w-7 h-7 rounded text-xs font-bold transition shadow-sm border ${val === opt ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-slate-600 hover:bg-slate-100 border-slate-200'}`}>{opt}</button>)}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex items-center gap-2">
+                                                            <input 
+                                                                ref={el => inputRefs.current[q.id] = el}
+                                                                type="number" 
+                                                                min="0" 
+                                                                max={q.max} 
+                                                                step="0.5" 
+                                                                className="w-16 p-1.5 text-center border border-slate-300 rounded font-bold font-mono text-sm bg-white focus:ring-2 focus:ring-amber-400 outline-none shadow-sm" 
+                                                                value={val !== undefined ? val : ''} 
+                                                                onChange={(e) => {
+                                                                    const newVal = e.target.value;
+                                                                    handleScoreChange(q.id, newVal);
+                                                                    
+                                                                    // 自動跳轉邏輯：
+                                                                    // 如果輸入了內容，且該題滿分小於 10 (單位數)，且當前輸入長度達到限制
+                                                                    if (newVal.length >= 1 && q.max < 10 && map.questions[idx + 1]) {
+                                                                        const nextQ = map.questions[idx + 1];
+                                                                        if (inputRefs.current[nextQ.id]) {
+                                                                            inputRefs.current[nextQ.id].focus();
+                                                                            inputRefs.current[nextQ.id].select(); // 自動全選方便修改
+                                                                        }
+                                                                    }
+                                                                }} 
+                                                                placeholder="-" 
+                                                            />
+                                                            <span className="text-xs text-slate-400 font-bold font-mono">/ {q.max}</span>
+                                                        </div>
+                                                    )}
+                                                    <div className="w-6 flex justify-center">{val !== undefined && val !== '' && (isCorrect ? <Icon name="Check" size={16} className="text-emerald-500" /> : <Icon name="X" size={16} className="text-red-500" />)}</div>
+                                                </div>
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                {q.type === 'MC' ? (
-                                                    <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-lg border border-slate-200">
-                                                        {['A','B','C','D'].map(opt => <button key={opt} onClick={() => handleScoreChange(q.id, val === opt ? '' : opt)} className={`w-7 h-7 rounded text-xs font-bold transition shadow-sm border ${val === opt ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-slate-600 hover:bg-slate-100 border-slate-200'}`}>{opt}</button>)}
-                                                    </div>
-                                                ) : (
-                                                    <div className="flex items-center gap-2"><input type="number" min="0" max={q.max} step="0.5" className="w-16 p-1.5 text-center border border-slate-300 rounded font-bold font-mono text-sm bg-white focus:ring-2 focus:ring-amber-400 outline-none shadow-sm" value={val !== undefined ? val : ''} onChange={(e) => handleScoreChange(q.id, e.target.value)} placeholder="-" /><span className="text-xs text-slate-400 font-bold font-mono">/ {q.max}</span></div>
-                                                )}
-                                                <div className="w-6 flex justify-center">{val !== undefined && val !== '' && (isCorrect ? <Icon name="Check" size={16} className="text-emerald-500" /> : <Icon name="X" size={16} className="text-red-500" />)}</div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
+                                        );
+                                    })}
                             </div>
                             <div className="mt-4 pt-4 border-t border-slate-100">
                                 <label className="text-xs font-bold text-slate-600 mb-1.5 flex items-center gap-1"><Icon name="MessageSquare" size={14} /> 老師批改備忘 (Remarks)</label>
