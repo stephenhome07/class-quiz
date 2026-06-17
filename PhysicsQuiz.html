@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.51 Physics Quiz Analyzer</title>
+    <title> V2.52 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -59,13 +59,13 @@
         let HOMEWORK_MAPS = {};  // ★ 加入這一行！
             
             // --- Views Components ---
-            
-            const StudentView = ({ students, setStudents, setScores }) => {
+// ==================== 升級版：學生管理 (Excel 匯入) 組件 (自動同步雲端) ====================
+            const StudentView = ({ students, setStudents, scores, setScores, syncToCloud }) => {
                 // 1. 群組狀態與貼上資料狀態
-                const [newCohort, setNewCohort] = React.useState('2025-2028'); // 預設可以寫他常用的群組
+                const [newCohort, setNewCohort] = React.useState('2025-2028'); 
                 const [pasteData, setPasteData] = React.useState('');
 
-                // 2. 升級版：處理匯入學生的函數 (修復了覆蓋舊名單的 Bug)
+                // 2. 處理匯入學生的函數
                 const handleImportStudents = () => {
                     const lines = pasteData.trim().split('\n');
                     const newStudents = [];
@@ -73,48 +73,60 @@
                         const parts = line.split('\t');
                         if (parts.length >= 3) {
                             const id = `${parts[0].trim()}-${parts[1].trim()}`;
-                            // 👇 系統自動幫每一位貼上的學生，加上老師設定的「群組 (cohort)」
                             newStudents.push({ 
                                 id: id, 
                                 class: parts[0].trim(), 
                                 num: parts[1].trim(), 
                                 name: parts[2].trim(),
-                                cohort: newCohort // 關鍵：寫入群組
+                                cohort: newCohort 
                             });
                         }
                     });
                     
                     if (newStudents.length > 0) {
-                        // 👇 修復 Bug：將新學生「附加」到現有學生名單後面，而不是覆蓋
-                        setStudents(prev => [...prev, ...newStudents]);
+                        const updatedStudents = [...students, ...newStudents];
+                        
+                        // 更新畫面狀態
+                        setStudents(updatedStudents);
+                        
+                        // ★ 立刻同步寫入 PHYSICS DB 雲端資料庫
+                        if (typeof syncToCloud === 'function') {
+                            syncToCloud({ students: updatedStudents }); 
+                        }
+
                         setPasteData('');
-                        alert(`✅ 成功匯入 ${newStudents.length} 名學生至群組「${newCohort}」！\n請記得點擊左側「儲存並同步至雲端」。`);
+                        alert(`✅ 成功匯入 ${newStudents.length} 名學生至群組「${newCohort}」！\n(系統已自動備份至雲端)`);
                     } else {
                         alert('無法匯入，請檢查 Excel 格式是否為「班別 (Tab) 學號 (Tab) 姓名」');
                     }
                 };
 
-                // 3. 刪除學生的函數 (維持不變)
+                // 3. 刪除學生的函數
                 const handleDeleteStudent = (id, name) => {
                     if (window.confirm(`確定要移除學生「${name}」嗎？\n注意：這將會同時刪除該學生的所有小測成績紀錄，且無法復原。`)) {
-                        setStudents(prev => prev.filter(s => s.id !== id));
-                        setScores(prev => {
-                            const newScores = { ...prev };
-                            delete newScores[id];
-                            return newScores;
-                        });
+                        const updatedStudents = students.filter(s => s.id !== id);
+                        const updatedScores = { ...scores };
+                        delete updatedScores[id];
+
+                        // 更新畫面狀態
+                        setStudents(updatedStudents);
+                        setScores(updatedScores);
+
+                        // ★ 立刻同步寫入 PHYSICS DB 雲端資料庫
+                        if (typeof syncToCloud === 'function') {
+                            syncToCloud({ students: updatedStudents, scores: updatedScores }); 
+                        }
                     }
                 };
 
                 return (
-                    <div className="p-6">
-                        <h2 className="text-2xl font-bold mb-4 flex items-center gap-2"><Icon name="Users" /> 學生管理 (Excel 匯入)</h2>
+                    <div className="p-6 max-w-5xl mx-auto animate-fadeIn">
+                        <h2 className="text-2xl font-bold mb-4 flex items-center gap-2"><Icon name="Users" className="text-blue-600" /> 學生管理 (Excel 匯入)</h2>
                         
                         {/* --- 匯入學生區塊 --- */}
-                        <div className="card p-5 mb-6 bg-blue-50/50 border-blue-100">
-                            <p className="text-sm text-gray-600 mb-3">請先設定群組，再從 Excel 複製資料並貼上至下方文字方塊。格式為 3 欄：<b>班別 (Tab) 學號 (Tab) 姓名</b>。</p>
+                        <div className="card p-5 mb-6 bg-blue-50/50 border-blue-100 shadow-sm">
+                            <p className="text-sm text-slate-600 mb-3 font-medium">請先設定群組，再從 Excel 複製資料並貼上至下方文字方塊。格式為 3 欄：<b>班別 (Tab) 學號 (Tab) 姓名</b>。</p>
                             
-                            {/* 👇 新增：群組設定輸入框 👇 */}
                             <div className="mb-3 flex items-center gap-3 bg-white p-3 rounded-lg shadow-sm border border-blue-100 w-fit">
                                 <label className="font-bold text-blue-800 text-sm">📌 準備匯入至群組：</label>
                                 <input 
@@ -127,49 +139,48 @@
                             </div>
 
                             <textarea 
-                                className="w-full h-32 p-3 border rounded text-sm mb-3 outline-none focus:ring-2 focus:ring-blue-400 shadow-inner" 
+                                className="w-full h-32 p-3 border border-slate-200 rounded text-sm mb-3 outline-none focus:ring-2 focus:ring-blue-400 shadow-inner bg-white" 
                                 value={pasteData} 
                                 onChange={e => setPasteData(e.target.value)} 
                                 placeholder="例如：&#10;5A&#9;01&#9;陳大文&#10;5A&#9;02&#9;李小明"
                             />
-                            <button onClick={handleImportStudents} className="bg-blue-600 text-white px-5 py-2.5 rounded-lg shadow-md hover:bg-blue-700 font-bold flex items-center gap-2 transition">
-                                <Icon name="PlusCircle" size={18} /> 執行匯入
+                            <button onClick={handleImportStudents} className="bg-blue-600 text-white px-5 py-2.5 rounded-lg shadow hover:bg-blue-700 font-bold flex items-center gap-2 transition">
+                                <Icon name="PlusCircle" size={18} /> 執行匯入並自動同步
                             </button>
                         </div>
 
                         {/* --- 現有學生列表 --- */}
-                        <div className="card overflow-hidden">
+                        <div className="card overflow-hidden border border-slate-200 shadow-sm">
                             <div className="bg-slate-800 text-white p-4 flex justify-between items-center">
-                                <h3 className="font-bold flex items-center gap-2"><Icon name="List" size={18}/> 系統現有名單</h3>
-                                <span className="text-sm bg-slate-700 px-3 py-1 rounded-full">共 {students.length} 人</span>
+                                <h3 className="font-bold flex items-center gap-2 text-sm"><Icon name="List" size={16}/> 系統現有名單</h3>
+                                <span className="text-xs bg-slate-700 px-3 py-1 rounded-full font-bold">共 {students.length} 人</span>
                             </div>
                             <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
                                 <table className="w-full text-left text-sm">
-                                    <thead className="bg-slate-50 border-b sticky top-0 shadow-sm">
+                                    <thead className="bg-slate-50 border-b sticky top-0 shadow-sm text-slate-500">
                                         <tr>
-                                            {/* 👇 表格加入群組欄位，方便辨識 👇 */}
-                                            <th className="p-3 font-semibold text-gray-600">群組 (Cohort)</th>
-                                            <th className="p-3 font-semibold text-gray-600">班別</th>
-                                            <th className="p-3 font-semibold text-gray-600">學號</th>
-                                            <th className="p-3 font-semibold text-gray-600">姓名</th>
-                                            <th className="p-3 font-semibold text-gray-600 text-center">操作</th>
+                                            <th className="p-3 font-bold">群組 (Cohort)</th>
+                                            <th className="p-3 font-bold">班別</th>
+                                            <th className="p-3 font-bold">學號</th>
+                                            <th className="p-3 font-bold">姓名</th>
+                                            <th className="p-3 font-bold text-center">操作</th>
                                         </tr>
                                     </thead>
-                                    <tbody>
+                                    <tbody className="divide-y divide-slate-100">
                                         {students.length > 0 ? students.map(s => (
-                                            <tr key={s.id} className="border-b hover:bg-slate-50 transition">
-                                                <td className="p-3 text-blue-600 font-bold">{s.cohort || '2024-2027'}</td>
-                                                <td className="p-3">{s.class}</td>
-                                                <td className="p-3">{s.num}</td>
-                                                <td className="p-3 font-bold text-gray-800">{s.name}</td>
+                                            <tr key={s.id} className="hover:bg-slate-50 transition-colors">
+                                                <td className="p-3 text-blue-600 font-bold font-mono text-xs">{s.cohort || '2024-2027'}</td>
+                                                <td className="p-3 font-medium text-slate-700">{s.class}</td>
+                                                <td className="p-3 font-medium text-slate-700">{s.num}</td>
+                                                <td className="p-3 font-bold text-slate-800">{s.name}</td>
                                                 <td className="p-3 text-center">
-                                                    <button onClick={() => handleDeleteStudent(s.id, s.name)} className="text-gray-400 hover:text-red-600 hover:bg-red-50 p-2 rounded transition">
-                                                        <Icon name="Trash2" size={18} />
+                                                    <button onClick={() => handleDeleteStudent(s.id, s.name)} className="text-slate-400 hover:text-red-500 hover:bg-red-50 p-1.5 rounded transition-colors">
+                                                        <Icon name="Trash2" size={16} />
                                                     </button>
                                                 </td>
                                             </tr>
                                         )) : (
-                                            <tr><td colSpan="5" className="text-center p-8 text-gray-400">尚未匯入任何學生</td></tr>
+                                            <tr><td colSpan="5" className="text-center p-8 text-slate-400 font-medium">尚未匯入任何學生</td></tr>
                                         )}
                                     </tbody>
                                 </table>
@@ -3971,7 +3982,8 @@ const App = () => {
 
             return (
                 <div className="flex min-h-screen relative"><Sidebar /><div className="flex-1 ml-64 overflow-hidden">
-                    {view === 'students' && <StudentView students={students} setStudents={setStudents} setScores={setScores} />}
+                    {/* 更新：傳入 scores 和 syncToCloud，實現自動存檔 */}
+                    {view === 'students' && <StudentView students={students} setStudents={setStudents} scores={scores} setScores={setScores} syncToCloud={syncToCloud} />}
                     {view === 'scores' && <ScoreInputView activeStudents={activeStudents} scores={scores} setScores={setScores} />}
                     {view === 'analysis' && <AnalysisView activeStudents={activeStudents} scores={scores} />}
       
