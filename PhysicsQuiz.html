@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.48 Physics Quiz Analyzer</title>
+    <title> V2.49 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -3795,23 +3795,36 @@ const App = () => {
                 const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
                 a.download = `Physics_Quiz_Scores.csv`; a.click();
             };
+            // ★ 修正版：過濾並只顯示「該群組有成績的試卷」的輔助函數
+            const getRelevantExamMaps = (targetCohort, currentExamScores, currentExamMaps) => {
+                if (!targetCohort || targetCohort === '所有學生') return currentExamMaps;
 
-            // 放入 App 組件內，供各個頁面調用
-            const getRelevantExamMaps = (targetCohort, examScores, examMaps) => {
-                if (!targetCohort || targetCohort === '所有學生') return examMaps;
-            
-                // 篩選出該群組有成績的試卷 ID
-                const relevantExamIds = Object.keys(examScores).filter(examId => {
-                    const studentScores = examScores[examId];
-                    // 檢查是否有屬於該群組的學生有輸入分數 (分數不為空)
-                    return Object.values(studentScores).some(score => score !== '' && score !== null && score !== undefined);
+                const validExamIds = new Set();
+
+                // currentExamScores 的結構是 { studentId: { examId: { q1: 1, q2: 2 } } }
+                Object.keys(currentExamScores).forEach(studentId => {
+                    // 檢查該學生是否屬於目前選定的群組
+                    const studentInfo = (students || []).find(s => s.id === studentId);
+                    if (studentInfo && studentInfo.cohort === targetCohort) {
+                        const studentExams = currentExamScores[studentId] || {};
+                        
+                        // 檢查該生考過的每一份試卷
+                        Object.keys(studentExams).forEach(examId => {
+                            const scoresObj = studentExams[examId] || {};
+                            // 檢查這張試卷內是否最少有一題有打分數
+                            const hasScore = Object.values(scoresObj).some(score => score !== '' && score !== null && score !== undefined);
+                            if (hasScore) {
+                                validExamIds.add(examId);
+                            }
+                        });
+                    }
                 });
-            
-                // 過濾 examMaps，只保留有成績的試卷
+
+                // 只回傳有被記錄到 (至少一人有分) 的試卷藍圖
                 const filteredMaps = {};
-                Object.keys(examMaps).forEach(key => {
-                    if (relevantExamIds.includes(key)) {
-                        filteredMaps[key] = examMaps[key];
+                Object.keys(currentExamMaps).forEach(key => {
+                    if (validExamIds.has(key)) {
+                        filteredMaps[key] = currentExamMaps[key];
                     }
                 });
                 return filteredMaps;
