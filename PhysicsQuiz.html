@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.73 Physics Quiz Analyzer</title>
+    <title> V2.74 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -4323,6 +4323,8 @@ const App = () => {
 
             return (
                      <div className="flex h-screen w-full overflow-hidden">
+                        {/* Sidebar 不需要固定，直接由 flex 控制寬度 */}
+                        <div className="w-64 flex-shrink-0">
                             {/* 1. Sidebar 獨立佔據左邊，擁有自己的捲軸 */}
                             <Sidebar 
                                 view={view} 
@@ -4332,9 +4334,10 @@ const App = () => {
                                 allCohorts={allCohorts}
                                 isSaving={isSaving}
                             />
+                        </div>
                             
-                            {/* 2. 主內容區域獨立佔據右邊，擁有自己的捲軸 */}
-                            <div className="flex-1 h-screen overflow-y-auto bg-slate-100">
+                            /* 右邊區域填滿剩餘空間 (flex-1) */}
+                        <div className="flex-1 h-screen overflow-y-auto bg-slate-100">
                                 <div className="p-8">
                     {/* 更新：傳入 scores 和 syncToCloud，實現自動存檔 */}
                     {view === 'students' && <StudentView students={students} setStudents={setStudents} scores={scores} setScores={setScores} syncToCloud={syncToCloud} />}
