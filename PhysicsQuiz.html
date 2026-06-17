@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.62 Physics Quiz Analyzer</title>
+    <title> V2.63 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -2559,16 +2559,23 @@ const StudentExamAnalysisView = ({ activeStudents = [], examScores = {} }) => {
         
 // ==================== 更新版：專屬補底練習生成與進度連動組件 (主動勾選出題) ====================
 const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress, setRemediationProgress, syncToCloud }) => {
+    // ★ 將所有 useState 集中在最頂部，保持與舊版一致的 Hook 順序，避免 Error #310
     const [selectedExam, setSelectedExam] = React.useState('');
     const [selectedStudentId, setSelectedStudentId] = React.useState('');
+    const [selectedTopicsForPrompt, setSelectedTopicsForPrompt] = React.useState([]);
+    const [aiLang, setAiLang] = React.useState('雙語 (Bilingual)');
+    const [aiMcCount, setAiMcCount] = React.useState('10'); 
+    const [aiLqCount, setAiLqCount] = React.useState('0'); 
+    const [generatedPrompt, setGeneratedPrompt] = React.useState('');
 
-    // ★ 新增：過濾出目前群組中真正「有輸入分數」的試卷
+    // ★ 新增：過濾出目前群組中真正「有輸入分數」的試卷 (Hook 放於狀態之後)
     const availableExams = React.useMemo(() => {
         const examsWithScores = new Set();
         (activeStudents || []).forEach(student => {
             const studentScores = examScores[student.id];
             if (studentScores) {
                 Object.keys(studentScores).forEach(examId => {
+                    // 只要該試卷有任何答題紀錄，就視為有分數
                     if (Object.keys(studentScores[examId]).length > 0) {
                         examsWithScores.add(examId);
                     }
@@ -2586,17 +2593,8 @@ const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress,
         }
     }, [availableExams, selectedExam]);
 
-    // ★ 新增：用來追蹤「目前勾選了哪些課題準備生成 Prompt」
-    const [selectedTopicsForPrompt, setSelectedTopicsForPrompt] = React.useState([]);
-
-    // AI 參數設定狀態 (★ 依要求更改預設值：MC 10, LQ 0)
-    const [aiLang, setAiLang] = React.useState('雙語 (Bilingual)');
-    const [aiMcCount, setAiMcCount] = React.useState('10'); 
-    const [aiLqCount, setAiLqCount] = React.useState('0'); 
-    const [generatedPrompt, setGeneratedPrompt] = React.useState('');
-
     const map = EXAM_MAPS[selectedExam];
-    if (!map) return (
+    if (!map && availableExams.length === 0) return (
         <div className="p-12 text-center text-slate-500 mt-10">
             <Icon name="AlertCircle" size={48} className="mx-auto mb-4 text-slate-300" />
             <h2 className="text-xl font-bold">目前群組無任何考試成績記錄</h2>
@@ -2617,7 +2615,7 @@ const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress,
     let totalExamMax = 0;
     const topicStats = {};
 
-    if (selectedStudentId) {
+    if (selectedStudentId && map) {
         map.questions.forEach(q => {
             const score = getStudentQScore(selectedStudentId, q);
             totalExamScore += score;
@@ -2642,7 +2640,7 @@ const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress,
         .sort((a, b) => a.topicId.localeCompare(b.topicId, undefined, { numeric: true, sensitivity: 'base' }))
         .map(t => ({ ...t, pct: t.earned / t.max, descArray: Array.from(t.descList) }));
 
-    // ★ 當切換學生或考試時，清空目前的勾選狀態
+    // 當切換學生或考試時，清空目前的勾選狀態
     React.useEffect(() => {
         setSelectedTopicsForPrompt([]);
     }, [selectedStudentId, selectedExam]);
@@ -2654,7 +2652,7 @@ const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress,
         );
     };
 
-    // ★ 點擊複製按鈕：複製文字 + 寫入 Google Sheet 紀錄
+    // 點擊複製按鈕：複製文字 + 寫入 Google Sheet 紀錄
     const handleCopyAndRecord = () => {
         if (selectedTopicsForPrompt.length === 0) {
             alert('⚠️ 請先在左側勾選至少一個課題！');
@@ -2684,7 +2682,7 @@ const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress,
         alert('📋 Prompt 已複製！系統已自動將勾選的課題標記為「✅ 已記錄」並同步。');
     };
 
-    // 動態生成 AI Prompt (★ 只針對「目前有打勾」的課題出題)
+    // 動態生成 AI Prompt
     React.useEffect(() => {
         if (!selectedStudentId || selectedTopicsForPrompt.length === 0) {
             setGeneratedPrompt('👈 請先在左側清單打勾選擇【本次想要生成練習的課題】。');
@@ -2703,7 +2701,7 @@ const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress,
         const newPrompt = `你是一位極具耐心的香港 DSE 物理科導師。我的學生【${studentName}】正在進行大考後的補救教學。以下是他【本次需要進行補底】的物理課題及歷史錯誤盲點，請為他度身訂造一份分段式專屬補底練習。\n\n[基本設定]\n- 語言: ${aiLang}\n- 預期題型與數量:\n  * 多項選擇題 (MC)：${aiMcCount} 題\n  * 長題目 (LQ)：${aiLqCount} 題\n\n[本次目標補底課題與盲點描述]\n${weakTopicsText}\n\n[生成要求]\n1. 針對上述列出的目標課題，設計難度由淺入深、著重釐清核心物理觀念的練習題。\n2. MC 必須包含 4 個選項，並為錯誤選項附帶【陷阱分析】；LQ (如有) 必須附帶詳細的【分步思維導引 (Scaffolding Tips)】與【評分標準】。\n3. 請在開頭給予【${studentName}】一段鼓勵，讓他有信心克服這些難關。`;
         
         setGeneratedPrompt(newPrompt);
-    }, [aiLang, aiMcCount, aiLqCount, selectedStudentId, selectedTopicsForPrompt, weakTopics]);
+    }, [aiLang, aiMcCount, aiLqCount, selectedStudentId, selectedTopicsForPrompt, weakTopics, activeStudents]);
 
     return (
         <div className="p-6 max-w-6xl mx-auto animate-fadeIn">
@@ -2800,7 +2798,6 @@ const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress,
                                     </thead>
                                     <tbody className="text-sm divide-y divide-slate-100">
                                         {weakTopics.map(t => {
-                                            // 判斷是否「準備生成」或「曾經記錄過」
                                             const isSelected = selectedTopicsForPrompt.includes(t.topicId);
                                             const isRecorded = remediationProgress[selectedStudentId]?.[selectedExam]?.[t.topicId] || false;
                                             
@@ -2895,6 +2892,7 @@ const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress,
     );
 };
 
+        
 // ==================== 升級版：考試成績匯出 (Excel) - 支援平均分與不及格紅字提示 ====================
 const ExamExportView = ({ activeStudents, examScores }) => {
     // 預設全選所有考試
