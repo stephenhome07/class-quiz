@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.69 Physics Quiz Analyzer</title>
+    <title> V2.70 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -1253,12 +1253,23 @@
                 return { totalScore, totalMax, analysis, weakTopics };
             };
 
-// ==================== 新增：班級成績總表組件 (加入顏色標示與滿分顯示) ====================
+// ==================== 新增：班級成績總表組件 (加入顏色標示與滿分顯示 & 自動過濾無成績小測) ====================
 const ClassSummaryView = ({ activeStudents, scores }) => {
-    // 1. 讀取系統定義的所有 Quiz ID
+    // 1. ★ 修改：只讀取「有入過分」的小測 Quiz ID
     const allQuizzes = React.useMemo(() => {
-        return Object.keys(QUIZ_MAPS || {});
-    }, []);
+        const quizzesWithScores = new Set();
+        (activeStudents || []).forEach(student => {
+            const studentScores = scores[student.id] || {};
+            Object.keys(studentScores).forEach(quizId => {
+                // 只要該學生在該小測有任何一題有分，即視為有入分，並確保該 Quiz 存在於系統設定中
+                if (QUIZ_MAPS[quizId] && Object.keys(studentScores[quizId]).length > 0) {
+                    quizzesWithScores.add(quizId);
+                }
+            });
+        });
+        // 轉為陣列並排序，確保每次顯示的順序一致
+        return Array.from(quizzesWithScores).sort();
+    }, [activeStudents, scores]);
 
     // 2. 計算每個小測的「滿分」總和
     const quizMaxScores = React.useMemo(() => {
@@ -1378,7 +1389,7 @@ const ClassSummaryView = ({ activeStudents, scores }) => {
                         <Icon name="Table" /> 班級成績總表 (Excel 匯出)
                     </h1>
                     <p className="text-sm text-slate-500 mt-1">
-                        黃底表示得分 40%~60%；<span className="text-red-500 font-semibold">紅底表示低於 40%</span>。
+                        系統僅顯示有成績記錄的小測。黃底表示得分 40%~60%；<span className="text-red-500 font-semibold">紅底表示低於 40%</span>。
                     </p>
                 </div>
                 <button 
@@ -1392,124 +1403,131 @@ const ClassSummaryView = ({ activeStudents, scores }) => {
             {/* Quiz 篩選控制面板 */}
             <div className="card p-4 mb-6 bg-white rounded-xl border border-slate-200 shadow-sm">
                 <h3 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-1">
-                    <Icon name="Settings" size={16} /> 選擇納入【平均分】計算的 Quiz：
+                    <Icon name="Settings" size={16} /> 選擇納入【平均分】計算的小測：
                 </h3>
                 <div className="flex flex-wrap gap-4">
-                    {allQuizzes.map(quiz => (
-                        <label key={quiz} className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-md border border-slate-200 cursor-pointer hover:bg-slate-100 transition text-sm">
-                            <input 
-                                type="checkbox" 
-                                className="w-4 h-4 text-blue-600 rounded"
-                                checked={!!includedQuizzes[quiz]} 
-                                onChange={() => toggleQuiz(quiz)} 
-                            />
-                            <span className="text-slate-700 font-medium">{quiz}</span>
-                        </label>
-                    ))}
+                    {allQuizzes.length === 0 ? (
+                         <span className="text-sm text-slate-400">目前沒有任何小測有成績紀錄。</span>
+                    ) : (
+                        allQuizzes.map(quiz => (
+                            <label key={quiz} className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-md border border-slate-200 cursor-pointer hover:bg-slate-100 transition text-sm">
+                                <input 
+                                    type="checkbox" 
+                                    className="w-4 h-4 text-blue-600 rounded"
+                                    checked={!!includedQuizzes[quiz]} 
+                                    onChange={() => toggleQuiz(quiz)} 
+                                />
+                                <span className="text-slate-700 font-medium">{quiz}</span>
+                            </label>
+                        ))
+                    )}
                 </div>
             </div>
 
             {/* 數據預覽表格 */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto max-h-[600px] overflow-y-auto">
-                <table className="w-full text-left border-collapse min-w-[800px]">
-                    <thead className="bg-slate-100 sticky top-0 z-10 shadow-[0_1px_0_0_rgba(226,232,240,1)]">
-                        <tr>
-                            <th className="p-3 text-sm font-semibold text-slate-600 border-b border-slate-200 align-bottom">班別</th>
-                            <th className="p-3 text-sm font-semibold text-slate-600 border-b border-slate-200 align-bottom">學號</th>
-                            <th className="p-3 text-sm font-semibold text-slate-600 border-b border-slate-200 align-bottom">姓名</th>
-                            {allQuizzes.map(quiz => (
-                                <th key={quiz} className={`p-3 text-sm font-semibold border-b border-slate-200 ${includedQuizzes[quiz] ? 'text-slate-800 bg-blue-50/50' : 'text-slate-400 line-through'}`}>
+            {allQuizzes.length > 0 && (
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto max-h-[600px] overflow-y-auto">
+                    <table className="w-full text-left border-collapse min-w-[800px]">
+                        <thead className="bg-slate-100 sticky top-0 z-10 shadow-[0_1px_0_0_rgba(226,232,240,1)]">
+                            <tr>
+                                <th className="p-3 text-sm font-semibold text-slate-600 border-b border-slate-200 align-bottom">班別</th>
+                                <th className="p-3 text-sm font-semibold text-slate-600 border-b border-slate-200 align-bottom">學號</th>
+                                <th className="p-3 text-sm font-semibold text-slate-600 border-b border-slate-200 align-bottom">姓名</th>
+                                {allQuizzes.map(quiz => (
+                                    <th key={quiz} className={`p-3 text-sm font-semibold border-b border-slate-200 ${includedQuizzes[quiz] ? 'text-slate-800 bg-blue-50/50' : 'text-slate-400 line-through'}`}>
+                                        <div className="flex flex-col gap-1">
+                                            <span>{quiz}</span>
+                                            <span className={`text-xs ${includedQuizzes[quiz] ? 'text-blue-500' : 'text-slate-400'}`}>
+                                                滿分: {quizMaxScores[quiz] || 0}
+                                            </span>
+                                        </div>
+                                    </th>
+                                ))}
+                                <th className="p-3 text-sm font-bold text-blue-600 bg-blue-50 border-b border-slate-200">
                                     <div className="flex flex-col gap-1">
-                                        <span>{quiz}</span>
-                                        <span className={`text-xs ${includedQuizzes[quiz] ? 'text-blue-500' : 'text-slate-400'}`}>
-                                            滿分: {quizMaxScores[quiz] || 0}
-                                        </span>
+                                        <span>平均分</span>
+                                        <span className="text-xs text-blue-400 font-normal">滿分: 100</span>
                                     </div>
                                 </th>
-                            ))}
-                            <th className="p-3 text-sm font-bold text-blue-600 bg-blue-50 border-b border-slate-200">
-                                <div className="flex flex-col gap-1">
-                                    <span>平均分</span>
-                                    <span className="text-xs text-blue-400 font-normal">滿分: 100</span>
-                                </div>
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {computedData.length === 0 ? (
-                            <tr>
-                                <td colSpan={4 + allQuizzes.length} className="text-center p-8 text-slate-400">暫無學生數據</td>
                             </tr>
-                        ) : (
-                            computedData.map((student, idx) => (
-                                <tr key={student.id || idx} className="hover:bg-slate-50 transition border-b border-slate-100">
-                                    <td className="p-3 text-sm text-slate-700 font-medium">{student.class || student.className || '-'}</td>
-                                    <td className="p-3 text-sm text-slate-600">{student.number || student.classNumber || '-'}</td>
-                                    <td className="p-3 text-sm text-slate-800 font-medium">{student.name || '-'}</td>
-                                    
-                                    {/* 每個 Quiz 的成績顯示與顏色判定 */}
-                                    {allQuizzes.map(quiz => {
-                                        const score = student.quizScores[quiz];
-                                        const max = quizMaxScores[quiz];
-                                        
-                                        // 預設樣式
-                                        let bgColor = '';
-                                        let textColor = includedQuizzes[quiz] ? 'text-slate-700' : 'text-slate-300';
-                                        let fontWeight = '';
-
-                                        // 判斷是否需要加上警示顏色
-                                        if (includedQuizzes[quiz] && score !== null && max > 0) {
-                                            const percentage = (score / max) * 100;
-                                            if (percentage < 40) {
-                                                bgColor = 'bg-red-100';
-                                                textColor = 'text-red-700';
-                                                fontWeight = 'font-bold';
-                                            } else if (percentage <= 60) {
-                                                bgColor = 'bg-yellow-100';
-                                                textColor = 'text-yellow-800';
-                                                fontWeight = 'font-bold';
-                                            }
-                                        }
-
-                                        return (
-                                            <td key={quiz} className={`p-3 text-sm ${bgColor} ${textColor} ${fontWeight}`}>
-                                                {score !== null ? score : <span className="text-slate-300">-</span>}
-                                            </td>
-                                        );
-                                    })}
-
-                                    {/* 平均分的成績顯示與顏色判定 */}
-                                    {(() => {
-                                        let avgBgColor = 'bg-blue-50/30';
-                                        let avgTextColor = 'text-blue-600';
-                                        let avgFontWeight = 'font-bold';
-
-                                        if (student.average !== '-') {
-                                            const avgNum = parseFloat(student.average);
-                                            if (avgNum < 40) {
-                                                avgBgColor = 'bg-red-100';
-                                                avgTextColor = 'text-red-700';
-                                            } else if (avgNum <= 60) {
-                                                avgBgColor = 'bg-yellow-100';
-                                                avgTextColor = 'text-yellow-800';
-                                            }
-                                        }
-
-                                        return (
-                                            <td className={`p-3 text-sm ${avgBgColor} ${avgTextColor} ${avgFontWeight}`}>
-                                                {student.average}
-                                            </td>
-                                        );
-                                    })()}
+                        </thead>
+                        <tbody>
+                            {computedData.length === 0 ? (
+                                <tr>
+                                    <td colSpan={4 + allQuizzes.length} className="text-center p-8 text-slate-400">暫無學生數據</td>
                                 </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
-            </div>
+                            ) : (
+                                computedData.map((student, idx) => (
+                                    <tr key={student.id || idx} className="hover:bg-slate-50 transition border-b border-slate-100">
+                                        <td className="p-3 text-sm text-slate-700 font-medium">{student.class || student.className || '-'}</td>
+                                        <td className="p-3 text-sm text-slate-600">{student.number || student.classNumber || '-'}</td>
+                                        <td className="p-3 text-sm text-slate-800 font-medium">{student.name || '-'}</td>
+                                        
+                                        {/* 每個 Quiz 的成績顯示與顏色判定 */}
+                                        {allQuizzes.map(quiz => {
+                                            const score = student.quizScores[quiz];
+                                            const max = quizMaxScores[quiz];
+                                            
+                                            // 預設樣式
+                                            let bgColor = '';
+                                            let textColor = includedQuizzes[quiz] ? 'text-slate-700' : 'text-slate-300';
+                                            let fontWeight = '';
+
+                                            // 判斷是否需要加上警示顏色
+                                            if (includedQuizzes[quiz] && score !== null && max > 0) {
+                                                const percentage = (score / max) * 100;
+                                                if (percentage < 40) {
+                                                    bgColor = 'bg-red-100';
+                                                    textColor = 'text-red-700';
+                                                    fontWeight = 'font-bold';
+                                                } else if (percentage <= 60) {
+                                                    bgColor = 'bg-yellow-100';
+                                                    textColor = 'text-yellow-800';
+                                                    fontWeight = 'font-bold';
+                                                }
+                                            }
+
+                                            return (
+                                                <td key={quiz} className={`p-3 text-sm ${bgColor} ${textColor} ${fontWeight}`}>
+                                                    {score !== null ? score : <span className="text-slate-300">-</span>}
+                                                </td>
+                                            );
+                                        })}
+
+                                        {/* 平均分的成績顯示與顏色判定 */}
+                                        {(() => {
+                                            let avgBgColor = 'bg-blue-50/30';
+                                            let avgTextColor = 'text-blue-600';
+                                            let avgFontWeight = 'font-bold';
+
+                                            if (student.average !== '-') {
+                                                const avgNum = parseFloat(student.average);
+                                                if (avgNum < 40) {
+                                                    avgBgColor = 'bg-red-100';
+                                                    avgTextColor = 'text-red-700';
+                                                } else if (avgNum <= 60) {
+                                                    avgBgColor = 'bg-yellow-100';
+                                                    avgTextColor = 'text-yellow-800';
+                                                }
+                                            }
+
+                                            return (
+                                                <td className={`p-3 text-sm ${avgBgColor} ${avgTextColor} ${avgFontWeight}`}>
+                                                    {student.average}
+                                                </td>
+                                            );
+                                        })()}
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            )}
         </div>
     );
 };
+        
 // ==================== 1. 課程大綱設定組件 ====================
 const SyllabusSettingsView = ({ syncToCloud }) => {
     const [syllabusText, setSyllabusText] = React.useState('');
