@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.52 Physics Quiz Analyzer</title>
+    <title> V2.53 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -3071,240 +3071,207 @@ const ExamExportView = ({ activeStudents, examScores }) => {
     );
 };
 
-// ==================== 更新版：學生管理與智慧升班組件 (修復 F5 資料丟失問題) ====================
-const StudentPromotionView = ({ students, setStudents, syncToCloud }) => {
-    const [newStudent, setNewStudent] = React.useState({ id: '', name: '', cohort: '2025-2028' });
-    const [promoFrom, setPromoFrom] = React.useState('2025-2028');
-    const [promoTo, setPromoTo] = React.useState('2026-2029');
+// ==================== 全新轉型版：學生動態管理與智慧升班組件 (名單識別升級 + 改名功能) ====================
+const StudentPromotionView = ({ students, setStudents, scores, setScores, syncToCloud }) => {
+    const [newCohort, setNewCohort] = React.useState('2025-2028'); // 設定新學年的新群組標籤
+    const [pasteData, setPasteData] = React.useState('');
 
-    // 取得所有群組清單
-    const cohorts = Array.from(new Set((students || []).map(s => s.cohort))).filter(Boolean);
-
-    // 1. 新增單一學生
-    const handleAddStudent = () => {
-        if (!newStudent.id.trim() || !newStudent.name.trim()) {
-            alert('⚠️ 請填寫完整的學生學號與姓名！');
+    // 執行 Excel 貼上並自動識別升班
+    const handleExcelPromotion = () => {
+        if (!pasteData.trim()) {
+            alert('⚠️ 請先貼上新學期的 Excel 學生資料！');
             return;
         }
 
-        const isExist = students.some(s => s.id === newStudent.id.trim());
-        if (isExist) {
-            alert(`⚠️ 學號 [${newStudent.id}] 已經存在，請勿重複新增！`);
-            return;
-        }
+        const lines = pasteData.trim().split('\n');
+        let updatedStudents = [...students];
+        let updatedScores = { ...scores };
+        let promoteCount = 0;
+        let newCount = 0;
 
-        const updatedStudents = [
-            ...students,
-            {
-                id: newStudent.id.trim(),
-                name: newStudent.name.trim(),
-                cohort: newStudent.cohort
+        lines.forEach(line => {
+            const parts = line.split('\t');
+            if (parts.length >= 3) {
+                const cls = parts[0].trim();  // 例如: 6A
+                const num = parts[1].trim();  // 例如: 27
+                const name = parts[2].trim(); // 例如: 謝宇邦
+                const newId = `${cls}-${num}`; // 組成新學號 ID: 6A-27
+
+                // 🔥 核心機制：利用「姓名」去搜尋系統內有沒有這個舊生
+                const existingIndex = updatedStudents.findIndex(s => s.name === name);
+
+                if (existingIndex !== -1) {
+                    // 1. 找到舊生了！執行自動資料升級
+                    const oldId = updatedStudents[existingIndex].id; // 舊 ID (例如 5A-26)
+
+                    updatedStudents[existingIndex] = {
+                        ...updatedStudents[existingIndex],
+                        id: newId,
+                        class: cls,
+                        num: num,
+                        cohort: newCohort // 變更為新學年群組標籤
+                    };
+
+                    // ★ 自動成績遷移：如果新舊 ID 不同，將歷史成績完整移過去新 ID，避免 F5 後資料遺失
+                    if (oldId !== newId && updatedScores[oldId]) {
+                        updatedScores[newId] = updatedScores[oldId];
+                        delete updatedScores[oldId];
+                    }
+                    promoteCount++;
+                } else {
+                    // 2. 沒找到這個名字，視為新學年全新加入物理科的學生
+                    updatedStudents.push({
+                        id: newId,
+                        class: cls,
+                        num: num,
+                        name: name,
+                        cohort: newCohort
+                    });
+                    newCount++;
+                }
             }
-        ];
-
-        // 更新 React 狀態
-        setStudents(updatedStudents);
-        
-        // ★ 核心修復：立刻同步寫入 PHYSICS DB 雲端資料庫
-        if (typeof syncToCloud === 'function') {
-            syncToCloud(updatedStudents, null, null); // 傳入更新後的學生清單
-        }
-
-        // 清空輸入框
-        setNewStudent({ id: '', name: '', cohort: newStudent.cohort });
-        alert('✅ 學生已成功加入並安全寫入雲端資料庫！');
-    };
-
-    // 2. 一鍵群組智慧升班 (批次更新群組名稱)
-    const handlePromoteCohort = () => {
-        if (promoFrom === promoTo) {
-            alert('⚠️ 來源群組與目標群組不能相同！');
-            return;
-        }
-
-        const count = students.filter(s => s.cohort === promoFrom).length;
-        if (count === 0) {
-            alert(`⚠️ 找不到屬於 [${promoFrom}] 群組的學生，無法進行升班。`);
-            return;
-        }
-
-        const confirmMsg = `確定要將所有屬於 [${promoFrom}] 群組的 ${count} 位學生，一鍵智慧升班至 [${promoTo}] 群組嗎？\n\n(此操作會直接同步至雲端)`;
-        if (!confirm(confirmMsg)) return;
-
-        const updatedStudents = students.map(s => {
-            if (s.cohort === promoFrom) {
-                return { ...s, cohort: promoTo };
-            }
-            return s;
         });
 
-        // 更新 React 狀態
+        // 更新畫面 React 狀態
         setStudents(updatedStudents);
+        setScores(updatedScores);
 
-        // ★ 核心修復：一鍵升班後，立刻同步寫入 PHYSICS DB 雲端資料庫
+        // ★ 自動同步寫入 PHYSICS DB 雲端金庫
         if (typeof syncToCloud === 'function') {
-            syncToCloud(updatedStudents, null, null);
+            syncToCloud({ students: updatedStudents, scores: updatedScores });
         }
 
-        alert(`🎉 智慧升班成功！已成功將 ${count} 位學生的群組更新為 [${promoTo}] 並寫入雲端。`);
+        setPasteData('');
+        alert(`🎉 新學年名單處理完畢！\n\n識別舊生並自動升班：${promoteCount} 人\n全新加入物理科學生：${newCount} 人\n\n(所有變更已安全寫入 PHYSICS DB 雲端，重整不消失)`);
     };
 
-    // 3. 刪除單一學生
-    const handleDeleteStudent = (studentId, studentName) => {
-        if (!confirm(`❌ 確定要刪除學生 [${studentName}] (${studentId}) 嗎？\n警告：這不會刪除他已有的考試或功課分數，但該生將不再顯示於列表中。`)) return;
-
-        const updatedStudents = students.filter(s => s.id !== studentId);
+    // 快速修改學生姓名功能 (解決學期中途改名問題)
+    const handleEditName = (id, currentName) => {
+        const newName = window.prompt(`📝 修改學生姓名\n\n請輸入學生 [${currentName}] 的正確新姓名：`, currentName);
+        if (newName === null) return; // 使用者按取消
         
-        // 更新 React 狀態
-        setStudents(updatedStudents);
+        const trimmedName = newName.trim();
+        if (!trimmedName) {
+            alert('⚠️ 姓名不能為空白！');
+            return;
+        }
 
-        // ★ 核心修復：刪除學生後，立刻同步寫入 PHYSICS DB 雲端資料庫
+        if (trimmedName !== currentName) {
+            const updatedStudents = students.map(s => {
+                if (s.id === id) {
+                    return { ...s, name: trimmedName };
+                }
+                return s;
+            });
+
+            setStudents(updatedStudents);
+            
+            // 同步雲端
+            if (typeof syncToCloud === 'function') {
+                syncToCloud({ students: updatedStudents });
+            }
+            alert(`✅ 姓名已成功更新為 [${trimmedName}] 並同步至雲端！`);
+        }
+    };
+
+    // 刪除學生
+    const handleDeleteStudent = (id, name) => {
+        if (!window.confirm(`❌ 確定要徹底移除學生「${name}」嗎？\n警告：這將會同時刪除該學生的所有小測與功課分數！`)) return;
+
+        const updatedStudents = students.filter(s => s.id !== id);
+        let updatedScores = { ...scores };
+        delete updatedScores[id];
+
+        setStudents(updatedStudents);
+        setScores(updatedScores);
+
         if (typeof syncToCloud === 'function') {
-            syncToCloud(updatedStudents, null, null);
+            syncToCloud({ students: updatedStudents, scores: updatedScores });
         }
     };
 
     return (
-        <div className="p-6 max-w-4xl mx-auto animate-fadeIn">
+        <div className="p-6 max-w-5xl mx-auto animate-fadeIn">
             {/* 標頭 */}
             <div className="mb-6 border-b pb-4">
                 <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                    <Icon name="Users" className="text-blue-600" /> 學生動態管理與智慧升班
+                    <Icon name="UserCheck" className="text-purple-600" /> 學生動態管理與智慧升班 (新學年轉換)
                 </h1>
-                <p className="text-sm text-slate-500 mt-1">管理物理科學生名單，或為舊群組進行一鍵批次升班轉移。</p>
+                <p className="text-sm text-slate-500 mt-1">在新學年直接貼上新名單，系統會自動根據「姓名」對應舊生進行班級座號升級，並完美遷移所有分數紀錄。</p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                {/* 區塊 A：手動新增單個新學生 */}
-                <div className="card p-5 border border-slate-200 shadow-sm bg-white">
-                    <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm border-b pb-2">
-                        <span className="p-1 bg-blue-50 text-blue-600 rounded"><Icon name="UserPlus" size={16} /></span>
-                        新增單一物理科學生
-                    </h3>
-                    <div className="space-y-3">
-                        <div>
-                            <label className="text-xs font-bold text-slate-500 block mb-1">自訂或選擇群組 (Cohort)</label>
-                            <select 
-                                className="w-full p-2 border border-slate-300 rounded-lg text-sm bg-white"
-                                value={newStudent.cohort}
-                                onChange={e => setNewStudent({...newStudent, cohort: e.target.value})}
-                            >
-                                <option value="2024-2027">2024-2027 (現中五/中六)</option>
-                                <option value="2025-2028">2025-2028 (現中四/中五)</option>
-                                <option value="2026-2029">2026-2029 (新入學中四)</option>
-                                <option value="2027-2030">2027-2030</option>
-                                {cohorts.filter(c => !['2024-2027','2025-2028','2026-2029','2027-2030'].includes(c)).map(c => (
-                                    <option key={c} value={c}>{c}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                            <div>
-                                <label className="text-xs font-bold text-slate-500 block mb-1">學生學號 (ID)</label>
-                                <input 
-                                    type="text" 
-                                    className="w-full p-2 border border-slate-300 rounded-lg text-sm uppercase placeholder:text-slate-300"
-                                    placeholder="例如 S24001"
-                                    value={newStudent.id}
-                                    onChange={e => setNewStudent({...newStudent, id: e.target.value})}
-                                />
-                            </div>
-                            <div>
-                                <label className="text-xs font-bold text-slate-500 block mb-1">學生中文/英文姓名</label>
-                                <input 
-                                    type="text" 
-                                    className="w-full p-2 border border-slate-300 rounded-lg text-sm"
-                                    placeholder="例如 陳大文 (Tom)"
-                                    value={newStudent.name}
-                                    onChange={e => setNewStudent({...newStudent, name: e.target.value})}
-                                />
-                            </div>
-                        </div>
-                        <button 
-                            onClick={handleAddStudent}
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg text-sm mt-2 transition flex items-center justify-center gap-2 shadow-sm"
-                        >
-                            <Icon name="Check" size={16} /> 確認新增並同步雲端
-                        </button>
-                    </div>
+            {/* Excel 智慧升班輸入區塊 */}
+            <div className="card p-5 mb-6 bg-purple-50/40 border border-purple-100 shadow-sm rounded-xl">
+                <div className="mb-4 flex flex-wrap items-center gap-4 bg-white p-3 rounded-lg border border-purple-100 shadow-sm w-fit">
+                    <label className="font-bold text-purple-900 text-sm">📌 將此批貼上的學生設定為新學群 (Cohort)：</label>
+                    <input 
+                        type="text" 
+                        className="p-1 border-b-2 border-purple-300 font-bold text-purple-700 outline-none focus:border-purple-600 bg-transparent font-mono" 
+                        value={newCohort} 
+                        onChange={e => setNewCohort(e.target.value)} 
+                        placeholder="例: 2025-2028"
+                    />
                 </div>
 
-                {/* 區塊 B：智慧批次升班轉移 */}
-                <div className="card p-5 border border-purple-100 shadow-sm bg-gradient-to-br from-purple-50/30 to-white">
-                    <h3 className="font-bold text-purple-900 mb-4 flex items-center gap-2 text-sm border-b border-purple-100 pb-2">
-                        <span className="p-1 bg-purple-100 text-purple-700 rounded"><Icon name="Zap" size={16} /></span>
-                        一鍵學群智慧升班
-                    </h3>
-                    <p className="text-xs text-slate-500 mb-4 leading-relaxed">
-                        新學年開始時，您可以將某一屆（例如 2024-2027）的全班同學一鍵轉移到新的學群標籤，無須重新匯入。
-                    </p>
-                    <div className="space-y-4">
-                        <div className="flex items-center gap-3">
-                            <div className="flex-1">
-                                <label className="text-xs font-bold text-slate-500 block mb-1">將原群組</label>
-                                <select className="w-full p-2 border border-slate-300 rounded-lg text-sm bg-white" value={promoFrom} onChange={e=>setPromoFrom(e.target.value)}>
-                                    {cohorts.map(c => <option key={c} value={c}>{c}</option>)}
-                                </select>
-                            </div>
-                            <div className="pt-4 text-slate-400 font-bold">➔</div>
-                            <div className="flex-1">
-                                <label className="text-xs font-bold text-slate-500 block mb-1">升班/改名為</label>
-                                <input 
-                                    type="text" 
-                                    className="w-full p-2 border border-slate-300 rounded-lg text-sm font-mono bg-white"
-                                    value={promoTo}
-                                    onChange={e=>setPromoTo(e.target.value)}
-                                />
-                            </div>
-                        </div>
-                        <button 
-                            onClick={handlePromoteCohort}
-                            className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 rounded-lg text-sm transition flex items-center justify-center gap-2 shadow-sm"
-                        >
-                            <Icon name="Shuffle" size={16} /> 執行全班智慧升班
-                        </button>
-                    </div>
-                </div>
+                <p className="text-xs text-slate-600 mb-2 font-medium">請從 Excel 複製新學期的名單（3 欄：<b>班別 (Tab) 座號 (Tab) 姓名</b>）並貼在下方：</p>
+                <textarea 
+                    className="w-full h-36 p-3 border border-slate-200 rounded-lg text-sm mb-3 outline-none focus:ring-2 focus:ring-purple-400 shadow-inner bg-white font-mono" 
+                    value={pasteData} 
+                    onChange={e => setPasteData(e.target.value)} 
+                    placeholder="例如新學期的資料：&#10;6A&#9;27&#9;謝宇邦&#10;6B&#9;05&#9;張小明"
+                />
+                <button onClick={handleExcelPromotion} className="bg-purple-600 text-white px-6 py-2.5 rounded-lg shadow-md hover:bg-purple-700 font-bold flex items-center gap-2 transition">
+                    <Icon name="RefreshCw" size={18} /> 執行名單識別與智慧升班 (自動同步)
+                </button>
             </div>
 
-            {/* 現有學生清單總覽 */}
-            <div className="card p-5 border border-slate-200 shadow-sm bg-white">
+            {/* 系統現有名冊總覽與改名 */}
+            <div className="card p-5 border border-slate-200 shadow-sm bg-white rounded-xl">
                 <div className="flex justify-between items-center mb-4 border-b pb-2">
                     <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
                         <Icon name="List" size={16} className="text-slate-500" /> 
-                        物理科現有學生名冊總覽 ({students.length} 人)
+                        物理科現有學生名冊與更名管理 ({students.length} 人)
                     </h3>
                 </div>
                 <div className="overflow-x-auto max-h-96 overflow-y-auto border border-slate-100 rounded-lg">
                     <table className="w-full text-left text-sm text-slate-600">
-                        <thead className="text-xs text-slate-500 bg-slate-50 sticky top-0 border-b border-slate-200">
+                        <thead className="text-xs text-slate-500 bg-slate-50 sticky top-0 border-b border-slate-200 shadow-sm">
                             <tr>
-                                <th className="p-3 font-bold">學號 (ID)</th>
-                                <th className="p-3 font-bold">學生姓名</th>
-                                <th className="p-3 font-bold">所屬群組 (Cohort)</th>
+                                <th className="p-3 font-bold">學群 (Cohort)</th>
+                                <th className="p-3 font-bold">班別</th>
+                                <th className="p-3 font-bold">座號</th>
+                                <th className="p-3 font-bold">學生姓名 (點擊可更名)</th>
                                 <th className="p-3 font-bold text-center">操作</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 bg-white">
                             {students.length === 0 ? (
                                 <tr>
-                                    <td colSpan="4" className="p-8 text-center text-slate-400 italic">目前名冊內沒有任何學生資料。</td>
+                                    <td colSpan="5" className="p-8 text-center text-slate-400 italic">目前名冊內沒有任何學生資料。</td>
                                 </tr>
                             ) : (
-                                [...students].sort((a,b) => a.cohort.localeCompare(b.cohort) || a.id.localeCompare(b.id)).map(s => (
+                                [...students].sort((a,b) => (a.cohort || '').localeCompare(b.cohort || '') || (a.class || '').localeCompare(b.class || '') || (a.num || '').localeCompare(b.num || '')).map(s => (
                                     <tr key={s.id} className="hover:bg-slate-50 transition-colors">
-                                        <td className="p-3 font-mono font-bold text-slate-700">{s.id}</td>
-                                        <td className="p-3 font-medium text-slate-800">{s.name}</td>
+                                        <td className="p-3"><span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-xs rounded border font-mono">{s.cohort || '未設定'}</span></td>
+                                        <td className="p-3 font-medium text-slate-700">{s.class}</td>
+                                        <td className="p-3 font-medium text-slate-700">{s.num}</td>
                                         <td className="p-3">
-                                            <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-xs rounded border border-slate-200 font-mono font-medium">
-                                                {s.cohort}
-                                            </span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-bold text-slate-800">{s.name}</span>
+                                                <button 
+                                                    onClick={() => handleEditName(s.id, s.name)}
+                                                    className="text-blue-500 hover:text-blue-700 p-0.5 rounded hover:bg-blue-50 transition"
+                                                    title="中途更名"
+                                                >
+                                                    <Icon name="Edit2" size={14} />
+                                                </button>
+                                            </div>
                                         </td>
                                         <td className="p-3 text-center">
                                             <button 
                                                 onClick={() => handleDeleteStudent(s.id, s.name)}
-                                                className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded transition-colors"
-                                                title="刪除學生"
+                                                className="p-1 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors"
+                                                title="移除學生"
                                             >
                                                 <Icon name="Trash2" size={16} />
                                             </button>
@@ -4007,6 +3974,8 @@ const App = () => {
                         <StudentPromotionView 
                             students={students} 
                             setStudents={setStudents} 
+                            scores={scores} 
+                            setScores={setScores} 
                             syncToCloud={syncToCloud} 
                         />
                     )}
