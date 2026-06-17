@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.49 Physics Quiz Analyzer</title>
+    <title> V2.50 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -1854,15 +1854,22 @@ const ExamScoresInputView = ({ activeStudents, examScores, setExamScores, syncTo
     );
 };
 
-// ==================== 更新版：大考全班數據診斷與 AI 教案生成組件 (只顯示該群組有成績的試卷) ====================
+// ==================== 更新版：大考全班數據診斷與 AI 教案生成組件 (修復 React 310 Error) ====================
 const ExamAnalysisView = ({ activeStudents, examScores, currentCohort, getRelevantExamMaps }) => {
     
-    // ★ 取得過濾後的試卷藍圖 (只包含該群組有成績的試卷)
+    // 1. 取得過濾後的試卷藍圖
     const relevantMaps = getRelevantExamMaps(currentCohort, examScores, EXAM_MAPS || {});
     
+    // 2. 所有的 useState 必須放在最上面
     const [selectedExam, setSelectedExam] = React.useState(Object.keys(relevantMaps)[0] || '');
-    
-    // ★ 當切換群組時，確保下拉選單能自動跳到該群組可用的第一張試卷
+    const [analysisTab, setAnalysisTab] = React.useState('MC'); 
+    const [aiLang, setAiLang] = React.useState('雙語 (Bilingual)');
+    const [aiType, setAiType] = React.useState('MC+LQ');
+    const [aiMcCount, setAiMcCount] = React.useState('5'); 
+    const [aiLqCount, setAiLqCount] = React.useState('5'); 
+    const [generatedPrompt, setGeneratedPrompt] = React.useState('');
+
+    // 3. 第一個 useEffect：自動跳轉可用試卷
     React.useEffect(() => {
         if (Object.keys(relevantMaps).length > 0 && !relevantMaps[selectedExam]) {
             setSelectedExam(Object.keys(relevantMaps)[0]);
@@ -1871,31 +1878,14 @@ const ExamAnalysisView = ({ activeStudents, examScores, currentCohort, getReleva
         }
     }, [currentCohort, relevantMaps, selectedExam]);
 
-    // ★ 切換 MC 還是 LQ 的介面狀態
-    const [analysisTab, setAnalysisTab] = React.useState('MC'); // 'MC' 或 'LQ'
-
-    // AI 參數設定狀態
-    const [aiLang, setAiLang] = React.useState('雙語 (Bilingual)');
-    const [aiType, setAiType] = React.useState('MC+LQ');
-    const [aiMcCount, setAiMcCount] = React.useState('5'); 
-    const [aiLqCount, setAiLqCount] = React.useState('5'); 
-    const [generatedPrompt, setGeneratedPrompt] = React.useState('');
-
-    // ★ 使用過濾後的 map
+    // 4. 準備安全運算的變數 (防呆機制)
     const map = relevantMaps[selectedExam];
-    
-    if (!map) return (
-        <div className="p-12 text-center text-slate-500 mt-10">
-            <Icon name="AlertCircle" size={48} className="mx-auto mb-4 text-slate-300" />
-            <h2 className="text-xl font-bold">此群組尚未有任何考試成績紀錄</h2>
-            <p className="mt-2 text-sm">請先前往「考試成績輸入」為此群組的學生登錄成績。</p>
-        </div>
-    );
+    const questions = map ? map.questions : [];
 
-    // 1. 試卷難度診斷與選項統計
-    const qStats = map.questions.map(q => {
+    // 5. 試卷難度診斷與選項統計 (安全地使用 questions 陣列，即使是空的也不會當機)
+    const qStats = questions.map(q => {
         let totalScore = 0;
-        let counts = { A: 0, B: 0, C: 0, D: 0, Other: 0 }; // 統計 A/B/C/D 選擇人數
+        let counts = { A: 0, B: 0, C: 0, D: 0, Other: 0 }; 
 
         activeStudents.forEach(s => {
             const record = examScores[s.id]?.[selectedExam];
@@ -1920,7 +1910,7 @@ const ExamAnalysisView = ({ activeStudents, examScores, currentCohort, getReleva
         
         const count = activeStudents.length || 1;
         const mean = totalScore / count;
-        const pValue = mean / q.max; 
+        const pValue = q.max > 0 ? mean / q.max : 0; 
         
         let diag = '中等';
         let badgeColor = 'text-amber-600 bg-amber-50 border-amber-200';
@@ -1930,9 +1920,9 @@ const ExamAnalysisView = ({ activeStudents, examScores, currentCohort, getReleva
         return { ...q, mean: mean.toFixed(2), pValue, diag, badgeColor, counts, studentCount: count };
     });
 
-    // 2. 各知識點全班掌握度
+    // 6. 各知識點全班掌握度
     const topicSummary = {};
-    map.questions.forEach(q => {
+    questions.forEach(q => {
         if (!topicSummary[q.topicId]) {
             topicSummary[q.topicId] = { 
                 topicId: q.topicId, 
@@ -1962,16 +1952,27 @@ const ExamAnalysisView = ({ activeStudents, examScores, currentCohort, getReleva
         a.topicId.localeCompare(b.topicId, undefined, { numeric: true, sensitivity: 'base' })
     );
 
-    // AI Prompt 生成邏輯
+    // 7. 第二個 useEffect：AI Prompt 生成邏輯 (★ 移到 Early Return 之前！)
     React.useEffect(() => {
+        if (!map) return; // 如果沒有試卷資料，就在 Hook 內部提早結束，這樣才不會破壞 Hook 規則
+        
         const hardMC = qStats.filter(q => q.type === 'MC' && q.pValue < 0.5).map(q => `- 題號 ${q.id}: 正確答案 [${q.ans}], P-Value: ${q.pValue.toFixed(2)}。題目敘述: ${q.topicDesc}`).join('\n');
         const hardLQ = qStats.filter(q => q.type !== 'MC' && q.pValue < 0.5).map(q => `- 題號 ${q.id} (滿分 ${q.max}分): P-Value: ${q.pValue.toFixed(2)}。題目敘述: ${q.topicDesc}`).join('\n');
-        const weakTopics = sortedTopics.filter(t => (t.actualEarned/t.maxPossible) < 0.55).map(t => `- 課題 [${t.topicId} ${t.topicName}]: 全班得分率僅 ${(t.actualEarned/t.maxPossible*100).toFixed(1)}%`).join('\n');
+        const weakTopics = sortedTopics.filter(t => t.maxPossible > 0 && (t.actualEarned/t.maxPossible) < 0.55).map(t => `- 課題 [${t.topicId} ${t.topicName}]: 全班得分率僅 ${(t.actualEarned/t.maxPossible*100).toFixed(1)}%`).join('\n');
 
         const newPrompt = `你是一位香港 DSE 物理科中學名師。請根據以下這份大考的【全班真實應考數據】，為我編寫一份高質素的【試後檢討與重難點澄清教案】。\n\n[基本設定]\n- 語言: ${aiLang}\n- 預期針對我指定的題型與題數，各編寫全新的衍生鞏固練習題：\n  * 衍生多項選擇題 (MC)：${aiMcCount} 題\n  * 衍生長題目 (LQ)：${aiLqCount} 題\n\n[數據診斷：全班答錯率極高的 MC 難點題目]\n${hardMC || '- 無明顯 MC 難點'}\n\n[數據診斷：全班失分嚴重的 LQ 難點題目]\n${hardLQ || '- 無明顯 LQ 難點'}\n\n[數據診斷：全班掌握度最差的知識點課題]\n${weakTopics || '- 全班各課題發揮均衡'}\n\n[教案與題目編寫要求]:\n1. 錯因深度剖析：針對上述答對率低的 MC 及 LQ 題目，從物理概念角度切入，指出學生最容易混淆的觀念陷阱。\n2. 變式題目擴充：根據我設定的 MC 題數 (${aiMcCount} 題) 和 LQ 題數 (${aiLqCount} 題)，分別編寫全新的【同類概念變式衍生題】。題目必須嚴格符合 DSE 考核風格，並為 MC 提供 4 個具備強干擾項的選項，為 LQ 提供詳細的【分步評分標準 (Marking Scheme)】。\n3. 提供下階段課堂複習的補救教學具體策略。`;
         
         setGeneratedPrompt(newPrompt);
-    }, [aiLang, aiType, aiMcCount, aiLqCount, selectedExam, qStats, sortedTopics]); 
+    }, [aiLang, aiType, aiMcCount, aiLqCount, selectedExam, map, activeStudents]); 
+
+    // 8. ★ 所有的 Hooks 都宣告完畢後，才可以進行 Early Return！
+    if (!map) return (
+        <div className="p-12 text-center text-slate-500 mt-10 animate-fadeIn">
+            <Icon name="AlertCircle" size={48} className="mx-auto mb-4 text-slate-300" />
+            <h2 className="text-xl font-bold">此群組尚未有任何考試成績紀錄</h2>
+            <p className="mt-2 text-sm">請先前往「考試成績輸入」為此群組的學生登錄成績。</p>
+        </div>
+    );
 
     const copyPrompt = () => {
         navigator.clipboard.writeText(generatedPrompt);
@@ -2169,7 +2170,7 @@ const ExamAnalysisView = ({ activeStudents, examScores, currentCohort, getReleva
         </div>
     );
 };
-
+        
 // ==================== 更新版：個人大考分析、跨卷進度（分開 3 大趨勢版塊）與補底生成 ====================
 const StudentExamAnalysisView = ({ activeStudents, examScores }) => {
     const [selectedStudentId, setSelectedStudentId] = React.useState('');
