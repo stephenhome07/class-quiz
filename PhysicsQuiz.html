@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.89 Physics Quiz Analyzer</title>
+    <title> V2.90 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -3103,7 +3103,9 @@ const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress,
                                                         
                                                         <span className="font-bold font-mono">{t.topicId}</span>
                                                         <span className={`max-w-[120px] truncate ${isSelected ? 'text-purple-100' : 'text-slate-500'}`}>
-                                                            {SYLLABUS_TOPICS[t.topicId] || '未定義'}
+                                                            {typeof SYLLABUS_TOPICS[t.topicId] === 'object' 
+                                                                ? (SYLLABUS_TOPICS[t.topicId].topic || SYLLABUS_TOPICS[t.topicId].desc || '格式錯誤') 
+                                                                : (SYLLABUS_TOPICS[t.topicId] || '未定義')}
                                                         </span>
                                                         {!t.isRecorded && !isSelected && (
                                                             <span className="text-[9px] bg-red-100 text-red-600 px-1 rounded ml-1 font-mono">
