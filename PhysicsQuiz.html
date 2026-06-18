@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.00 Physics Quiz Analyzer</title>
+    <title> V3.01 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -4554,7 +4554,7 @@ const HomeworkSummaryView = ({ activeStudents, currentCohort, homeworkMaps, home
 };
 
 
-        // ==================== 新增：歷屆試題 (Pastpaper) 藍圖設定組件 ====================
+// ==================== 新增：歷屆試題 (Pastpaper) 藍圖設定組件 (自動即時存檔版) ====================
 const PastpaperSettingsView = ({ syncToCloud }) => {
     const [pastpaperText, setPastpaperText] = React.useState('');
     const [status, setStatus] = React.useState('');
@@ -4574,12 +4574,14 @@ const PastpaperSettingsView = ({ syncToCloud }) => {
             const parsed = JSON.parse(pastpaperText);
             window.PASTPAPER_MAPS = parsed; // 更新全域變數
             
-            setStatus('更新成功，準備同步中...');
-            alert('✅ 歷屆試題題庫更新成功！\n\n系統已暫存您的變更。請記得點擊左下角的「儲存至雲端」按鈕，將題庫永久同步至 Google Sheet！');
-            setStatus('✅ 已暫存，請點擊儲存至雲端');
+            setStatus('⏳ 更新成功，正在同步至雲端...');
             
-            // 若要強制立即存檔，可解開這行註解：
-            // syncToCloud(); 
+            // ★ 解除註解，並強制將最新的 parsed 資料丟給 syncToCloud 打包上傳！
+            syncToCloud({ pastpaperMaps: parsed }); 
+            
+            alert('✅ 歷屆試題題庫更新成功！\n\n系統已開始將您的變更同步至 Google Sheet，請留意畫面左下角的「✅ 雲端同步成功」提示。');
+            setStatus('✅ 題庫已更新並觸發雲端儲存');
+            
         } catch (err) {
             setStatus('❌ 儲存失敗：JSON 格式錯誤');
             alert('JSON 格式錯誤，請檢查您的輸入！\n錯誤詳情：' + err.message);
@@ -4598,7 +4600,7 @@ const PastpaperSettingsView = ({ syncToCloud }) => {
                 <div className="flex items-center gap-4">
                     {status && <span className={`text-sm font-bold ${status.includes('❌') ? 'text-red-600' : 'text-emerald-600'}`}>{status}</span>}
                     <button onClick={handleSave} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-6 rounded-lg shadow-md flex items-center gap-2 transition">
-                        <Icon name="Save" size={18} /> 更新本機題庫 (準備存檔)
+                        <Icon name="CloudUpload" size={18} /> 儲存並同步至雲端
                     </button>
                 </div>
             </div>
@@ -4636,7 +4638,7 @@ const PastpaperSettingsView = ({ syncToCloud }) => {
         </div>
     );
 };
-
+        
 // ==================== 升級版：分區模塊化 Sidebar (區分小測與考試版) ====================
             const Sidebar = ({ view, setView, currentCohort, setCurrentCohort, allCohorts, isSaving }) => {
                 // 輔助函數：用來產生統一風格的按鈕
