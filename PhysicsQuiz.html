@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.93 Physics Quiz Analyzer</title>
+    <title> V2.94 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -2533,21 +2533,24 @@ const StudentExamAnalysisView = ({ activeStudents = [], examScores = {} }) => {
         if (!selectedStudentId) return;
         const studentName = (activeStudents || []).find(s => s.id === selectedStudentId)?.name || '該學生';
         
+        // 修正：這裡應該使用上面計算好的 processedTopics 來過濾出弱項
         const weakTopics = processedTopics.filter(t => t.overallPct < 0.5);
         
         // ★ AI 提示詞升級：結合官方 Syllabus 學習要求與歷史錯題細節
-        const weakTopicsText = selectedWeakTopics.map(t => {
-            const topicInfo = SYLLABUS_TOPICS[t.topicId];
-            // 確保取出的是字串
-            const topicName = typeof topicInfo === 'object' ? topicInfo.topic : topicInfo;
-            return `- 課題 [${t.topicId} ${topicName || ''}]: 曾做錯的題型盲點: ${t.descArray.join('; ')}`;
+        // 修正：將變數名稱改為上面定義好的 weakTopics
+        const weakTopicsText = weakTopics.map(t => {
+            const topicInfo = typeof window !== 'undefined' && window.SYLLABUS_TOPICS ? window.SYLLABUS_TOPICS[t.topicId] : null;
+            const topicName = typeof topicInfo === 'object' ? topicInfo.topic : (topicInfo || '');
+            return `- 課題 [${t.topicId} ${topicName}]: 曾做錯的題型盲點: ${t.descArray.join('; ')}`;
         }).join('\n');
 
         const newPrompt = `你是一位香港 DSE 物理科專屬導師。我的學生【${studentName}】在近期的物理考試中表現需要提升。以下是他在所選考試範圍內【掌握度低於 50%】的物理課題及對應的題型盲點，請為他度身訂造一份專屬補底練習。\n\n[基本設定]\n- 語言: ${aiLang}\n- 預期題型與數量:\n  * 多項選擇題 (MC)：${aiMcCount} 題\n  * 長題目 (LQ)：${aiLqCount} 題\n\n[學生薄弱課題與盲點描述]\n${weakTopicsText || '- 該學生目前無明顯弱項課題，請生成進階挑戰題。'}\n\n[生成要求]\n1. 針對上述薄弱課題，設計難度由淺入深、著重釐清核心觀念的練習題。\n2. MC 必須包含 4 個選項，並為錯誤選項附帶【陷阱分析】（指出為何學生容易選錯）；LQ 必須附帶詳細的【分步評分標準 (Marking Scheme)】。\n3. 請在開頭給予【${studentName}】一段鼓勵性的評語，並指出他在這些課題中最需要優先克服的思維盲區。`;
         
         setGeneratedPrompt(newPrompt);
-    }, [aiLang, aiMcCount, aiLqCount, selectedStudentId, selectedExams, activeStudents, examScores]);
+    }, [aiLang, aiMcCount, aiLqCount, selectedStudentId, selectedExams, activeStudents, examScores, processedTopics]); 
+    // 注意：依賴項加上了 processedTopics，確保資料更新時 Prompt 會重算
 
+    
     return (
         <div className="p-6 max-w-6xl mx-auto animate-fadeIn">
             {/* 標頭與過濾器 */}
