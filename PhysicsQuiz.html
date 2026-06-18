@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.85 Physics Quiz Analyzer</title>
+    <title> V2.86 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -906,282 +906,289 @@ const StudentChartView = ({ activeStudents, scores }) => {
         </div>
     );
 };
-            // 全班課題綜合分析版面 (加入 P-Value 難度診斷)
-            // 全班課題綜合分析版面 (加入 P-Value 難度診斷)
-            const TopicAnalysisView = ({ activeStudents, scores }) => {
-                // 1. 新增：動態計算當前群組有輸入成績的測驗
-                const activeQuizzes = React.useMemo(() => {
-                    return Object.keys(QUIZ_MAPS).filter(quizId => {
-                        return activeStudents.some(s => scores[s.id]?.[quizId] && Object.keys(scores[s.id][quizId]).length > 0);
-                    });
-                }, [activeStudents, scores]);
+          
+// ==================== 全班課題綜合分析版面 (修復物件渲染 Bug + 升級 AI 提示詞) ====================
+const TopicAnalysisView = ({ activeStudents, scores }) => {
+    // 1. 動態計算當前群組有輸入成績的測驗
+    const activeQuizzes = React.useMemo(() => {
+        return Object.keys(window.QUIZ_MAPS || {}).filter(quizId => {
+            return activeStudents.some(s => scores[s.id]?.[quizId] && Object.keys(scores[s.id][quizId]).length > 0);
+        });
+    }, [activeStudents, scores]);
 
-                // 2. 修改：預設選擇 activeQuizzes 的第一個，而不是 Object.keys(QUIZ_MAPS)
-                const [localQuiz, setLocalQuiz] = React.useState(activeQuizzes[0] || Object.keys(QUIZ_MAPS)[0]);
+    // 2. 預設選擇 activeQuizzes 的第一個
+    const [localQuiz, setLocalQuiz] = React.useState(activeQuizzes[0] || Object.keys(window.QUIZ_MAPS || {})[0]);
 
-                // 3. 新增：防呆機制，當群組切換導致目前測驗沒成績時，自動跳轉
-                React.useEffect(() => {
-                    if (activeQuizzes.length > 0 && !activeQuizzes.includes(localQuiz)) {
-                        setLocalQuiz(activeQuizzes[0]);
-                    }
-                }, [activeQuizzes, localQuiz]);
+    // 3. 防呆機制
+    React.useEffect(() => {
+        if (activeQuizzes.length > 0 && !activeQuizzes.includes(localQuiz)) {
+            setLocalQuiz(activeQuizzes[0]);
+        }
+    }, [activeQuizzes, localQuiz]);
 
-                const map = QUIZ_MAPS[localQuiz];
+    const map = window.QUIZ_MAPS?.[localQuiz];
 
-                const getClassStats = () => {
-                    if (!map || activeStudents.length === 0) return null;
+    const getClassStats = () => {
+        if (!map || activeStudents.length === 0) return null;
 
-                    let classTotalScore = 0;
-                    let classTotalMax = 0;
-                    let studentsAttempted = 0;
+        let classTotalScore = 0;
+        let classTotalMax = 0;
+        let studentsAttempted = 0;
 
-                    const qStats = {}; 
-                    const conceptStats = {}; 
+        const qStats = {}; 
+        const conceptStats = {}; 
 
-                    map.questions.forEach(q => {
-                        // 新增：讀取題目的預設難度 q.level
-                        qStats[q.id] = { id: q.id, type: q.type, max: q.max, total: 0, attempts: 0, desc: q.topicDesc, topicId: q.topicId, originalLevel: q.level };
-                    });
+        map.questions.forEach(q => {
+            qStats[q.id] = { id: q.id, type: q.type, max: q.max, total: 0, attempts: 0, desc: q.topicDesc || q.desc, topicId: q.topicId, originalLevel: q.level };
+        });
 
-                    activeStudents.forEach(st => {
-                        const stScores = (scores[st.id] || {})[localQuiz];
-                        if (stScores && Object.keys(stScores).length > 0) {
-                            studentsAttempted++;
-                            map.questions.forEach(q => {
-                                const val = parseFloat(stScores[q.id]);
-                                if (!isNaN(val)) {
-                                    classTotalScore += val;
-                                    classTotalMax += q.max;
-                                    qStats[q.id].total += val;
-                                    qStats[q.id].attempts++;
+        activeStudents.forEach(st => {
+            const stScores = (scores[st.id] || {})[localQuiz];
+            if (stScores && Object.keys(stScores).length > 0) {
+                studentsAttempted++;
+                map.questions.forEach(q => {
+                    const val = parseFloat(stScores[q.id]);
+                    if (!isNaN(val)) {
+                        classTotalScore += val;
+                        classTotalMax += q.max;
+                        qStats[q.id].total += val;
+                        qStats[q.id].attempts++;
 
-                                    if (!conceptStats[q.topicId]) {
-                                        conceptStats[q.topicId] = { 
-                                            topicId: q.topicId, 
-                                            topicName: SYLLABUS_TOPICS[q.topicId] || '未知課題', 
-                                            total: 0, max: 0, specificDesc: new Set() 
-                                        };
-                                    }
-                                    conceptStats[q.topicId].total += val;
-                                    conceptStats[q.topicId].max += q.max;
-                                    conceptStats[q.topicId].specificDesc.add(q.topicDesc);
-                                }
-                            });
+                        if (!conceptStats[q.topicId]) {
+                            // ★ 修復核心：安全提取 Syllabus 的 topic 與 desc
+                            const syllabusInfo = window.SYLLABUS_TOPICS?.[q.topicId];
+                            const topicStr = typeof syllabusInfo === 'object' ? syllabusInfo.topic : (syllabusInfo || '未知課題');
+                            const descStr = typeof syllabusInfo === 'object' ? syllabusInfo.desc : '';
+
+                            conceptStats[q.topicId] = { 
+                                topicId: q.topicId, 
+                                topicName: topicStr, // 確保這裡是字串
+                                syllabusDesc: descStr, // 儲存官方描述給 AI 用
+                                total: 0, 
+                                max: 0, 
+                                specificDesc: new Set() 
+                            };
                         }
-                    });
+                        conceptStats[q.topicId].total += val;
+                        conceptStats[q.topicId].max += q.max;
+                        // 兼容新舊 map 的題目描述欄位名稱
+                        conceptStats[q.topicId].specificDesc.add(q.topicDesc || q.desc || '無具體描述');
+                    }
+                });
+            }
+        });
 
-                    if (studentsAttempted === 0) return null;
+        if (studentsAttempted === 0) return null;
 
-                    const processedQStats = Object.values(qStats).map(q => ({
-                        ...q,
-                        pct: q.attempts > 0 ? (q.total / (q.max * q.attempts)) * 100 : 0
-                    })).sort((a, b) => a.pct - b.pct);
+        const processedQStats = Object.values(qStats).map(q => ({
+            ...q,
+            pct: q.attempts > 0 ? (q.total / (q.max * q.attempts)) * 100 : 0
+        })).sort((a, b) => a.pct - b.pct);
 
-                    const processedConceptStats = Object.values(conceptStats).map(c => ({
-                        ...c,
-                        pct: c.max > 0 ? (c.total / c.max) * 100 : 0,
-                        specificDescArray: Array.from(c.specificDesc)
-                    })).sort((a, b) => a.pct - b.pct);
+        const processedConceptStats = Object.values(conceptStats).map(c => ({
+            ...c,
+            pct: c.max > 0 ? (c.total / c.max) * 100 : 0,
+            specificDescArray: Array.from(c.specificDesc)
+        })).sort((a, b) => a.pct - b.pct);
 
-                    return { classTotalScore, classTotalMax, studentsAttempted, processedQStats, processedConceptStats };
-                };
+        return { classTotalScore, classTotalMax, studentsAttempted, processedQStats, processedConceptStats };
+    };
 
-                const stats = getClassStats();
+    const stats = getClassStats();
 
-                // 計算難度分佈 (P-Value)
-                const difficultyStats = { easy: [], medium: [], hard: [] };
-                if (stats) {
-                    stats.processedQStats.forEach(q => {
-                        if (q.pct >= 70) difficultyStats.easy.push(q);
-                        else if (q.pct >= 40) difficultyStats.medium.push(q);
-                        else difficultyStats.hard.push(q);
-                    });
-                }
+    // 計算難度分佈 (P-Value)
+    const difficultyStats = { easy: [], medium: [], hard: [] };
+    if (stats) {
+        stats.processedQStats.forEach(q => {
+            if (q.pct >= 70) difficultyStats.easy.push(q);
+            else if (q.pct >= 40) difficultyStats.medium.push(q);
+            else difficultyStats.hard.push(q);
+        });
+    }
 
-                const generateClassReviewPrompt = () => {
-                    if (!stats) return "目前沒有足夠數據生成教案。";
-                    
-                    const weakestConcepts = stats.processedConceptStats.slice(0, 3).map(c => 
-                        `- ${c.topicId} ${c.topicName} (全班平均得分率: ${Math.round(c.pct)}%)\n  具體難點: ${c.specificDescArray.join(', ')}`
-                    ).join('\n');
+    const generateClassReviewPrompt = () => {
+        if (!stats) return "目前沒有足夠數據生成教案。";
+        
+        // ★ AI 提示詞升級：加入官方 Syllabus Desc
+        const weakestConcepts = stats.processedConceptStats.slice(0, 3).map(c => 
+            `- ${c.topicId} ${c.topicName} (全班平均得分率: ${Math.round(c.pct)}%)\n  官方學習要求: ${c.syllabusDesc || '無'}\n  具體難點: ${c.specificDescArray.join(', ')}`
+        ).join('\n\n');
 
-                    const weakestQuestions = stats.processedQStats.slice(0, 3).map(q => 
-                        `- 題號 ${q.id} (${q.type}): ${q.desc} (全班平均: ${Math.round(q.pct)}%)`
-                    ).join('\n');
+        const weakestQuestions = stats.processedQStats.slice(0, 3).map(q => 
+            `- 題號 ${q.id} (${q.type}): ${q.desc} (全班平均: ${Math.round(q.pct)}%)`
+        ).join('\n');
 
-                    return `你是一位經驗豐富的香港 DSE 物理科老師。我的全班學生剛完成了「${map.title}」的小測。以下是系統綜合出來的全班共同盲點與難點：\n\n【全班最弱的基礎概念】\n${weakestConcepts}\n\n【全班失分最多的具體題目】\n${weakestQuestions}\n\n我準備為他們進行「試後檢討 (Post-exam Review)」。請為我設計一份大約 15 分鐘的教學重溫大綱，要求：\n1. 針對上述的「最弱概念」，提供易於理解的日常例子或比喻來重新解說。\n2. 針對「失分最多的題目」，點出學生常犯的迷思概念 (Misconceptions) 及思考陷阱。\n3. 提供 3 條簡單直接的「黑板提問 (Concept Checking Questions)」，讓我能在堂上即時考問全班，以確保他們已經明白。`;
-                };
+        return `你是一位經驗豐富的香港 DSE 物理科老師。我的全班學生剛完成了「${map.title}」的小測。以下是系統綜合出來的全班共同盲點與難點：\n\n【全班最弱的基礎概念】\n${weakestConcepts}\n\n【全班失分最多的具體題目】\n${weakestQuestions}\n\n我準備為他們進行「試後檢討 (Post-exam Review)」。請為我設計一份大約 15 分鐘的教學重溫大綱，要求：\n1. 針對上述的「最弱概念」，提供易於理解的日常例子或比喻來重新解說。\n2. 針對「失分最多的題目」，點出學生常犯的迷思概念 (Misconceptions) 及思考陷阱。\n3. 提供 3 條簡單直接的「黑板提問 (Concept Checking Questions)」，讓我能在堂上即時考問全班，以確保他們已經明白。`;
+    };
 
-                return (
-                    <div className="p-6 h-full overflow-y-auto">
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-2xl font-bold flex items-center gap-2"><Icon name="Target" /> 全班課題綜合分析</h2>
-                            <select className="p-2 border rounded-md shadow-sm outline-none font-bold text-blue-700 bg-blue-50" 
-                                value={localQuiz} onChange={(e) => setLocalQuiz(e.target.value)}>
-                                {/* 4. 修改：只顯示有成績的測驗 */}
-                                {activeQuizzes.length > 0 
-                                    ? activeQuizzes.map(k => <option key={k} value={k}>{QUIZ_MAPS[k].title}</option>)
-                                    : <option value={localQuiz}>-- 此群組尚未輸入任何測驗成績 --</option>
-                                }
-                            </select>
+    return (
+        <div className="p-6 h-full overflow-y-auto animate-fadeIn">
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold flex items-center gap-2"><Icon name="Target" /> 全班課題綜合分析</h2>
+                <select className="p-2 border rounded-md shadow-sm outline-none font-bold text-blue-700 bg-blue-50" 
+                    value={localQuiz} onChange={(e) => setLocalQuiz(e.target.value)}>
+                    {activeQuizzes.length > 0 
+                        ? activeQuizzes.map(k => <option key={k} value={k}>{window.QUIZ_MAPS[k].title}</option>)
+                        : <option value={localQuiz}>-- 此群組尚未輸入任何測驗成績 --</option>
+                    }
+                </select>
+            </div>
+
+            {stats ? (
+                <div className="space-y-6">
+                    {/* 上半部：分析區塊 */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="space-y-6">
+                            <div className="card p-6 flex justify-around text-center items-center">
+                                <div><div className="text-sm text-gray-500 mb-1">參與人數</div><div className="text-3xl font-bold text-blue-600">{stats.studentsAttempted}</div></div>
+                                <div className="w-px h-12 bg-gray-200"></div>
+                                <div><div className="text-sm text-gray-500 mb-1">全班平均得分</div><div className="text-3xl font-bold text-green-600">{((stats.classTotalScore / stats.studentsAttempted) || 0).toFixed(1)} <span className="text-lg text-gray-400">/ {stats.classTotalMax / stats.studentsAttempted}</span></div></div>
+                                <div className="w-px h-12 bg-gray-200"></div>
+                                <div><div className="text-sm text-gray-500 mb-1">整體得分率</div><div className="text-3xl font-bold text-purple-600">{((stats.classTotalScore / stats.classTotalMax) * 100).toFixed(1)}%</div></div>
+                            </div>
+
+                            <div className="card p-6">
+                                <h3 className="font-bold text-lg mb-4 text-red-700 flex items-center gap-2"><Icon name="AlertTriangle" size={20}/> 難點題目 (全班失分最多 Top 10)</h3>
+                                <div className="space-y-3">
+                                    {stats.processedQStats.slice(0, 10).map((q, idx) => (
+                                        <div key={q.id} className="flex items-center justify-between p-3 bg-red-50 rounded border border-red-100">
+                                            <div className="flex items-center gap-3">
+                                                <span className="bg-red-200 text-red-800 font-bold px-2 py-1 rounded text-xs">#{idx + 1}</span>
+                                                <div>
+                                                    <div className="font-bold">{q.id} <span className="text-xs text-gray-500 font-normal ml-1">({q.type})</span></div>
+                                                    <div className="text-sm text-gray-600">{q.desc}</div>
+                                                </div>
+                                            </div>
+                                            <div className="text-right whitespace-nowrap ml-4">
+                                                <div className={`font-bold ${q.pct < 50 ? 'text-red-600' : 'text-yellow-600'}`}>{Math.round(q.pct)}%</div>
+                                                <div className="text-xs text-gray-400">平均得分率</div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            
+                            <div className="card p-6">
+                                <h3 className="font-bold text-lg mb-4 text-gray-800">各知識點全班掌握度</h3>
+                                <div className="space-y-4">
+                                    {stats.processedConceptStats.map(c => {
+                                        let colorClass = c.pct >= 70 ? 'bg-green-500' : c.pct >= 50 ? 'bg-yellow-500' : 'bg-red-500';
+                                        let textClass = c.pct >= 70 ? 'text-green-600' : c.pct >= 50 ? 'text-yellow-600' : 'text-red-600';
+                                        return (
+                                            <div key={c.topicId} className="text-sm">
+                                                <div className="flex justify-between mb-1">
+                                                    <span className="font-semibold text-gray-700">{c.topicId} {c.topicName}</span>
+                                                    <span className={`font-bold ${textClass}`}>{Math.round(c.pct)}%</span>
+                                                </div>
+                                                <div className="w-full bg-gray-200 rounded-full h-2">
+                                                    <div className={`h-2 rounded-full ${colorClass}`} style={{width: `${c.pct}%`}}></div>
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            </div>
                         </div>
 
-                        {stats ? (
-                            <div className="space-y-6">
-                                {/* 上半部：原本的分析區塊 */}
-                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                    <div className="space-y-6">
-                                        <div className="card p-6 flex justify-around text-center items-center">
-                                            <div><div className="text-sm text-gray-500 mb-1">參與人數</div><div className="text-3xl font-bold text-blue-600">{stats.studentsAttempted}</div></div>
-                                            <div className="w-px h-12 bg-gray-200"></div>
-                                            <div><div className="text-sm text-gray-500 mb-1">全班平均得分</div><div className="text-3xl font-bold text-green-600">{((stats.classTotalScore / stats.studentsAttempted) || 0).toFixed(1)} <span className="text-lg text-gray-400">/ {stats.classTotalMax / stats.studentsAttempted}</span></div></div>
-                                            <div className="w-px h-12 bg-gray-200"></div>
-                                            <div><div className="text-sm text-gray-500 mb-1">整體得分率</div><div className="text-3xl font-bold text-purple-600">{((stats.classTotalScore / stats.classTotalMax) * 100).toFixed(1)}%</div></div>
-                                        </div>
-
-                                        <div className="card p-6">
-                                            <h3 className="font-bold text-lg mb-4 text-red-700 flex items-center gap-2"><Icon name="AlertTriangle" size={20}/> 難點題目 (全班失分最多 Top 10)</h3>
-                                            <div className="space-y-3">
-                                                {stats.processedQStats.slice(0, 10).map((q, idx) => (
-                                                    <div key={q.id} className="flex items-center justify-between p-3 bg-red-50 rounded border border-red-100">
-                                                        <div className="flex items-center gap-3">
-                                                            <span className="bg-red-200 text-red-800 font-bold px-2 py-1 rounded text-xs">#{idx + 1}</span>
-                                                            <div>
-                                                                <div className="font-bold">{q.id} <span className="text-xs text-gray-500 font-normal ml-1">({q.type})</span></div>
-                                                                <div className="text-sm text-gray-600">{q.desc}</div>
-                                                            </div>
-                                                        </div>
-                                                        <div className="text-right">
-                                                            <div className={`font-bold ${q.pct < 50 ? 'text-red-600' : 'text-yellow-600'}`}>{Math.round(q.pct)}%</div>
-                                                            <div className="text-xs text-gray-400">平均得分率</div>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                        
-                                        <div className="card p-6">
-                                            <h3 className="font-bold text-lg mb-4 text-gray-800">各知識點全班掌握度</h3>
-                                            <div className="space-y-4">
-                                                {stats.processedConceptStats.map(c => {
-                                                    let colorClass = c.pct >= 70 ? 'bg-green-500' : c.pct >= 50 ? 'bg-yellow-500' : 'bg-red-500';
-                                                    let textClass = c.pct >= 70 ? 'text-green-600' : c.pct >= 50 ? 'text-yellow-600' : 'text-red-600';
-                                                    return (
-                                                        <div key={c.topicId} className="text-sm">
-                                                            <div className="flex justify-between mb-1">
-                                                                <span className="font-semibold text-gray-700">{c.topicId} {c.topicName}</span>
-                                                                <span className={`font-bold ${textClass}`}>{Math.round(c.pct)}%</span>
-                                                            </div>
-                                                            <div className="w-full bg-gray-200 rounded-full h-2">
-                                                                <div className={`h-2 rounded-full ${colorClass}`} style={{width: `${c.pct}%`}}></div>
-                                                            </div>
-                                                        </div>
-                                                    )
-                                                })}
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="card p-6 bg-orange-50 border-orange-200 h-fit">
-                                        <h3 className="font-bold text-xl mb-3 text-orange-800 flex items-center gap-2"><Icon name="Lightbulb" /> 全班試後檢討 AI 教案生成</h3>
-                                        <p className="text-sm text-gray-700 mb-4">系統已找出全班的共同盲點。複製以下指令給 AI，為下一堂課快速準備「試後檢討 (Post-exam Review)」的講解策略及黑板提問。</p>
-                                        <textarea readOnly className="w-full h-80 p-3 rounded border border-orange-300 text-sm bg-white outline-none resize-none" value={generateClassReviewPrompt()} />
-                                        <button onClick={() => navigator.clipboard.writeText(generateClassReviewPrompt())} className="mt-4 bg-orange-600 text-white w-full py-3 rounded-lg shadow hover:bg-orange-700 font-bold transition flex justify-center items-center gap-2">
-                                            <Icon name="Copy" size={18} /> 複製指令 (生成檢討教案)
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {/* 下半部：新增的 P-Value 難度診斷區塊 */}
-                                <div className="card p-6">
-                                    <h3 className="font-bold text-xl mb-4 text-indigo-800 flex items-center gap-2">
-                                        <Icon name="BarChart" size={24}/> 試卷難度診斷 (P-Value 難度指數)
-                                    </h3>
-                                    <p className="text-sm text-gray-600 mb-6">
-                                        根據考評局標準，P-Value (平均得分率) 反映了題目對學生的實際體感難度。系統會將得分率分為：<strong className="text-green-600">淺 (≥70%)</strong>、<strong className="text-yellow-600">中 (40%-69%)</strong>、<strong className="text-red-600">深 (&lt;40%)</strong>，助你診斷本次測驗的深淺度是否符合預期。
-                                    </p>
-                                    
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 text-center">
-                                        <div className="bg-green-50 p-4 rounded-xl border border-green-200">
-                                            <div className="font-bold text-green-700 mb-2">🟢 淺 (P-Value ≥ 70%)</div>
-                                            <div className="text-3xl font-black text-green-600 mb-2">{difficultyStats.easy.length} <span className="text-sm font-normal text-green-700">題</span></div>
-                                            <div className="text-xs text-green-600">{difficultyStats.easy.map(q => q.id).join(', ') || '無'}</div>
-                                        </div>
-                                        <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200">
-                                            <div className="font-bold text-yellow-700 mb-2">🟡 中 (40% ≤ P-Value &lt; 70%)</div>
-                                            <div className="text-3xl font-black text-yellow-600 mb-2">{difficultyStats.medium.length} <span className="text-sm font-normal text-yellow-700">題</span></div>
-                                            <div className="text-xs text-yellow-600">{difficultyStats.medium.map(q => q.id).join(', ') || '無'}</div>
-                                        </div>
-                                        <div className="bg-red-50 p-4 rounded-xl border border-red-200">
-                                            <div className="font-bold text-red-700 mb-2">🔴 深 (P-Value &lt; 40%)</div>
-                                            <div className="text-3xl font-black text-red-600 mb-2">{difficultyStats.hard.length} <span className="text-sm font-normal text-red-700">題</span></div>
-                                            <div className="text-xs text-red-600">{difficultyStats.hard.map(q => q.id).join(', ') || '無'}</div>
-                                        </div>
-                                    </div>
-
-                                    {/* 實測 vs 預設難度對比列表 */}
-                                    <div className="overflow-x-auto rounded-lg border border-gray-200">
-                                        <table className="w-full text-sm text-left border-collapse">
-                                            <thead className="bg-indigo-50 text-indigo-800">
-                                                <tr>
-                                                    <th className="p-3 border-b">題號</th>
-                                                    <th className="p-3 border-b w-1/3">考核概念</th>
-                                                    <th className="p-3 border-b">老師預設難度</th>
-                                                    <th className="p-3 border-b">學生實測得分率</th>
-                                                    <th className="p-3 border-b">學生實際體感</th>
-                                                    <th className="p-3 border-b">診斷結果</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {/* 這裡依照題號原始順序顯示，不強制由低至高排序，方便對卷 */}
-                                                {map.questions.map(qBase => {
-                                                    const q = stats.processedQStats.find(x => x.id === qBase.id);
-                                                    if (!q) return null;
-
-                                                    let actualLevel = q.pct >= 70 ? '淺' : q.pct >= 40 ? '中' : '深';
-                                                    let actualColor = q.pct >= 70 ? 'text-green-600' : q.pct >= 40 ? 'text-yellow-600' : 'text-red-600';
-                                                    let intendedLevel = q.originalLevel || '未設定';
-                                                    
-                                                    let diagnosis = '-';
-                                                    if (intendedLevel !== '未設定') {
-                                                        if (intendedLevel === actualLevel) diagnosis = '✅ 符合預期';
-                                                        else if (
-                                                            (intendedLevel === '淺' && (actualLevel === '中' || actualLevel === '深')) ||
-                                                            (intendedLevel === '中' && actualLevel === '深')
-                                                        ) {
-                                                            diagnosis = '⚠️ 比預期深 (殺手題)';
-                                                        } else {
-                                                            diagnosis = '⚠️ 比預期淺 (送分題)';
-                                                        }
-                                                    }
-
-                                                    return (
-                                                        <tr key={q.id} className="border-b hover:bg-indigo-50 transition">
-                                                            <td className="p-3 font-bold text-gray-700">{q.id}</td>
-                                                            <td className="p-3 text-gray-600 truncate">{q.desc}</td>
-                                                            <td className="p-3 text-gray-500 font-medium">{intendedLevel}</td>
-                                                            <td className="p-3 font-mono font-bold text-gray-700">{q.pct.toFixed(1)}%</td>
-                                                            <td className={`p-3 font-bold ${actualColor}`}>{actualLevel}</td>
-                                                            <td className={`p-3 font-bold ${diagnosis.includes('殺手題') ? 'text-red-600' : diagnosis.includes('符合預期') ? 'text-green-600' : 'text-blue-600'}`}>
-                                                                {diagnosis}
-                                                            </td>
-                                                        </tr>
-                                                    )
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="card p-10 text-center text-gray-500 flex flex-col items-center">
-                                <Icon name="Inbox" size={48} className="text-gray-300 mb-4" />
-                                <p>目前 {QUIZ_MAPS[localQuiz]?.title} 尚未有任何學生成績紀錄。</p>
-                            </div>
-                        )}
+                        <div className="card p-6 bg-orange-50 border-orange-200 h-fit sticky top-6">
+                            <h3 className="font-bold text-xl mb-3 text-orange-800 flex items-center gap-2"><Icon name="Lightbulb" /> 全班試後檢討 AI 教案生成</h3>
+                            <p className="text-sm text-gray-700 mb-4">系統已找出全班的共同盲點。複製以下指令給 AI，為下一堂課快速準備「試後檢討 (Post-exam Review)」的講解策略及黑板提問。</p>
+                            <textarea readOnly className="w-full h-96 p-3 rounded border border-orange-300 text-sm bg-white outline-none resize-none" value={generateClassReviewPrompt()} />
+                            <button onClick={() => navigator.clipboard.writeText(generateClassReviewPrompt())} className="mt-4 bg-orange-600 text-white w-full py-3 rounded-lg shadow hover:bg-orange-700 font-bold transition flex justify-center items-center gap-2">
+                                <Icon name="Copy" size={18} /> 複製指令 (生成檢討教案)
+                            </button>
+                        </div>
                     </div>
-                );
-            };
+
+                    {/* 下半部：P-Value 難度診斷區塊 */}
+                    <div className="card p-6">
+                        <h3 className="font-bold text-xl mb-4 text-indigo-800 flex items-center gap-2">
+                            <Icon name="BarChart" size={24}/> 試卷難度診斷 (P-Value 難度指數)
+                        </h3>
+                        <p className="text-sm text-gray-600 mb-6">
+                            根據考評局標準，P-Value (平均得分率) 反映了題目對學生的實際體感難度。系統會將得分率分為：<strong className="text-green-600">淺 (≥70%)</strong>、<strong className="text-yellow-600">中 (40%-69%)</strong>、<strong className="text-red-600">深 (&lt;40%)</strong>，助你診斷本次測驗的深淺度是否符合預期。
+                        </p>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 text-center">
+                            <div className="bg-green-50 p-4 rounded-xl border border-green-200">
+                                <div className="font-bold text-green-700 mb-2">🟢 淺 (P-Value ≥ 70%)</div>
+                                <div className="text-3xl font-black text-green-600 mb-2">{difficultyStats.easy.length} <span className="text-sm font-normal text-green-700">題</span></div>
+                                <div className="text-xs text-green-600">{difficultyStats.easy.map(q => q.id).join(', ') || '無'}</div>
+                            </div>
+                            <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200">
+                                <div className="font-bold text-yellow-700 mb-2">🟡 中 (40% ≤ P-Value &lt; 70%)</div>
+                                <div className="text-3xl font-black text-yellow-600 mb-2">{difficultyStats.medium.length} <span className="text-sm font-normal text-yellow-700">題</span></div>
+                                <div className="text-xs text-yellow-600">{difficultyStats.medium.map(q => q.id).join(', ') || '無'}</div>
+                            </div>
+                            <div className="bg-red-50 p-4 rounded-xl border border-red-200">
+                                <div className="font-bold text-red-700 mb-2">🔴 深 (P-Value &lt; 40%)</div>
+                                <div className="text-3xl font-black text-red-600 mb-2">{difficultyStats.hard.length} <span className="text-sm font-normal text-red-700">題</span></div>
+                                <div className="text-xs text-red-600">{difficultyStats.hard.map(q => q.id).join(', ') || '無'}</div>
+                            </div>
+                        </div>
+
+                        {/* 實測 vs 預設難度對比列表 */}
+                        <div className="overflow-x-auto rounded-lg border border-gray-200">
+                            <table className="w-full text-sm text-left border-collapse">
+                                <thead className="bg-indigo-50 text-indigo-800">
+                                    <tr>
+                                        <th className="p-3 border-b">題號</th>
+                                        <th className="p-3 border-b w-1/3">考核概念</th>
+                                        <th className="p-3 border-b">老師預設難度</th>
+                                        <th className="p-3 border-b">學生實測得分率</th>
+                                        <th className="p-3 border-b">學生實際體感</th>
+                                        <th className="p-3 border-b">診斷結果</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {map.questions.map(qBase => {
+                                        const q = stats.processedQStats.find(x => x.id === qBase.id);
+                                        if (!q) return null;
+
+                                        let actualLevel = q.pct >= 70 ? '淺' : q.pct >= 40 ? '中' : '深';
+                                        let actualColor = q.pct >= 70 ? 'text-green-600' : q.pct >= 40 ? 'text-yellow-600' : 'text-red-600';
+                                        let intendedLevel = q.originalLevel || '未設定';
+                                        
+                                        let diagnosis = '-';
+                                        if (intendedLevel !== '未設定') {
+                                            if (intendedLevel === actualLevel) diagnosis = '✅ 符合預期';
+                                            else if (
+                                                (intendedLevel === '淺' && (actualLevel === '中' || actualLevel === '深')) ||
+                                                (intendedLevel === '中' && actualLevel === '深')
+                                            ) {
+                                                diagnosis = '⚠️ 比預期深 (殺手題)';
+                                            } else {
+                                                diagnosis = '⚠️ 比預期淺 (送分題)';
+                                            }
+                                        }
+
+                                        return (
+                                            <tr key={q.id} className="border-b hover:bg-indigo-50 transition">
+                                                <td className="p-3 font-bold text-gray-700">{q.id}</td>
+                                                <td className="p-3 text-gray-600 truncate">{q.desc}</td>
+                                                <td className="p-3 text-gray-500 font-medium">{intendedLevel}</td>
+                                                <td className="p-3 font-mono font-bold text-gray-700">{q.pct.toFixed(1)}%</td>
+                                                <td className={`p-3 font-bold ${actualColor}`}>{actualLevel}</td>
+                                                <td className={`p-3 font-bold ${diagnosis.includes('殺手題') ? 'text-red-600' : diagnosis.includes('符合預期') ? 'text-green-600' : 'text-blue-600'}`}>
+                                                    {diagnosis}
+                                                </td>
+                                            </tr>
+                                        )
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            ) : (
+                <div className="card p-10 text-center text-gray-500 flex flex-col items-center">
+                    <Icon name="Inbox" size={48} className="text-gray-300 mb-4" />
+                    <p>目前 {window.QUIZ_MAPS?.[localQuiz]?.title || localQuiz} 尚未有任何學生成績紀錄。</p>
+                </div>
+            )}
+        </div>
+    );
+};
 
             
              const BackupView = ({ students, setStudents, scores, setScores }) => {
