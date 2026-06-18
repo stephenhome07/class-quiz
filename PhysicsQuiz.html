@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.80 Physics Quiz Analyzer</title>
+    <title> V2.81 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -4125,6 +4125,324 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkMaps, 
     );
 };
 
+// ==================== 新增：功課成績總表與快速編輯組件 ====================
+const HomeworkSummaryView = ({ activeStudents, currentCohort, homeworkMaps, homeworkScores, setHomeworkScores, syncToCloud }) => {
+    // 1. 取得該群組的所有功課
+    const availableHws = React.useMemo(() => {
+        return Object.keys(homeworkMaps || {}).filter(id => !homeworkMaps[id].cohort || homeworkMaps[id].cohort === currentCohort).sort();
+    }, [currentCohort, homeworkMaps]);
+
+    // 2. 計算每份功課的滿分
+    const hwMaxScores = React.useMemo(() => {
+        const maxes = {};
+        availableHws.forEach(hwId => {
+            let max = 0;
+            if (homeworkMaps[hwId] && homeworkMaps[hwId].questions) {
+                homeworkMaps[hwId].questions.forEach(q => max += (q.max || 0));
+            }
+            maxes[hwId] = max;
+        });
+        return maxes;
+    }, [availableHws, homeworkMaps]);
+
+    // 3. 狀態管理
+    const [includedHws, setIncludedHws] = React.useState({});
+    const [isEditMode, setIsEditMode] = React.useState(false);
+    const [saveStatus, setSaveStatus] = React.useState('idle'); // idle, saving, saved
+    const syncTimeout = React.useRef(null);
+
+    React.useEffect(() => {
+        const initial = {};
+        availableHws.forEach(hw => initial[hw] = true);
+        setIncludedHws(initial);
+    }, [availableHws]);
+
+    const toggleHw = (hwId) => setIncludedHws(prev => ({ ...prev, [hwId]: !prev[hwId] }));
+
+    // 4. 計算學生成績與平均分
+    const computedData = React.useMemo(() => {
+        return activeStudents.map(student => {
+            let totalForAvg = 0;
+            let countForAvg = 0;
+            const hwData = {};
+
+            availableHws.forEach(hwId => {
+                const record = homeworkScores[student.id]?.[hwId] || {};
+                const scoresObj = record.scores || {};
+                const status = record.remakeStatus || 'MISSING';
+                
+                let sum = 0;
+                let hasScore = false;
+
+                if (homeworkMaps[hwId] && homeworkMaps[hwId].questions) {
+                    homeworkMaps[hwId].questions.forEach(q => {
+                        const val = scoresObj[q.id];
+                        if (q.type === 'MC') {
+                            if (val && q.ans && val.toString().toUpperCase() === q.ans.toUpperCase()) sum += q.max;
+                        } else {
+                            if (val !== undefined && val !== '') {
+                                sum += parseFloat(val);
+                                hasScore = true;
+                            }
+                        }
+                    });
+                }
+
+                const maxScore = hwMaxScores[hwId];
+                hwData[hwId] = {
+                    score: hasScore || Object.keys(scoresObj).length > 0 ? sum : '',
+                    status: status
+                };
+
+                // 納入平均分計算 (滿分換算為 100)
+                if (includedHws[hwId] && (hasScore || Object.keys(scoresObj).length > 0) && maxScore > 0) {
+                    totalForAvg += (sum / maxScore) * 100;
+                    countForAvg++;
+                }
+            });
+
+            return {
+                ...student,
+                hwData,
+                average: countForAvg > 0 ? (totalForAvg / countForAvg).toFixed(1) : '-'
+            };
+        });
+    }, [activeStudents, availableHws, homeworkMaps, homeworkScores, hwMaxScores, includedHws]);
+
+    // 5. 處理快速編輯與自動存檔 (Auto Save with Debounce)
+    const handleCellEdit = (studentId, hwId, newScoreStr, newStatus) => {
+        const hwMap = homeworkMaps[hwId];
+        if (!hwMap) return;
+
+        setHomeworkScores(prev => {
+            const studentData = prev[studentId] || {};
+            const oldRecord = studentData[hwId] || { scores: {} };
+            const updatedScores = { ...oldRecord.scores };
+            
+            // 計算原本的總分
+            let currentTotal = 0;
+            hwMap.questions.forEach(q => currentTotal += parseFloat(updatedScores[q.id] || 0));
+
+            const newScore = newScoreStr === '' ? '' : parseFloat(newScoreStr);
+
+            // 如果修改了總分，自動將分數分配到第一題 (快速編輯模式的預設行為)
+            if (newScore !== '' && newScore !== currentTotal) {
+                hwMap.questions.forEach((q, idx) => {
+                    updatedScores[q.id] = idx === 0 ? newScore : 0;
+                });
+            } else if (newScore === '') {
+                hwMap.questions.forEach(q => updatedScores[q.id] = '');
+            }
+
+            // 狀態自動判斷 (防呆)
+            let finalStatus = newStatus;
+            if (newScore !== '' && finalStatus === 'MISSING') finalStatus = 'PENDING';
+            if (newScore === hwMaxScores[hwId]) finalStatus = 'PERFECT';
+
+            const newScoresState = {
+                ...prev,
+                [studentId]: {
+                    ...studentData,
+                    [hwId]: {
+                        ...oldRecord,
+                        scores: updatedScores,
+                        remakeStatus: finalStatus,
+                        gradingDate: oldRecord.gradingDate || new Date().toISOString().slice(0, 10)
+                    }
+                }
+            };
+
+            // 觸發自動雲端儲存 (Debounce 防暴衝：1.5秒內沒有新輸入才執行上傳)
+            setSaveStatus('saving');
+            if (syncTimeout.current) clearTimeout(syncTimeout.current);
+            syncTimeout.current = setTimeout(() => {
+                syncToCloud({ homeworkScores: newScoresState });
+                setSaveStatus('saved');
+                setTimeout(() => setSaveStatus('idle'), 2000);
+            }, 1500);
+
+            return newScoresState;
+        });
+    };
+
+    // 6. 複製到 Excel
+    const handleCopyToExcel = () => {
+        if (computedData.length === 0) return alert("沒有資料可複製");
+        let tsv = ["班別", "學號", "姓名", ...availableHws.map(h => `${h}分數\t${h}狀態`), "平均分"].join("\t") + "\n";
+        tsv += ["", "", "滿分:", ...availableHws.map(h => `${hwMaxScores[h]}\t`), "100"].join("\t") + "\n";
+
+        computedData.forEach(s => {
+            const row = [s.class, s.num, s.name];
+            availableHws.forEach(hwId => {
+                const statusMap = { 'PERFECT': '完美', 'DONE': '已改正', 'PENDING': '欠改正', 'MISSING': '未交' };
+                row.push(s.hwData[hwId].score !== '' ? s.hwData[hwId].score : '');
+                row.push(statusMap[s.hwData[hwId].status]);
+            });
+            row.push(s.average);
+            tsv += row.join("\t") + "\n";
+        });
+
+        navigator.clipboard.writeText(tsv).then(() => alert("📋 已成功複製！請至 Excel 按 Ctrl+V 貼上。"));
+    };
+
+    const getStatusIcon = (status) => {
+        if (status === 'PERFECT') return <span className="text-emerald-600 bg-emerald-50 px-1 rounded flex items-center gap-0.5"><Icon name="CheckCircle" size={12}/> 完美</span>;
+        if (status === 'DONE') return <span className="text-blue-600 bg-blue-50 px-1 rounded flex items-center gap-0.5"><Icon name="RotateCw" size={12}/> 已改正</span>;
+        if (status === 'PENDING') return <span className="text-red-600 bg-red-50 px-1 rounded flex items-center gap-0.5"><Icon name="XCircle" size={12}/> 欠改正</span>;
+        return <span className="text-slate-400 bg-slate-100 px-1 rounded flex items-center gap-0.5"><Icon name="Circle" size={12}/> 未交</span>;
+    };
+
+    return (
+        <div className="p-6 max-w-7xl mx-auto animate-fadeIn">
+            {/* 頂部控制列 */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 border-b pb-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                        <Icon name="Table" className="text-amber-600" /> 功課成績總表與快速編輯
+                    </h1>
+                    <p className="text-sm text-slate-500 mt-1 flex items-center gap-3">
+                        <span>開啟編輯模式可直接於表格修改，離開格子自動存檔。</span>
+                        {saveStatus === 'saving' && <span className="text-amber-500 flex items-center gap-1 font-bold"><Icon name="Loader2" size={14} className="animate-spin" /> 儲存中...</span>}
+                        {saveStatus === 'saved' && <span className="text-emerald-500 flex items-center gap-1 font-bold"><Icon name="Check" size={14} /> 已同步雲端</span>}
+                    </p>
+                </div>
+                <div className="flex items-center gap-3">
+                    <button 
+                        onClick={() => setIsEditMode(!isEditMode)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold shadow-sm transition ${isEditMode ? 'bg-rose-500 hover:bg-rose-600 text-white' : 'bg-amber-100 text-amber-700 hover:bg-amber-200 border border-amber-200'}`}
+                    >
+                        {isEditMode ? <Icon name="X" size={18} /> : <Icon name="Edit" size={18} />}
+                        {isEditMode ? '關閉編輯模式' : '開啟快速編輯'}
+                    </button>
+                    <button onClick={handleCopyToExcel} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg shadow-sm transition font-bold">
+                        <Icon name="Copy" size={18} /> 複製至 Excel
+                    </button>
+                </div>
+            </div>
+
+            {/* 功課篩選面板 */}
+            <div className="card p-4 mb-6 bg-white rounded-xl border border-slate-200 shadow-sm">
+                <h3 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-1">
+                    <Icon name="Settings" size={16} /> 選擇要顯示及納入平均分的功課：
+                </h3>
+                <div className="flex flex-wrap gap-4">
+                    {availableHws.length === 0 ? <span className="text-sm text-slate-400">目前沒有功課紀錄。</span> : 
+                        availableHws.map(hw => (
+                            <label key={hw} className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-md border border-slate-200 cursor-pointer hover:bg-slate-100 transition text-sm font-medium text-slate-700">
+                                <input type="checkbox" className="w-4 h-4 text-amber-500 rounded focus:ring-amber-500" checked={!!includedHws[hw]} onChange={() => toggleHw(hw)} />
+                                {hw}
+                            </label>
+                        ))
+                    }
+                </div>
+            </div>
+
+            {/* 數據表格 */}
+            {availableHws.length > 0 && (
+                <div className={`bg-white rounded-xl border-2 shadow-sm overflow-x-auto max-h-[600px] overflow-y-auto transition ${isEditMode ? 'border-amber-400 shadow-md ring-4 ring-amber-50' : 'border-slate-200'}`}>
+                    <table className="w-full text-left border-collapse min-w-[800px]">
+                        <thead className="bg-slate-100 sticky top-0 z-10 shadow-sm">
+                            <tr>
+                                <th className="p-3 text-sm font-semibold text-slate-600 border-b border-r border-slate-200">班別</th>
+                                <th className="p-3 text-sm font-semibold text-slate-600 border-b border-r border-slate-200">學號</th>
+                                <th className="p-3 text-sm font-semibold text-slate-600 border-b border-r border-slate-200">姓名</th>
+                                {availableHws.map(hw => (
+                                    <th key={hw} className={`p-3 border-b border-r border-slate-200 ${includedHws[hw] ? 'bg-amber-50/50' : 'bg-slate-50 text-slate-400 opacity-50'}`}>
+                                        <div className="flex flex-col gap-1 items-center">
+                                            <span className="font-bold text-slate-700">{hw}</span>
+                                            <span className="text-[10px] text-slate-500 bg-white px-1.5 rounded border">滿分: {hwMaxScores[hw]}</span>
+                                        </div>
+                                    </th>
+                                ))}
+                                <th className="p-3 text-sm font-bold text-amber-700 bg-amber-100 border-b border-slate-200 text-center w-24">平均分<br/><span className="text-[10px] font-normal">/100</span></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {computedData.map(student => (
+                                <tr key={student.id} className="hover:bg-slate-50 transition border-b border-slate-100 group">
+                                    <td className="p-3 text-sm text-slate-700 font-medium border-r border-slate-100 text-center">{student.class}</td>
+                                    <td className="p-3 text-sm text-slate-600 border-r border-slate-100 text-center">{student.num}</td>
+                                    <td className="p-3 text-sm text-slate-800 font-bold border-r border-slate-100">{student.name}</td>
+                                    
+                                    {availableHws.map(hw => {
+                                        const hwData = student.hwData[hw];
+                                        const max = hwMaxScores[hw];
+                                        const isIncluded = includedHws[hw];
+                                        
+                                        // 顏色判定
+                                        let scoreColor = 'text-slate-700';
+                                        if (hwData.score !== '' && max > 0) {
+                                            const pct = hwData.score / max;
+                                            if (pct < 0.4) scoreColor = 'text-red-600 font-bold';
+                                            else if (pct <= 0.6) scoreColor = 'text-amber-600 font-bold';
+                                            else scoreColor = 'text-emerald-600 font-bold';
+                                        }
+
+                                        return (
+                                            <td key={hw} className={`p-2 border-r border-slate-100 align-middle ${!isIncluded ? 'opacity-30 bg-slate-50' : ''}`}>
+                                                {!isEditMode ? (
+                                                    <div className="flex flex-col items-center justify-center gap-1.5">
+                                                        <span className={`text-base font-mono ${scoreColor}`}>
+                                                            {hwData.score !== '' ? hwData.score : '-'}
+                                                        </span>
+                                                        <div className="text-[10px] font-bold">{getStatusIcon(hwData.status)}</div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex flex-col items-center gap-1.5 bg-amber-50/50 p-1.5 rounded-lg border border-amber-100">
+                                                        <div className="flex items-center gap-1">
+                                                            <input 
+                                                                type="number" min="0" max={max} step="0.5"
+                                                                defaultValue={hwData.score}
+                                                                onBlur={(e) => handleCellEdit(student.id, hw, e.target.value, hwData.status)}
+                                                                className={`w-14 p-1 text-center text-sm font-bold font-mono border rounded outline-none focus:ring-2 focus:ring-amber-400 ${scoreColor}`}
+                                                                placeholder="-"
+                                                            />
+                                                        </div>
+                                                        <select 
+                                                            defaultValue={hwData.status}
+                                                            onChange={(e) => handleCellEdit(student.id, hw, hwData.score, e.target.value)}
+                                                            className={`w-20 text-[10px] p-1 font-bold rounded border outline-none cursor-pointer
+                                                                ${hwData.status === 'PERFECT' ? 'bg-emerald-50 text-emerald-700' : 
+                                                                  hwData.status === 'DONE' ? 'bg-blue-50 text-blue-700' : 
+                                                                  hwData.status === 'PENDING' ? 'bg-red-50 text-red-700' : 'bg-slate-50 text-slate-500'}`}
+                                                        >
+                                                            <option value="PERFECT">✅ 完美</option>
+                                                            <option value="DONE">🔄 已改正</option>
+                                                            <option value="PENDING">❌ 欠改正</option>
+                                                            <option value="MISSING">⚪ 未交</option>
+                                                        </select>
+                                                    </div>
+                                                )}
+                                            </td>
+                                        );
+                                    })}
+                                    
+                                    {/* 平均分欄位 */}
+                                    {(() => {
+                                        let avgBgColor = 'bg-amber-50/30';
+                                        let avgTextColor = 'text-amber-700';
+                                        
+                                        if (student.average !== '-') {
+                                            const avgNum = parseFloat(student.average);
+                                            if (avgNum < 40) { avgBgColor = 'bg-red-100'; avgTextColor = 'text-red-700'; }
+                                            else if (avgNum <= 60) { avgBgColor = 'bg-yellow-100'; avgTextColor = 'text-yellow-800'; }
+                                        }
+
+                                        return (
+                                            <td className={`p-3 text-center font-mono font-black text-base ${avgBgColor} ${avgTextColor}`}>
+                                                {student.average}
+                                            </td>
+                                        );
+                                    })()}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+        </div>
+    );
+};
 
 // ==================== 升級版：分區模塊化 Sidebar (區分小測與考試版) ====================
             const Sidebar = ({ view, setView, currentCohort, setCurrentCohort, allCohorts, isSaving }) => {
@@ -4189,6 +4507,7 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkMaps, 
                                 <p className="px-3 text-[11px] font-bold text-amber-500 tracking-wider uppercase mb-1">📚 日常功課管理區</p>
                                 {navButton('homeworkScoresInput', 'BookOpenCheck', '功課批改與狀態跟進', 'bg-amber-600')}
                                 {navButton('homeworkSettings', 'BookType', '功課內容與藍圖設定', 'bg-amber-600')}
+                                {navButton('homeworkSummary', 'Table', '功課成績總表與編輯', 'bg-amber-600')}
                             </div>
 
                             <div className="border-t border-slate-700/50 my-1 mx-2"></div>
@@ -4199,15 +4518,15 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkMaps, 
                                 <p className="px-3 text-[11px] font-bold text-blue-400 tracking-wider uppercase mb-2">📝 小測管理與分析區</p>
                                 {/* 輸入與設定 */}
                                 {navButton('scores', 'ClipboardList', '小測成績輸入')}
-                                {navButton('quizSettings', 'FileEdit', '小測內容設定')}
+                                {navButton('analysis', 'Wand2', '個人分析/補底')}
+                                {navButton('chart', 'PieChart', '所有小測表現')}
+                                {navButton('topicAnalysis', 'Target', '整班弱點分析')}
+                               
+                                
                                 
                                 <div className="my-1 border-t border-slate-700/30 mx-3"></div> {/* 區塊內微小分隔線 */}
-                                
-                                {/* 分析與圖表 */}
-                                {navButton('classSummary', 'Table', '小測成績表')}
-                                {navButton('analysis', 'Wand2', '個人分析/補底')}
-                                {navButton('chart', 'PieChart', '所有小測成績表現')}
-                                {navButton('topicAnalysis', 'Target', '整班小測弱點分析')}
+                                {navButton('classSummary', 'Table', '小測分數表')}
+                                {navButton('quizSettings', 'FileEdit', '小測內容設定')}
                             </div>
 
                             <div className="border-t border-slate-700/50 my-1 mx-2"></div>
@@ -4219,7 +4538,7 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkMaps, 
                                 {navButton('examAnalysis', 'LineChart', '考試弱點分析', 'bg-purple-600')}
                                 {navButton('studentExamAnalysis', 'UserCheck', '個人大考分析', 'bg-purple-600')}
                                 {navButton('remedialPractice', 'ClipboardEdit', '專屬補底練習與進度', 'bg-purple-600')}
-                                {navButton('examExport', 'Download', '考試成績匯出 (Excel)', 'bg-green-600')}
+                                {navButton('examExport', 'Download', '考試分數表', 'bg-green-600')}
                                 {navButton('examSettings', 'Settings', '考試內容設定', 'bg-purple-600')}
                             </div>
 
@@ -4499,6 +4818,7 @@ const App = () => {
                     {/* 更新：功課管理頁面傳入完整的狀態與更新函數 */}
                     {view === 'homeworkSettings' && <HomeworkSettingsView students={students} currentCohort={currentCohort} homeworkMaps={homeworkMaps} setHomeworkMaps={setHomeworkMaps} syncToCloud={syncToCloud} />}
                     {view === 'homeworkScoresInput' && <HomeworkScoresInputView activeStudents={activeStudents} currentCohort={currentCohort} homeworkMaps={homeworkMaps} homeworkScores={homeworkScores} setHomeworkScores={setHomeworkScores} syncToCloud={syncToCloud} />}
+                    {view === 'homeworkSummary' && <HomeworkSummaryView activeStudents={activeStudents} currentCohort={currentCohort} homeworkMaps={homeworkMaps} homeworkScores={homeworkScores} setHomeworkScores={setHomeworkScores} syncToCloud={syncToCloud} />}                
                             </div>
                     </div>
                 </div>
