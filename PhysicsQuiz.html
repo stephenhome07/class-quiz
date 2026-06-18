@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.81 Physics Quiz Analyzer</title>
+    <title> V2.83 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -350,26 +350,19 @@ const ScoreInputView = ({ activeStudents, scores, setScores }) => {
     );
 };
 
-             // 弱點分析與 AI 補底卷生成視圖
+             // ==================== 弱點分析與 AI 補底卷生成視圖 (修復 Object 渲染與升級 AI) ====================
             const AnalysisView = ({ activeStudents, scores }) => {
-
-                // ==========================================
-                // 1. 新增：計算當前群組有輸入成績的測驗
-                // ==========================================
+            
+                // 1. 計算當前群組有輸入成績的測驗
                 const activeQuizzes = React.useMemo(() => {
                     return Object.keys(QUIZ_MAPS).filter(quizId => {
-                        // 檢查這個群組裡，有沒有任何一個學生在這個小測有成績
                         return activeStudents.some(s => scores[s.id]?.[quizId] && Object.keys(scores[s.id][quizId]).length > 0);
                     });
                 }, [activeStudents, scores]);
                 
                 const [selectedStudent, setSelectedStudent] = React.useState('');
-                // ==========================================
-                // 2. 修改：預設選擇第一個「有成績」的測驗
-                // ==========================================
                 const [selectedQuiz, setSelectedQuiz] = React.useState(activeQuizzes[0] || Object.keys(QUIZ_MAPS)[0]);
             
-                // 新增：如果切換群組後，原本選的測驗沒成績了，就自動跳到有成績的測驗
                 React.useEffect(() => {
                     if (activeQuizzes.length > 0 && !activeQuizzes.includes(selectedQuiz)) {
                         setSelectedQuiz(activeQuizzes[0]);
@@ -382,25 +375,30 @@ const ScoreInputView = ({ activeStudents, scores, setScores }) => {
                 const [aiLevel, setAiLevel] = React.useState('LV3-4');
                 const [aiMcCount, setAiMcCount] = React.useState(10);
                 const [aiLqCount, setAiLqCount] = React.useState(2);
-
+            
                 const map = QUIZ_MAPS[selectedQuiz];
                 
                 // 取得該學生此小測的成績分析
                 const ana = getStudentAnalysis(selectedStudent, selectedQuiz, scores);
-
+            
                 const generatePrompt = () => {
                     if (!ana || ana.weakTopics.length === 0) return aiLang === 'en' ? "This student is performing well. No remedial worksheet is needed." : "此學生表現良好，暫不需要補底練習。";
                     
                     const weakList = ana.weakTopics.map(topic => {
                         const info = ana.analysis[topic];
-                        return `- ${topic} ${info.topicName} (${aiLang === 'en' ? 'Specific Weaknesses' : '具體錯題概念'}: ${[...new Set(info.weakPoints)].join(', ')})`;
-                    }).join('\n');
-
+                        
+                        // ★ 修復與升級：判斷 topicName 是否為升級後的物件，精準提取 topic 與 desc
+                        const topicTitle = typeof info.topicName === 'object' ? info.topicName.topic : info.topicName;
+                        const topicDesc = typeof info.topicName === 'object' && info.topicName.desc ? `\n  - 官方學習要求：${info.topicName.desc}` : '';
+                        
+                        return `【課題 ${topic}：${topicTitle}】${topicDesc}\n  - ${aiLang === 'en' ? 'Specific Weaknesses' : '具體錯題概念'}：${[...new Set(info.weakPoints)].join(', ')}`;
+                    }).join('\n\n');
+            
                     const isEng = aiLang === 'en';
                     let prompt = isEng 
                         ? `You are an HKDSE Physics teacher. My student failed some sub-topics in "${map.title}". Based on the system analysis, their weak points are:\n\n${weakList}\n\nPlease generate a remedial worksheet based on these weaknesses with the following requirements:\n`
-                        : `你是一位香港 DSE 物理科老師。我的學生在小測「${map.title}」中表現不合格。以下是系統分析出他的弱點課題 (Sub-topics)：\n\n${weakList}\n\n請根據以上弱點，為他生成一份「互動練習卷」，要求：\n`;
-
+                        : `你是一位香港 DSE 物理科老師。我的學生在小測「${map.title}」中表現不合格。以下是系統分析出他的弱點與 DSE 官方學習要求：\n\n${weakList}\n\n請根據以上弱點，為他生成一份「互動練習卷」，要求：\n`;
+            
                     let qIdx = 1;
                     if (aiType === 'MC' || aiType === 'Both') {
                         prompt += isEng ? `${qIdx++}. Generate ${aiMcCount} Multiple Choice (MC) questions directly targeting these specific weaknesses.\n` : `${qIdx++}. 針對上述弱點，生成 ${aiMcCount} 題選擇題 (MC)，必須直擊這些常犯錯誤。\n`;
@@ -408,16 +406,16 @@ const ScoreInputView = ({ activeStudents, scores, setScores }) => {
                     if (aiType === 'LQ' || aiType === 'Both') {
                         prompt += isEng ? `${qIdx++}. Generate ${aiLqCount} Structured/Long Questions (LQ) mimicking standard DSE formats.\n` : `${qIdx++}. 生成 ${aiLqCount} 題結構式長題目 (LQ)，模擬 DSE 常見題型。\n`;
                     }
-
+            
                     const levelDesc = { 'LV2': isEng?'Level 2 (Basic)':'基本 (Level 2)', 'LV3-4': isEng?'Level 3-4 (Standard)':'標準 (Level 3-4)', 'LV5': isEng?'Level 5/5* (Advanced)':'高階 (Level 5, 5*, 5**)' };
                     
                     prompt += isEng 
                         ? `${qIdx++}. Difficulty: ${levelDesc[aiLevel]} standard of HKDSE Physics.\n${qIdx}. Provide detailed explanations, highlight common traps, and show step-by-step calculations in English.`
                         : `${qIdx++}. 難度必須符合 HKDSE 物理科 ${levelDesc[aiLevel]} 程度。\n${qIdx}. 提供詳細的繁體中文解釋、點出學生常犯的思考陷阱 (Common traps) 及計算步驟。`;
-
+            
                     return prompt;
                 };
-
+            
                 return (
                     <div className="p-6 flex flex-col md:flex-row gap-6 h-full">
                         {/* 左側：學生選擇 */}
@@ -437,7 +435,7 @@ const ScoreInputView = ({ activeStudents, scores, setScores }) => {
                                 )
                             })}
                         </div>
-
+            
                         {/* 右側：分析內容 */}
                         <div className="flex-1 flex flex-col gap-4 max-h-[85vh] overflow-y-auto pr-2">
                             <div className="card p-6 border-b-4 border-blue-500">
@@ -456,8 +454,7 @@ const ScoreInputView = ({ activeStudents, scores, setScores }) => {
                                         }
                                     </select>
                                 </div>
-
-                                {/* 修正重點：使用 ana 變數直接判斷是否有成績紀錄 */}
+            
                                 {!selectedStudent ? (
                                     <div className="text-center p-12 text-gray-400 flex flex-col items-center">
                                         <Icon name="UserCheck" size={48} className="mb-3 opacity-50" />
@@ -485,10 +482,14 @@ const ScoreInputView = ({ activeStudents, scores, setScores }) => {
                                                         const t = ana.analysis[topicId];
                                                         const pct = (t.score / t.max) * 100;
                                                         let color = pct >= 70 ? 'bg-green-500' : pct >= 50 ? 'bg-yellow-500' : 'bg-red-500';
+                                                        
+                                                        // ★ 修復渲染錯誤：提取物件中的 topic 字串
+                                                        const displayTopicName = typeof t.topicName === 'object' ? t.topicName.topic : t.topicName;
+            
                                                         return (
                                                             <div key={topicId} className="text-sm">
                                                                 <div className="flex justify-between mb-1">
-                                                                    <span className="font-semibold text-gray-700">{topicId} {t.topicName}</span>
+                                                                    <span className="font-semibold text-gray-700">{topicId} {displayTopicName}</span>
                                                                     <span className="font-bold text-gray-600">{Math.round(pct)}% ({t.score}/{t.max})</span>
                                                                 </div>
                                                                 <div className="w-full bg-gray-200 rounded-full h-1.5">
@@ -500,7 +501,7 @@ const ScoreInputView = ({ activeStudents, scores, setScores }) => {
                                                 </div>
                                             </div>
                                         </div>
-
+            
                                         {/* AI 補底卷生成 */}
                                         <div className="bg-blue-50 p-5 rounded-xl border border-blue-100">
                                             <h3 className="font-bold text-lg mb-3 text-blue-800 flex items-center gap-2"><Icon name="Bot" /> AI 補底練習生成</h3>
@@ -536,10 +537,10 @@ const ScoreInputView = ({ activeStudents, scores, setScores }) => {
                                                     </div>
                                                 </div>
                                             </div>
-
+            
                                             <textarea 
                                                 readOnly 
-                                                className="w-full h-40 p-3 rounded-lg border border-blue-200 text-sm bg-white outline-none resize-none focus:ring-2 focus:ring-blue-400" 
+                                                className="w-full h-48 p-3 rounded-lg border border-blue-200 text-sm bg-white outline-none resize-none focus:ring-2 focus:ring-blue-400" 
                                                 value={generatePrompt()} 
                                             />
                                             <button 
