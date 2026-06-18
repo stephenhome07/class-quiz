@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.84 Physics Quiz Analyzer</title>
+    <title> V2.85 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -727,13 +727,13 @@ const StudentChartView = ({ activeStudents, scores }) => {
     const radarInstance = React.useRef(null);
 
     // 計算圖表所需的數據
+// ==================== 升級版：排序與警示功能 (弱項置頂 + 低於平均紅標) ====================
     const getChartData = () => {
         if (!selectedStudentId) return null;
         
         const topicStats = {}; 
-        const sectionStats = {}; // ★ 新增：用於雷達圖的範疇統計
+        const sectionStats = {};
 
-        // 收集並計算所有小測中的知識點總分與該學生得分
         Object.keys(window.QUIZ_MAPS || {}).forEach(quizId => {
             const map = window.QUIZ_MAPS[quizId];
             activeStudents.forEach(st => {
@@ -741,27 +741,22 @@ const StudentChartView = ({ activeStudents, scores }) => {
                 map.questions.forEach(q => {
                     const val = parseFloat(stScores[q.id]);
                     if (!isNaN(val)) {
-                        // ★ 修復：判斷 SYLLABUS_TOPICS 是舊版字串還是新版物件，並提取對應名稱
                         const syllabusInfo = window.SYLLABUS_TOPICS?.[q.topicId];
                         const topicName = typeof syllabusInfo === 'object' ? syllabusInfo.topic : (syllabusInfo || '未知課題');
                         const sectionName = (typeof syllabusInfo === 'object' && syllabusInfo.section) ? syllabusInfo.section : '綜合範疇';
 
-                        // 初始化 Topic 統計
                         if (!topicStats[q.topicId]) {
                             topicStats[q.topicId] = { desc: topicName, studentScore: 0, studentMax: 0, classScore: 0, classMax: 0 };
                         }
-                        // 初始化 Section 統計
                         if (!sectionStats[sectionName]) {
                             sectionStats[sectionName] = { studentScore: 0, studentMax: 0, classScore: 0, classMax: 0 };
                         }
 
-                        // 累加全級總分
                         topicStats[q.topicId].classScore += val;
                         topicStats[q.topicId].classMax += q.max;
                         sectionStats[sectionName].classScore += val;
                         sectionStats[sectionName].classMax += q.max;
                         
-                        // 累加選定學生總分
                         if (st.id === selectedStudentId) {
                             topicStats[q.topicId].studentScore += val;
                             topicStats[q.topicId].studentMax += q.max;
@@ -773,75 +768,55 @@ const StudentChartView = ({ activeStudents, scores }) => {
             });
         });
 
-        // 整理長條圖 (Topic) 數據
-        const barLabels = [];
-        const barStudentData = [];
-        const barAverageData = [];
-        Object.keys(topicStats).forEach(topicId => {
+        // 整理並排序 Bar 數據
+        const barEntries = Object.keys(topicStats).map(topicId => {
             const stat = topicStats[topicId];
-            if (stat.classMax > 0 && stat.studentMax > 0) {
-                // 限制標籤長度以免圖表變形
-                const labelText = `${topicId} ${stat.desc}`;
-                barLabels.push(labelText.length > 20 ? labelText.substring(0, 20) + '...' : labelText);
-                barStudentData.push(((stat.studentScore / stat.studentMax) * 100).toFixed(1));
-                barAverageData.push(((stat.classScore / stat.classMax) * 100).toFixed(1));
-            }
-        });
+            const sPct = (stat.studentScore / stat.studentMax) * 100;
+            const aPct = (stat.classScore / stat.classMax) * 100;
+            return { label: `${topicId} ${stat.desc}`, sPct: sPct.toFixed(1), aPct: aPct.toFixed(1) };
+        }).sort((a, b) => a.sPct - b.sPct); // ★ 關鍵修改：由弱到強排序
 
-        // 整理雷達圖 (Section) 數據
-        const radarLabels = [];
-        const radarStudentData = [];
-        const radarAverageData = [];
+        // 整理 Radar 數據
+        const radarLabels = [], radarS = [], radarA = [];
         Object.keys(sectionStats).forEach(sec => {
             const stat = sectionStats[sec];
-            if (stat.classMax > 0 && stat.studentMax > 0) {
-                radarLabels.push(sec);
-                radarStudentData.push(((stat.studentScore / stat.studentMax) * 100).toFixed(1));
-                radarAverageData.push(((stat.classScore / stat.classMax) * 100).toFixed(1));
-            }
+            radarLabels.push(sec);
+            radarS.push(((stat.studentScore / stat.studentMax) * 100).toFixed(1));
+            radarA.push(((stat.classScore / stat.classMax) * 100).toFixed(1));
         });
 
-        return { 
-            bar: { labels: barLabels, studentData: barStudentData, averageData: barAverageData },
-            radar: { labels: radarLabels, studentData: radarStudentData, averageData: radarAverageData }
-        };
+        return { bar: barEntries, radar: { labels: radarLabels, sData: radarS, aData: radarA } };
     };
 
     React.useEffect(() => {
         const data = getChartData();
         if (!data || !chartRef.current || !radarRef.current) return;
 
-        // 1. 繪製精細課題長條圖 (Bar Chart)
+        // 1. Bar Chart
         if (chartInstance.current) chartInstance.current.destroy();
         const ctxBar = chartRef.current.getContext('2d');
+        
+        // ★ 關鍵修改：動態顏色判斷
+        const backgroundColors = data.bar.map(item => 
+            parseFloat(item.sPct) < parseFloat(item.aPct) ? 'rgba(239, 68, 68, 0.7)' : 'rgba(59, 130, 246, 0.7)'
+        );
+
         chartInstance.current = new Chart(ctxBar, {
             type: 'bar',
             data: {
-                labels: data.bar.labels,
-                datasets: [
-                    {
-                        label: '該學生表現 (%)',
-                        data: data.bar.studentData,
-                        backgroundColor: 'rgba(59, 130, 246, 0.7)',
-                        borderColor: 'rgba(59, 130, 246, 1)',
-                        borderWidth: 1
-                    },
-                    {
-                        label: '全級平均 (%)',
-                        data: data.bar.averageData,
-                        backgroundColor: 'rgba(156, 163, 175, 0.5)',
-                        borderColor: 'rgba(156, 163, 175, 1)',
-                        borderWidth: 1
-                    }
-                ]
+                labels: data.bar.map(i => i.label),
+                datasets: [{
+                    label: '學生得分 (%)',
+                    data: data.bar.map(i => i.sPct),
+                    backgroundColor: backgroundColors,
+                    borderWidth: 1
+                }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                indexAxis: 'y', // 橫向長條圖
-                scales: {
-                    x: { beginAtZero: true, max: 100, title: { display: true, text: '得分百分比 (%)' } }
-                }
+                indexAxis: 'y',
+                scales: { x: { beginAtZero: true, max: 100 } }
             }
         });
 
