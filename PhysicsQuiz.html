@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.01 Physics Quiz Analyzer</title>
+    <title> V3.02 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -4838,6 +4838,9 @@ const App = () => {
                     const safeSyllabus = typeof SYLLABUS_TOPICS !== 'undefined' ? SYLLABUS_TOPICS : (window.SYLLABUS_TOPICS || {});
                     const safeQuizMaps = typeof QUIZ_MAPS !== 'undefined' ? QUIZ_MAPS : (window.QUIZ_MAPS || {});
                     const safeExamMaps = typeof EXAM_MAPS !== 'undefined' ? EXAM_MAPS : (window.EXAM_MAPS || {});
+                    
+                    // ★ 補上這行：安全讀取 Pastpaper 資料
+                    const safePastpaperMaps = typeof PASTPAPER_MAPS !== 'undefined' ? PASTPAPER_MAPS : (window.PASTPAPER_MAPS || {});
 
                     const payload = { 
                         students: students, 
@@ -4849,7 +4852,7 @@ const App = () => {
                         remediationProgress: remediationProgress,
                         homeworkMaps: homeworkMaps,      // 來自 React 最新狀態
                         homeworkScores: homeworkScores,  // 來自 React 最新狀態
-                        pastpaperMaps: safePastpaperMaps,
+                        pastpaperMaps: safePastpaperMaps, // ★ 這裡現在安全了
                         ...overrideData                  // 強制使用當下操作的最新資料
                     };
 
@@ -4873,19 +4876,9 @@ const App = () => {
                 } catch (error) {
                     // 如果打包過程中依然發生未知錯誤，會抓住它，不會讓畫面卡死
                     console.error("系統打包存檔資料時發生嚴重錯誤:", error);
-                    alert("系統內部錯誤：無法打包上傳資料。");
+                    alert("系統內部錯誤：無法打包上傳資料。\n錯誤詳情: " + error.message);
                     setIsSaving(false);
                 }
-            };
-
-            // 當畫面還在載入時，顯示 Loading 畫面
-            if (isLoading) {
-                return (
-                    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
-                        <Icon name="Loader2" size={48} className="text-blue-500 animate-spin mb-4" />
-                        <h2 className="text-xl font-bold text-gray-700">正在從 Google 雲端讀取資料...</h2>
-                    </div>
-                );
             };
 
 
