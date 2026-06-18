@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V2.94 Physics Quiz Analyzer</title>
+    <title> V3.00 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -4553,6 +4553,90 @@ const HomeworkSummaryView = ({ activeStudents, currentCohort, homeworkMaps, home
     );
 };
 
+
+        // ==================== 新增：歷屆試題 (Pastpaper) 藍圖設定組件 ====================
+const PastpaperSettingsView = ({ syncToCloud }) => {
+    const [pastpaperText, setPastpaperText] = React.useState('');
+    const [status, setStatus] = React.useState('');
+
+    // 載入目前的設定
+    React.useEffect(() => {
+        if (window.PASTPAPER_MAPS && Object.keys(window.PASTPAPER_MAPS).length > 0) {
+            setPastpaperText(JSON.stringify(window.PASTPAPER_MAPS, null, 2));
+        } else {
+            // 提供預設的完美格式範本給同事參考
+            setPastpaperText('{\n  "2023": {\n    "title": "2023 HKDSE Physics",\n    "questions": [\n      { "id": "2023-MC-01", "type": "MC", "max": 1, "level": "中", "topicId": "1.1.1", "topicDesc": "溫度計", "ans": "A" },\n      { "id": "2023-LQ-01", "type": "LQ", "max": 5, "level": "深", "topicId": "2.7.1", "topicDesc": "非彈性碰撞", "ans": "" }\n    ]\n  }\n}');
+        }
+    }, []);
+
+    const handleSave = () => {
+        try {
+            const parsed = JSON.parse(pastpaperText);
+            window.PASTPAPER_MAPS = parsed; // 更新全域變數
+            
+            setStatus('更新成功，準備同步中...');
+            alert('✅ 歷屆試題題庫更新成功！\n\n系統已暫存您的變更。請記得點擊左下角的「儲存至雲端」按鈕，將題庫永久同步至 Google Sheet！');
+            setStatus('✅ 已暫存，請點擊儲存至雲端');
+            
+            // 若要強制立即存檔，可解開這行註解：
+            // syncToCloud(); 
+        } catch (err) {
+            setStatus('❌ 儲存失敗：JSON 格式錯誤');
+            alert('JSON 格式錯誤，請檢查您的輸入！\n錯誤詳情：' + err.message);
+        }
+    };
+
+    return (
+        <div className="p-6 max-w-6xl mx-auto animate-fadeIn">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 border-b pb-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                        <Icon name="Database" className="text-indigo-600" /> Pastpaper 歷屆試題題庫設定
+                    </h1>
+                    <p className="text-sm text-slate-500 mt-1">請在此貼上「新版整合格式」的 JSON 題庫資料。包含 MC 答案與 LQ 滿分配置。</p>
+                </div>
+                <div className="flex items-center gap-4">
+                    {status && <span className={`text-sm font-bold ${status.includes('❌') ? 'text-red-600' : 'text-emerald-600'}`}>{status}</span>}
+                    <button onClick={handleSave} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-6 rounded-lg shadow-md flex items-center gap-2 transition">
+                        <Icon name="Save" size={18} /> 更新本機題庫 (準備存檔)
+                    </button>
+                </div>
+            </div>
+
+            <div className="card p-5 border-2 border-indigo-100 bg-slate-50 shadow-sm flex flex-col h-[600px] rounded-xl">
+                <label className="text-xs font-bold text-slate-700 mb-2 flex justify-between">
+                    <span>📝 JSON 題庫編輯區 (請直接從 AI 產出的格式貼上)</span>
+                    <span className="text-slate-400 font-normal">請確保 JSON 格式完全正確</span>
+                </label>
+                <textarea 
+                    className="flex-1 w-full p-4 text-[13px] font-mono bg-slate-900 text-emerald-400 border border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none shadow-inner resize-none custom-scrollbar"
+                    value={pastpaperText}
+                    onChange={(e) => setPastpaperText(e.target.value)}
+                    spellCheck="false"
+                />
+            </div>
+            
+            <div className="mt-6 bg-indigo-50 border border-indigo-200 p-4 rounded-xl shadow-sm">
+                <h3 className="font-bold text-indigo-800 text-sm mb-2 flex items-center gap-1">
+                    <Icon name="Info" size={16} /> 格式參考 (請交由 AI 協助轉換)
+                </h3>
+                <p className="text-xs text-indigo-600 mb-3">若您有舊版的 Pastpaper 資料，請將舊資料丟給 ChatGPT，並附上以下標準範本請它轉換：</p>
+                <pre className="text-xs text-slate-600 bg-white p-4 rounded border border-indigo-100 overflow-x-auto shadow-inner font-mono">
+{`{
+  "2023": {
+    "title": "2023 HKDSE Physics",
+    "questions": [
+      { "id": "2023-MC-01", "type": "MC", "max": 1, "level": "中", "topicId": "1.1.1", "topicDesc": "溫度計的使用", "ans": "A" },
+      { "id": "2023-LQ-01", "type": "LQ", "max": 5, "level": "深", "topicId": "2.7.1", "topicDesc": "非彈性碰撞與動能計算", "ans": "" }
+    ]
+  }
+}`}
+                </pre>
+            </div>
+        </div>
+    );
+};
+
 // ==================== 升級版：分區模塊化 Sidebar (區分小測與考試版) ====================
             const Sidebar = ({ view, setView, currentCohort, setCurrentCohort, allCohorts, isSaving }) => {
                 // 輔助函數：用來產生統一風格的按鈕
@@ -4652,6 +4736,13 @@ const HomeworkSummaryView = ({ activeStudents, currentCohort, homeworkMaps, home
                             </div>
 
                             <div className="border-t border-slate-700/50 my-1 mx-2"></div>
+                            {/* ================= 歷屆試題區 (新加入) ================= */}
+                            <div className="mt-6 mb-2 px-4 text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                                <Icon name="Database" size={14} /> 歷屆試題 (Pastpaper)
+                            </div>
+                            {navButton('pastpaperSettings', 'Settings', 'Pastpaper 題庫設定', 'bg-indigo-600')}
+
+                            <div className="border-t border-slate-700/50 my-1 mx-2"></div>
 
                             {/* 區塊 3：系統設定區 */}
                             <div className="flex flex-col gap-1 mb-4">
@@ -4712,6 +4803,7 @@ const App = () => {
                         window.SYLLABUS_TOPICS = data.syllabus || {};
                         window.QUIZ_MAPS = data.quizMaps || {};
                         window.EXAM_MAPS = data.examMaps || {};
+                        window.PASTPAPER_MAPS = data.pastpaperMaps || {};
                         
                         // 如果原本有宣告 let 變數就覆寫，如果沒有就存入 window 安全區
                         if (typeof SYLLABUS_TOPICS !== 'undefined') SYLLABUS_TOPICS = window.SYLLABUS_TOPICS;
@@ -4755,6 +4847,7 @@ const App = () => {
                         remediationProgress: remediationProgress,
                         homeworkMaps: homeworkMaps,      // 來自 React 最新狀態
                         homeworkScores: homeworkScores,  // 來自 React 最新狀態
+                        pastpaperMaps: safePastpaperMaps,
                         ...overrideData                  // 強制使用當下操作的最新資料
                     };
 
@@ -4922,7 +5015,7 @@ const App = () => {
                             syncToCloud={syncToCloud} 
                         />
                     )}
-
+                    {view === 'pastpaperSettings' && <PastpaperSettingsView syncToCloud={syncToCloud} />}
                     
                     {/* 更新：功課管理頁面傳入完整的狀態與更新函數 */}
                     {view === 'homeworkSettings' && <HomeworkSettingsView students={students} currentCohort={currentCohort} homeworkMaps={homeworkMaps} setHomeworkMaps={setHomeworkMaps} syncToCloud={syncToCloud} />}
