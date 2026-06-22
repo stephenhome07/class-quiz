@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.05 Physics Quiz Analyzer</title>
+    <title> V3.06 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -2139,7 +2139,7 @@ const ExamScoresInputView = ({ activeStudents, examScores, setExamScores, syncTo
     );
 };
 
-// ==================== 更新版：大考全班數據診斷與 AI 教案生成組件 (修復 React 31 Error + 升級 AI 提示詞) ====================
+// ==================== 升級版：大考全班數據診斷與 AI 教案生成組件 (支援雙重答案 A,C 解析) ====================
 const ExamAnalysisView = ({ activeStudents, examScores, currentCohort, getRelevantExamMaps }) => {
     
     // 1. 取得過濾後的試卷藍圖
@@ -2167,7 +2167,7 @@ const ExamAnalysisView = ({ activeStudents, examScores, currentCohort, getReleva
     const map = relevantMaps[selectedExam];
     const questions = map ? map.questions : [];
 
-    // 5. 試卷難度診斷與選項統計 (安全地使用 questions 陣列)
+    // 5. 試卷難度診斷與選項統計 (安全地使用 questions 陣列，並加入雙重答案邏輯)
     const qStats = questions.map(q => {
         let totalScore = 0;
         let counts = { A: 0, B: 0, C: 0, D: 0, Other: 0 }; 
@@ -2179,14 +2179,19 @@ const ExamAnalysisView = ({ activeStudents, examScores, currentCohort, getReleva
             
             if (q.type === 'MC') {
                 const ans = val ? val.toString().trim().toUpperCase() : '';
+                // 統計選項分佈
                 if (['A', 'B', 'C', 'D'].includes(ans)) {
                     counts[ans]++;
                 } else if (ans) {
                     counts.Other++;
                 }
                 
-                if (q.ans && ans === q.ans.toUpperCase()) {
-                    totalScore += q.max;
+                // ★ 升級核心 1：計算得分時支援雙重答案陣列比對
+                if (q.ans) {
+                    const correctAnswers = q.ans.toString().split(',').map(a => a.trim().toUpperCase());
+                    if (correctAnswers.includes(ans)) {
+                        totalScore += q.max;
+                    }
                 }
             } else {
                 totalScore += (val === '' || val === undefined ? 0 : parseFloat(val));
@@ -2202,18 +2207,17 @@ const ExamAnalysisView = ({ activeStudents, examScores, currentCohort, getReleva
         if (pValue < 0.40) { diag = '艱深'; badgeColor = 'text-red-600 bg-red-50 border-red-200'; }
         else if (pValue > 0.75) { diag = '容易'; badgeColor = 'text-green-600 bg-green-50 border-green-200'; }
 
-        // ★ 修復核心 1：確保 topicDesc 絕對是字串，避免 React 渲染崩潰
+        // 修復核心 1：確保 topicDesc 絕對是字串
         const rawDesc = q.topicDesc || q.desc;
         const safeTopicDesc = typeof rawDesc === 'object' ? (rawDesc.topic || rawDesc.desc) : (rawDesc || '無具體描述');
 
         return { ...q, topicDesc: safeTopicDesc, mean: mean.toFixed(2), pValue, diag, badgeColor, counts, studentCount: count };
     });
 
-    // 6. 各知識點全班掌握度
+    // 6. 各知識點全班掌握度 (加入雙重答案邏輯)
     const topicSummary = {};
     questions.forEach(q => {
         if (!topicSummary[q.topicId]) {
-            // ★ 修復核心 2：安全提取 SYLLABUS_TOPICS 內的文字
             const syllabusInfo = window.SYLLABUS_TOPICS?.[q.topicId];
             const topicStr = typeof syllabusInfo === 'object' ? syllabusInfo.topic : (syllabusInfo || '未定義課題');
             const descStr = typeof syllabusInfo === 'object' ? syllabusInfo.desc : '';
@@ -2221,7 +2225,7 @@ const ExamAnalysisView = ({ activeStudents, examScores, currentCohort, getReleva
             topicSummary[q.topicId] = { 
                 topicId: q.topicId, 
                 topicName: topicStr, 
-                syllabusDesc: descStr, // 存起來餵給 AI
+                syllabusDesc: descStr,
                 maxPossible: 0, 
                 actualEarned: 0 
             };
@@ -2234,8 +2238,12 @@ const ExamAnalysisView = ({ activeStudents, examScores, currentCohort, getReleva
             
             if (q.type === 'MC') {
                 const ans = val ? val.toString().trim().toUpperCase() : '';
-                if (q.ans && ans === q.ans.toUpperCase()) {
-                    topicSummary[q.topicId].actualEarned += q.max;
+                // ★ 升級核心 2：掌握度計算支援雙重答案
+                if (q.ans) {
+                    const correctAnswers = q.ans.toString().split(',').map(a => a.trim().toUpperCase());
+                    if (correctAnswers.includes(ans)) {
+                        topicSummary[q.topicId].actualEarned += q.max;
+                    }
                 }
             } else {
                 topicSummary[q.topicId].actualEarned += (val === '' || val === undefined ? 0 : parseFloat(val));
@@ -2254,7 +2262,6 @@ const ExamAnalysisView = ({ activeStudents, examScores, currentCohort, getReleva
         const hardMC = qStats.filter(q => q.type === 'MC' && q.pValue < 0.5).map(q => `- 題號 ${q.id}: 正確答案 [${q.ans}], P-Value: ${q.pValue.toFixed(2)}。題目敘述: ${q.topicDesc}`).join('\n');
         const hardLQ = qStats.filter(q => q.type !== 'MC' && q.pValue < 0.5).map(q => `- 題號 ${q.id} (滿分 ${q.max}分): P-Value: ${q.pValue.toFixed(2)}。題目敘述: ${q.topicDesc}`).join('\n');
         
-        // ★ 升級 AI 提示詞：加入官方 Syllabus Desc
         const weakTopics = sortedTopics.filter(t => t.maxPossible > 0 && (t.actualEarned/t.maxPossible) < 0.55).map(t => 
             `- 課題 [${t.topicId} ${t.topicName}]: 全班得分率僅 ${(t.actualEarned/t.maxPossible*100).toFixed(1)}%\n  官方學習要求: ${t.syllabusDesc || '無'}`
         ).join('\n\n');
@@ -2262,7 +2269,7 @@ const ExamAnalysisView = ({ activeStudents, examScores, currentCohort, getReleva
         const newPrompt = `你是一位香港 DSE 物理科中學名師。請根據以下這份大考的【全班真實應考數據】，為我編寫一份高質素的【試後檢討與重難點澄清教案】。\n\n[基本設定]\n- 語言: ${aiLang}\n- 預期針對我指定的題型與題數，各編寫全新的衍生鞏固練習題：\n  * 衍生多項選擇題 (MC)：${aiMcCount} 題\n  * 衍生長題目 (LQ)：${aiLqCount} 題\n\n[數據診斷：全班答錯率極高的 MC 難點題目]\n${hardMC || '- 無明顯 MC 難點'}\n\n[數據診斷：全班失分嚴重的 LQ 難點題目]\n${hardLQ || '- 無明顯 LQ 難點'}\n\n[數據診斷：全班掌握度最差的知識點課題]\n${weakTopics || '- 全班各課題發揮均衡'}\n\n[教案與題目編寫要求]:\n1. 錯因深度剖析：針對上述答對率低的 MC 及 LQ 題目，從物理概念角度切入，指出學生最容易混淆的觀念陷阱。\n2. 變式題目擴充：根據我設定的 MC 題數 (${aiMcCount} 題) 和 LQ 題數 (${aiLqCount} 題)，分別編寫全新的【同類概念變式衍生題】。題目必須嚴格符合 DSE 考核風格，並為 MC 提供 4 個具備強干擾項的選項，為 LQ 提供詳細的【分步評分標準 (Marking Scheme)】。\n3. 提供下階段課堂複習的補救教學具體策略。`;
         
         setGeneratedPrompt(newPrompt);
-    }, [aiLang, aiType, aiMcCount, aiLqCount, selectedExam, map, activeStudents]); 
+    }, [aiLang, aiType, aiMcCount, aiLqCount, selectedExam, map, activeStudents, qStats, sortedTopics]); 
 
     // 8. ★ 所有的 Hooks 都宣告完畢後，才可以進行 Early Return！
     if (!map) return (
@@ -2330,39 +2337,48 @@ const ExamAnalysisView = ({ activeStudents, examScores, currentCohort, getReleva
                     
                     <div className="flex-1 overflow-y-auto space-y-4 pr-2">
                         {/* 顯示 MC 視圖 */}
-                        {analysisTab === 'MC' && qStats.filter(q => q.type === 'MC').sort((a,b) => a.pValue - b.pValue).map(q => (
-                            <div key={q.id} className="p-3 border border-slate-200 bg-white rounded-xl shadow-sm flex flex-col gap-2">
-                                <div className="flex justify-between items-start">
-                                    <div className="space-y-0.5">
-                                        <div className="font-bold text-slate-800 text-sm">題號 {q.id} <span className="text-slate-400 font-normal text-xs ml-2">正確答案: {q.ans}</span></div>
-                                        <p className="text-slate-500 text-xs line-clamp-2">知識點: {q.topicDesc}</p>
-                                    </div>
-                                    <span className={`px-2 py-0.5 font-bold rounded-full border shrink-0 text-[10px] ${q.badgeColor}`}>P: {q.pValue.toFixed(2)}</span>
-                                </div>
-                                
-                                {/* MC 選項分佈橫條圖 */}
-                                <div className="mt-1 pt-2 border-t border-slate-100 space-y-1.5">
-                                    {['A', 'B', 'C', 'D'].map(opt => {
-                                        const c = q.counts[opt] || 0;
-                                        const total = q.studentCount;
-                                        const pct = total > 0 ? Math.round((c / total) * 100) : 0;
-                                        const isCorrect = opt === q.ans;
-                                        const barColor = isCorrect ? 'bg-emerald-400' : 'bg-rose-300';
-                                        const textColor = isCorrect ? 'text-emerald-700 font-bold' : 'text-slate-500';
-                                        
-                                        return (
-                                            <div key={opt} className="flex items-center text-xs">
-                                                <span className={`w-5 font-bold ${isCorrect ? 'text-emerald-600' : 'text-slate-400'}`}>{opt}</span>
-                                                <div className="flex-1 h-3.5 bg-slate-100 rounded overflow-hidden flex shadow-inner">
-                                                    <div className={`h-full ${barColor} transition-all duration-700`} style={{ width: `${pct}%` }}></div>
-                                                </div>
-                                                <span className={`w-14 text-right ${textColor}`}>{pct}% <span className="text-[10px] text-slate-400 opacity-60">({c})</span></span>
+                        {analysisTab === 'MC' && qStats.filter(q => q.type === 'MC').sort((a,b) => a.pValue - b.pValue).map(q => {
+                            // ★ 升級核心 3：渲染 UI 時處理雙重答案的顯示
+                            const correctAnswers = q.ans ? q.ans.toString().split(',').map(a => a.trim().toUpperCase()) : [];
+                            
+                            return (
+                                <div key={q.id} className="p-3 border border-slate-200 bg-white rounded-xl shadow-sm flex flex-col gap-2">
+                                    <div className="flex justify-between items-start">
+                                        <div className="space-y-0.5">
+                                            <div className="font-bold text-slate-800 text-sm">
+                                                題號 {q.id} 
+                                                <span className="text-slate-400 font-normal text-xs ml-2">正確答案: {correctAnswers.join(' 或 ')}</span>
                                             </div>
-                                        )
-                                    })}
+                                            <p className="text-slate-500 text-xs line-clamp-2">知識點: {q.topicDesc}</p>
+                                        </div>
+                                        <span className={`px-2 py-0.5 font-bold rounded-full border shrink-0 text-[10px] ${q.badgeColor}`}>P: {q.pValue.toFixed(2)}</span>
+                                    </div>
+                                    
+                                    {/* MC 選項分佈橫條圖 */}
+                                    <div className="mt-1 pt-2 border-t border-slate-100 space-y-1.5">
+                                        {['A', 'B', 'C', 'D'].map(opt => {
+                                            const c = q.counts[opt] || 0;
+                                            const total = q.studentCount;
+                                            const pct = total > 0 ? Math.round((c / total) * 100) : 0;
+                                            // 判斷當前長條圖是否為正確答案之一
+                                            const isCorrect = correctAnswers.includes(opt);
+                                            const barColor = isCorrect ? 'bg-emerald-400' : 'bg-rose-300';
+                                            const textColor = isCorrect ? 'text-emerald-700 font-bold' : 'text-slate-500';
+                                            
+                                            return (
+                                                <div key={opt} className="flex items-center text-xs">
+                                                    <span className={`w-5 font-bold ${isCorrect ? 'text-emerald-600' : 'text-slate-400'}`}>{opt}</span>
+                                                    <div className="flex-1 h-3.5 bg-slate-100 rounded overflow-hidden flex shadow-inner">
+                                                        <div className={`h-full ${barColor} transition-all duration-700`} style={{ width: `${pct}%` }}></div>
+                                                    </div>
+                                                    <span className={`w-14 text-right ${textColor}`}>{pct}% <span className="text-[10px] text-slate-400 opacity-60">({c})</span></span>
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
 
                         {/* 顯示 LQ 視圖 */}
                         {analysisTab === 'LQ' && qStats.filter(q => q.type !== 'MC').sort((a,b) => a.pValue - b.pValue).map(q => (
@@ -2468,6 +2484,7 @@ const ExamAnalysisView = ({ activeStudents, examScores, currentCohort, getReleva
         </div>
     );
 };
+
         
 // ==================== 更新版：個人大考分析、跨卷進度（自動過濾有分試卷、移除多餘學群、修復 React 31 錯誤） ====================
 const StudentExamAnalysisView = ({ activeStudents = [], examScores = {} }) => {
