@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.03 Physics Quiz Analyzer</title>
+    <title> V3.04 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -1796,7 +1796,7 @@ const ExamSettingsView = ({ syncToCloud }) => {
     );
 };
 
-// ==================== 升級版：考試成績輸入組件 (支援即時分數看板 & 下拉選單分數顯示) ====================
+// ==================== 升級版：考試成績輸入組件 (支援即時分數看板、下拉選單分數顯示 & 雙重答案) ====================
 const ExamScoresInputView = ({ activeStudents, examScores, setExamScores, syncToCloud }) => {
     // 預設選擇第一個考試
     const [selectedExam, setSelectedExam] = React.useState(Object.keys(EXAM_MAPS || {})[0] || '');
@@ -1806,7 +1806,7 @@ const ExamScoresInputView = ({ activeStudents, examScores, setExamScores, syncTo
     // ★ 關鍵：用來記錄所有輸入框的實體位置
     const inputRefs = React.useRef({});
     
-    // ★ 輔助函式：計算特定學生在特定考試中的分數詳情
+    // ★ 輔助函式：計算特定學生在特定考試中的分數詳情 (已升級支援雙重答案)
     const calculateStudentScore = (studentId, examId) => {
         const currentMap = EXAM_MAPS[examId];
         if (!currentMap || !currentMap.questions) return { mcScore: 0, lqScore: 0, totalScore: 0, totalMax: 0, hasRecord: false };
@@ -1826,9 +1826,15 @@ const ExamScoresInputView = ({ activeStudents, examScores, setExamScores, syncTo
             if (savedVal !== undefined && savedVal !== null && savedVal !== '') {
                 hasRecord = true;
                 if (q.type === 'MC') {
-                    // MC題型：比對正確答案，答對得滿分（通常是1分），答錯或未答得0分
-                    if (q.ans && savedVal.toString().toUpperCase().trim() === q.ans.toString().toUpperCase().trim()) {
-                        mcScore += maxScore;
+                    // ★ 升級：MC題型，支援雙重答案（以逗號分隔，例如 "A,C"）
+                    if (q.ans) {
+                        const correctAnswers = q.ans.toString().split(',').map(a => a.trim().toUpperCase());
+                        const studentAnswer = savedVal.toString().toUpperCase().trim();
+                        
+                        // 如果學生輸入的答案包含在正確答案陣列中，即給滿分
+                        if (correctAnswers.includes(studentAnswer)) {
+                            mcScore += maxScore;
+                        }
                     }
                 } else {
                     // LQ題型：直接累加輸入的分數
@@ -1933,7 +1939,7 @@ const ExamScoresInputView = ({ activeStudents, examScores, setExamScores, syncTo
     if (!map) return (
         <div className="p-6 max-w-4xl mx-auto text-center mt-20">
             <Icon name="AlertCircle" className="mx-auto mb-4 text-slate-400" size={48} />
-            <h2 className="text-xl font-bold text-slate-600 mb-2">尚未設定 any 考試內容</h2>
+            <h2 className="text-xl font-bold text-slate-600 mb-2">尚未設定任何考試內容</h2>
             <p className="text-slate-500">請先至左側「考試內容設定」貼上您的考試大綱後，再來輸入成績。</p>
         </div>
     );
@@ -1945,7 +1951,7 @@ const ExamScoresInputView = ({ activeStudents, examScores, setExamScores, syncTo
                     <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
                         <Icon name="GraduationCap" /> 考試成績輸入 (MC & LQ)
                     </h1>
-                    <p className="text-sm text-slate-500 mt-1">MC 請直接輸入字母 (A/B/C/D)，LQ 請輸入得分數字。</p>
+                    <p className="text-sm text-slate-500 mt-1">遇到雙重答案的題目 (如 A,C)，學生輸入其中一個字母即會自動給分。</p>
                 </div>
                 <button 
                     onClick={() => syncToCloud()}
@@ -2050,7 +2056,8 @@ const ExamScoresInputView = ({ activeStudents, examScores, setExamScores, syncTo
                                             <div key={q.id} className="flex flex-col gap-1 p-2 border border-slate-100 rounded-lg bg-slate-50 hover:bg-slate-100 transition">
                                                 <div className="flex justify-between items-center text-sm">
                                                     <span className="font-bold text-slate-700">{q.id}</span>
-                                                    {q.ans && <span className="text-xs text-green-600 font-medium">正確: {q.ans}</span>}
+                                                    {/* ★ UI 顯示雙重答案 */}
+                                                    {q.ans && <span className="text-xs text-green-600 font-medium">正確: {q.ans.toString().split(',').map(a=>a.trim()).join(' 或 ')}</span>}
                                                 </div>
                                                 <input 
                                                     ref={el => inputRefs.current[q.id] = el} // ★ 綁定 DOM 位置
