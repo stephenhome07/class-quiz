@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.06 Physics Quiz Analyzer</title>
+    <title> V3.07 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -2486,7 +2486,7 @@ const ExamAnalysisView = ({ activeStudents, examScores, currentCohort, getReleva
 };
 
         
-// ==================== 更新版：個人大考分析、跨卷進度（自動過濾有分試卷、移除多餘學群、修復 React 31 錯誤） ====================
+// ==================== 更新版：個人大考分析、跨卷進度（支援 MC 雙重答案 A,C、修復 React 31 錯誤） ====================
 const StudentExamAnalysisView = ({ activeStudents = [], examScores = {} }) => {
     // 狀態設定
     const [selectedExams, setSelectedExams] = React.useState([]);
@@ -2554,13 +2554,23 @@ const StudentExamAnalysisView = ({ activeStudents = [], examScores = {} }) => {
         }
     }, [availableStudents, selectedStudentId]);
 
+    // ★ 升級核心：支援 MC 雙重答案 (例如 "A,C") 的計分邏輯
     const getStudentQScore = (studentId, examId, q) => {
         const record = examScores[studentId]?.[examId];
         if (!record) return 0;
         const val = record[q.id];
+        
         if (q.type === 'MC') {
-            return (val && q.ans && val.toString().toUpperCase() === q.ans.toUpperCase()) ? q.max : 0;
+            if (val && q.ans) {
+                // 將正確答案用逗號切開，支援 "A,C" 這種格式
+                const correctAnswers = q.ans.toString().split(',').map(a => a.trim().toUpperCase());
+                const studentAnswer = val.toString().toUpperCase().trim();
+                // 如果學生的答案在正確答案陣列中，就給分
+                return correctAnswers.includes(studentAnswer) ? q.max : 0;
+            }
+            return 0;
         }
+        // LQ 直接回傳數字
         return val === '' || val === undefined ? 0 : parseFloat(val);
     };
 
@@ -2593,6 +2603,7 @@ const StudentExamAnalysisView = ({ activeStudents = [], examScores = {} }) => {
                     topicStats[q.topicId].examDetails[examId] = { max: 0, earned: 0 };
                 }
 
+                // 呼叫上方升級後的 getStudentQScore
                 const score = getStudentQScore(selectedStudentId, examId, q);
                 topicStats[q.topicId].totalMax += q.max;
                 topicStats[q.topicId].totalEarned += score;
@@ -2880,8 +2891,8 @@ const StudentExamAnalysisView = ({ activeStudents = [], examScores = {} }) => {
     );
 };
         
-// ==================== 更新版：以「學生為主體」的專屬補底練習 (修復變數衝突與 SYLLABUS 物件錯誤) ====================
-const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress, setRemediationProgress, syncToCloud }) => {
+// ==================== 更新版：以「學生為主體」的專專屬補底練習 (修復變數衝突、SYLLABUS 物件錯誤與群組隔離、MC雙重答案) ====================
+const RemedialPracticeView = ({ currentCohort, activeStudents, examScores, remediationProgress, setRemediationProgress, syncToCloud }) => {
     // 狀態管理
     const [selectedExam, setSelectedExam] = React.useState('');
     const [aiLang, setAiLang] = React.useState('雙語 (Bilingual)');
@@ -2889,19 +2900,30 @@ const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress,
     const [aiLqCount, setAiLqCount] = React.useState('0'); 
     const [generatedPrompt, setGeneratedPrompt] = React.useState('');
 
-    // ★ 學生記憶功能
-    const [selectedStudentIds, setSelectedStudentIds] = React.useState(() => {
-        try {
-            const saved = localStorage.getItem('dse_physics_remedial_students');
-            return saved ? JSON.parse(saved) : [];
-        } catch (e) {
-            return [];
-        }
-    });
+    // ★ 學生記憶功能（已升級：依據 currentCohort 進行群組數據隔離）
+    const [selectedStudentIds, setSelectedStudentIds] = React.useState([]);
 
+    // 當切換群組時，讀取該群組專屬的已選學生名單
     React.useEffect(() => {
-        localStorage.setItem('dse_physics_remedial_students', JSON.stringify(selectedStudentIds));
-    }, [selectedStudentIds]);
+        try {
+            const key = `dse_physics_remedial_students_${currentCohort || 'default'}`;
+            const saved = localStorage.getItem(key);
+            setSelectedStudentIds(saved ? JSON.parse(saved) : []);
+        } catch (e) {
+            setSelectedStudentIds([]);
+        }
+        // 切換群組時同時重設目前正在出題的狀態，避免跨群組資料錯亂
+        setActivePromptStudent(null);
+        setSelectedTopicsForPrompt([]);
+    }, [currentCohort]);
+
+    // 當已選學生清單改變時，寫入該群組專屬的 localStorage
+    React.useEffect(() => {
+        if (currentCohort) {
+            const key = `dse_physics_remedial_students_${currentCohort}`;
+            localStorage.setItem(key, JSON.stringify(selectedStudentIds));
+        }
+    }, [selectedStudentIds, currentCohort]);
 
     // ★ 新增：學生排序模式 ('score' 依分數由低至高 | 'class' 依班級學號)
     const [sortMode, setSortMode] = React.useState('score');
@@ -2939,12 +2961,31 @@ const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress,
 
     const map = window.EXAM_MAPS?.[selectedExam];
 
-    // 取得該生在本卷的單題得分
+    // ★ 已修復：優化 MC 雙重答案計分邏輯
     const getStudentQScore = React.useCallback((studentId, q) => {
         const record = examScores[studentId]?.[selectedExam];
         if (!record) return 0;
         const val = record[q.id];
-        if (q.type === 'MC') return (val && q.ans && val.toString().toUpperCase() === q.ans.toUpperCase()) ? q.max : 0;
+        
+        if (q.type === 'MC') {
+            if (!val || !q.ans) return 0;
+            const studentAns = val.toString().toUpperCase().trim();
+            const officialAns = q.ans.toString().toUpperCase().trim();
+            
+            // 情況 1：答案完全一致
+            if (studentAns === officialAns) return q.max;
+            
+            // 情況 2：處理雙重/多重正確答案情況（例如官方答案為 "AB"、"A/B" 或 "A或B"）
+            const cleanOfficial = officialAns.replace(/[^A-D]/g, ''); // 只留下 A, B, C, D
+            const cleanStudent = studentAns.replace(/[^A-D]/g, '');
+            
+            // 如果學生只填寫了一個乾淨的選項，且該選項包含在官方的多重正確答案中
+            if (cleanStudent.length === 1 && cleanOfficial.includes(cleanStudent)) {
+                return q.max;
+            }
+            return 0;
+        }
+        
         return val === '' || val === undefined ? 0 : parseFloat(val);
     }, [examScores, selectedExam]);
 
@@ -3320,24 +3361,30 @@ const RemedialPracticeView = ({ activeStudents, examScores, remediationProgress,
     );
 };
         
-// ==================== 升級版：考試成績匯出 (Excel) - 支援成績過濾與狀態記憶 ====================
-const ExamExportView = ({ activeStudents, examScores }) => {
-    // ★ 新增：從 localStorage 讀取上次選擇，若無則預設為空陣列
-    const [selectedExams, setSelectedExams] = React.useState(() => {
-        try {
-            const saved = localStorage.getItem('dse_physics_export_selected');
-            return saved ? JSON.parse(saved) : [];
-        } catch (e) { 
-            return []; 
-        }
-    });
+// ==================== 升級版：考試成績匯出 (Excel) - 支援成績過濾、群組隔離與 MC 雙重答案 ====================
+const ExamExportView = ({ currentCohort, activeStudents, examScores }) => {
+    // ★ 新增：根據群組隔離讀取 localStorage，確保切換群組時狀態不會錯亂
+    const [selectedExams, setSelectedExams] = React.useState([]);
 
-    // ★ 新增：監聽選擇變化並存入 localStorage
     React.useEffect(() => {
-        localStorage.setItem('dse_physics_export_selected', JSON.stringify(selectedExams));
-    }, [selectedExams]);
+        try {
+            const key = `dse_physics_export_selected_${currentCohort || 'default'}`;
+            const saved = localStorage.getItem(key);
+            setSelectedExams(saved ? JSON.parse(saved) : []);
+        } catch (e) { 
+            setSelectedExams([]); 
+        }
+    }, [currentCohort]);
 
-    // ★ 新增：只篩選出「有入分」的試卷
+    // 監聽選擇變化並存入專屬的 localStorage
+    React.useEffect(() => {
+        if (currentCohort) {
+            const key = `dse_physics_export_selected_${currentCohort}`;
+            localStorage.setItem(key, JSON.stringify(selectedExams));
+        }
+    }, [selectedExams, currentCohort]);
+
+    // ★ 篩選出當前群組「真正有入分」的試卷
     const availableExams = React.useMemo(() => {
         const examsWithScores = new Set();
         (activeStudents || []).forEach(student => {
@@ -3350,13 +3397,18 @@ const ExamExportView = ({ activeStudents, examScores }) => {
         return Array.from(examsWithScores).sort(); // 加上 sort 讓顯示排序固定
     }, [activeStudents, examScores]);
 
+    // ★ 核心修復：絕對安全過濾牆！確保畫面上及匯出時，只處理「當前群組真正有考」且「已被勾選」的試卷
+    const validSelectedExams = React.useMemo(() => {
+        return selectedExams.filter(examId => availableExams.includes(examId)).sort();
+    }, [selectedExams, availableExams]);
+
     const toggleExam = (examId) => {
         setSelectedExams(prev => 
             prev.includes(examId) ? prev.filter(id => id !== examId) : [...prev, examId]
         );
     };
 
-    // ★ 核心成績計算邏輯 (回傳分數、滿分及學段標記)
+    // ★ 核心成績計算邏輯 (修復 MC 雙重答案 A,C 計分)
     const getCalculatedScores = (studentId, examId) => {
         const map = EXAM_MAPS[examId];
         if (!map) return { mc: 0, lq: 0, total: 0, mcMax: 0, lqMax: 0, totalMax: 0, isSenior: false };
@@ -3368,8 +3420,13 @@ const ExamExportView = ({ activeStudents, examScores }) => {
             if (q.type === 'MC') {
                 mcMax += 1; // MC 每題 1 分
                 const val = record[q.id];
-                if (val && q.ans && val.toString().toUpperCase() === q.ans.toUpperCase()) {
-                    mcScore += 1;
+                if (val && q.ans) {
+                    // ★ 雙重答案判斷邏輯
+                    const correctAnswers = q.ans.toString().split(',').map(a => a.trim().toUpperCase());
+                    const studentAnswer = val.toString().toUpperCase().trim();
+                    if (correctAnswers.includes(studentAnswer)) {
+                        mcScore += 1;
+                    }
                 }
             } else {
                 lqMax += q.max;
@@ -3400,7 +3457,7 @@ const ExamExportView = ({ activeStudents, examScores }) => {
         return { mc: mcScore, lq: lqScore, total: totalScore, mcMax, lqMax, totalMax, isSenior };
     };
 
-    // ★ 智慧型樣式判斷：低於標準回傳紅色樣式
+    // 智慧型樣式判斷：低於標準回傳紅色樣式
     const getCellStyles = (score, max, isSenior, isTotalColumn = false) => {
         if (max === 0) return "p-2 text-center text-slate-400 font-mono";
         
@@ -3418,7 +3475,7 @@ const ExamExportView = ({ activeStudents, examScores }) => {
         return `p-2 text-center font-mono ${isFail ? 'text-red-500 font-semibold' : 'text-slate-600'}`;
     };
 
-    // ★ 計算某一卷目的班級平均分
+    // 計算某一卷目的班級平均分
     const getExamAverages = (examId) => {
         if (activeStudents.length === 0) return { mc: '0.0', lq: '0.0', total: '0.0' };
         
@@ -3438,9 +3495,9 @@ const ExamExportView = ({ activeStudents, examScores }) => {
         };
     };
 
-    // ★ 匯出 CSV 檔案給 Excel (包含最後一行的平均分)
+    // 匯出 CSV 檔案給 Excel (包含最後一行的平均分)
     const exportToCSV = () => {
-        if (selectedExams.length === 0) {
+        if (validSelectedExams.length === 0) {
             alert('⚠️ 請至少選擇一份試卷進行匯出！');
             return;
         }
@@ -3449,7 +3506,7 @@ const ExamExportView = ({ activeStudents, examScores }) => {
         
         // 1. 建立標題列
         let headers = ['班別', '學號', '姓名'];
-        selectedExams.forEach(examId => {
+        validSelectedExams.forEach(examId => {
             const title = EXAM_MAPS[examId]?.title || examId;
             headers.push(`${title} MC`);
             headers.push(`${title} LQ`);
@@ -3460,16 +3517,16 @@ const ExamExportView = ({ activeStudents, examScores }) => {
         // 2. 建立學生資料列
         activeStudents.forEach(s => {
             let row = [s.class, s.num, s.name];
-            selectedExams.forEach(examId => {
+            validSelectedExams.forEach(examId => {
                 const scores = getCalculatedScores(s.id, examId);
                 row.push(scores.mc, scores.lq, scores.total);
             });
             csvContent += row.join(',') + '\n';
         });
 
-        // 3. ★ 新增：在 CSV 最後一行自動注入「全班平均分」
+        // 3. 在 CSV 最後一行自動注入「全班平均分」
         let averageRow = ['全班平均分', '', ''];
-        selectedExams.forEach(examId => {
+        validSelectedExams.forEach(examId => {
             const avgs = getExamAverages(examId);
             averageRow.push(avgs.mc, avgs.lq, avgs.total);
         });
@@ -3498,7 +3555,7 @@ const ExamExportView = ({ activeStudents, examScores }) => {
                 </div>
                 <button 
                     onClick={exportToCSV}
-                    className={`font-bold py-2.5 px-6 rounded-xl shadow-sm flex items-center justify-center gap-2 transition ${selectedExams.length > 0 ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
+                    className={`font-bold py-2.5 px-6 rounded-xl shadow-sm flex items-center justify-center gap-2 transition ${validSelectedExams.length > 0 ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
                 >
                     <Icon name="FileSpreadsheet" size={18} /> 下載報表 (含平均分)
                 </button>
@@ -3509,7 +3566,7 @@ const ExamExportView = ({ activeStudents, examScores }) => {
                 <label className="text-xs font-bold text-slate-700 mb-3 block">1. 選擇要匯出的試卷（自動過濾無成績試卷）：</label>
                 <div className="flex flex-wrap gap-2">
                     {availableExams.length === 0 ? (
-                        <span className="text-sm text-slate-400">目前沒有任何試卷有成績紀錄。</span>
+                        <span className="text-sm text-slate-400">目前群組沒有任何試卷有成績紀錄。</span>
                     ) : (
                         availableExams.map(examId => {
                             const isSelected = selectedExams.includes(examId);
@@ -3534,8 +3591,8 @@ const ExamExportView = ({ activeStudents, examScores }) => {
                 </div>
             </div>
 
-            {/* 報表即時預覽 (完整保留) */}
-            {selectedExams.length > 0 && (
+            {/* 報表即時預覽 (完整保留，改用 validSelectedExams 安全渲染) */}
+            {validSelectedExams.length > 0 && (
                 <div className="card p-0 border border-slate-200 shadow-sm overflow-hidden flex flex-col max-h-[650px]">
                     <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
                         <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm">
@@ -3550,7 +3607,7 @@ const ExamExportView = ({ activeStudents, examScores }) => {
                                     <th className="p-3 border-b border-r border-slate-200 text-center w-12 bg-slate-100">班別</th>
                                     <th className="p-3 border-b border-r border-slate-200 text-center w-16 bg-slate-100">學號</th>
                                     <th className="p-3 border-b border-r border-slate-200 w-24 bg-slate-100">姓名</th>
-                                    {selectedExams.map(examId => (
+                                    {validSelectedExams.map(examId => (
                                         <th key={examId} colSpan="3" className="p-3 border-b border-r border-slate-200 text-center bg-green-50 text-green-900 font-bold">
                                             {EXAM_MAPS[examId]?.title || examId}
                                         </th>
@@ -3560,7 +3617,7 @@ const ExamExportView = ({ activeStudents, examScores }) => {
                                     <th className="p-2 border-b border-r border-slate-200 bg-slate-50"></th>
                                     <th className="p-2 border-b border-r border-slate-200 bg-slate-50"></th>
                                     <th className="p-2 border-b border-r border-slate-200 bg-slate-50"></th>
-                                    {selectedExams.map(examId => (
+                                    {validSelectedExams.map(examId => (
                                         <React.Fragment key={examId + '_sub'}>
                                             <th className="p-2 border-b border-slate-200 text-center text-slate-500 font-medium w-16 bg-slate-50">MC</th>
                                             <th className="p-2 border-b border-slate-200 text-center text-slate-500 font-medium w-16 bg-slate-50">LQ</th>
@@ -3577,7 +3634,7 @@ const ExamExportView = ({ activeStudents, examScores }) => {
                                         <td className="p-2 border-r border-slate-100 text-center text-slate-600 font-mono">{s.class}</td>
                                         <td className="p-2 border-r border-slate-100 text-center text-slate-600 font-mono">{s.num}</td>
                                         <td className="p-2 border-r border-slate-200 font-bold text-slate-700">{s.name}</td>
-                                        {selectedExams.map(examId => {
+                                        {validSelectedExams.map(examId => {
                                             const res = getCalculatedScores(s.id, examId);
                                             return (
                                                 <React.Fragment key={examId + '_scores'}>
@@ -3591,11 +3648,11 @@ const ExamExportView = ({ activeStudents, examScores }) => {
                                 ))}
                             </tbody>
 
-                            {/* ★ 底部固定顯示：班級平均分 ★ */}
+                            {/* 底部固定顯示：班級平均分 */}
                             <tfoot className="sticky bottom-0 z-10 font-bold border-t-2 border-slate-300 bg-slate-100 text-slate-800 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
                                 <tr>
                                     <td className="p-3 border-r border-slate-200 text-center bg-slate-200" colSpan="3">班級平均分</td>
-                                    {selectedExams.map(examId => {
+                                    {validSelectedExams.map(examId => {
                                         const avgs = getExamAverages(examId);
                                         return (
                                             <React.Fragment key={examId + '_avg_row'}>
@@ -5118,8 +5175,8 @@ const App = () => {
                     {view === 'examAnalysis' && <ExamAnalysisView activeStudents={activeStudents} examScores={examScores} currentCohort={currentCohort} getRelevantExamMaps={getRelevantExamMaps} />}
 
                     {view === 'studentExamAnalysis' && <StudentExamAnalysisView activeStudents={activeStudents} examScores={examScores} />} 
-                    {view === 'remedialPractice' && <RemedialPracticeView activeStudents={activeStudents} examScores={examScores} remediationProgress={remediationProgress} setRemediationProgress={setRemediationProgress} syncToCloud={syncToCloud} />}
-                    {view === 'examExport' && <ExamExportView activeStudents={activeStudents} examScores={examScores} />}
+                    {view === 'remedialPractice' && <RemedialPracticeView activeStudents={activeStudents} examScores={examScores} remediationProgress={remediationProgress} setRemediationProgress={setRemediationProgress} syncToCloud={syncToCloud} currentCohort={currentCohort}/>}
+                    {view === 'examExport' && <ExamExportView activeStudents={activeStudents} examScores={examScores} currentCohort={currentCohort} />}
                     {/* 新增智慧升班頁面的切換邏輯 */}
                     {view === 'studentPromotion' && (
                         <StudentPromotionView 
