@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.07 Physics Quiz Analyzer</title>
+    <title> V3.08 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -4729,7 +4729,319 @@ const HomeworkSummaryView = ({ activeStudents, currentCohort, homeworkMaps, home
         </div>
     );
 };
+        
+// ==================== 第二步：歷屆試題成績快速輸入介面 (PastpaperScoresInputView) ====================
+const PastpaperScoresInputView = ({ currentCohort, activeStudents, pastpaperScores, setPastpaperScores, syncToCloud }) => {
+    // 預設選擇第一份 Pastpaper
+    const availablePapers = Object.keys(window.PASTPAPER_MAPS || {});
+    const [selectedPaper, setSelectedPaper] = React.useState(availablePapers[0] || '');
+    const [selectedStudentId, setSelectedStudentId] = React.useState(activeStudents[0]?.id || '');
+    
+    // 用來記錄所有輸入框的實體 DOM 位置，實現極速跳轉
+    const inputRefs = React.useRef({});
 
+    const map = window.PASTPAPER_MAPS?.[selectedPaper];
+
+    // ★ 輔助函式：計算特定學生在該 Pastpaper 的分數
+    const calculateStudentScore = (studentId, paperId) => {
+        const currentMap = window.PASTPAPER_MAPS?.[paperId];
+        if (!currentMap || !currentMap.questions) return { mcScore: 0, lqScore: 0, totalScore: 0, totalMax: 0, hasRecord: false };
+
+        const studentScores = pastpaperScores[studentId]?.[paperId] || {};
+        let mcScore = 0, lqScore = 0, totalMax = 0;
+        let hasRecord = false;
+
+        currentMap.questions.forEach(q => {
+            const maxScore = q.max || 1;
+            totalMax += maxScore;
+            const savedVal = studentScores[q.id];
+            
+            if (savedVal !== undefined && savedVal !== null && savedVal !== '') {
+                hasRecord = true;
+                if (q.type === 'MC') {
+                    if (q.ans) {
+                        const correctAnswers = q.ans.toString().split(',').map(a => a.trim().toUpperCase());
+                        const studentAnswer = savedVal.toString().toUpperCase().trim();
+                        if (correctAnswers.includes(studentAnswer)) mcScore += maxScore;
+                    }
+                } else {
+                    lqScore += parseFloat(savedVal) || 0;
+                }
+            }
+        });
+
+        return { mcScore, lqScore, totalScore: mcScore + lqScore, totalMax, hasRecord };
+    };
+
+    // ★ 神級輸入處理：支援 ABCD 也能支援 1/0
+    const handleScoreChange = (studentId, paperId, q, val) => {
+        let processedVal = val.toString().toUpperCase().trim();
+        
+        if (q.type === 'MC') {
+            // 如果老師追求極速，直接輸入 1 (代表對) 或 0 (代表錯)
+            if (processedVal === '1') {
+                // 自動轉為正確答案 (若有雙重答案 A,C 則取第一個)
+                processedVal = q.ans ? q.ans.split(',')[0].trim().toUpperCase() : '1'; 
+            } else if (processedVal === '0') {
+                processedVal = 'X'; // 用 X 代表已答但答錯
+            } else if (processedVal !== '' && !['A', 'B', 'C', 'D', 'X'].includes(processedVal)) {
+                return; // 防呆：阻擋亂碼
+            }
+        } else {
+            processedVal = val === '' ? '' : parseFloat(val);
+            if (processedVal > q.max) processedVal = q.max; // 防呆：不能超過滿分
+        }
+
+        setPastpaperScores(prev => ({
+            ...prev,
+            [studentId]: {
+                ...(prev[studentId] || {}),
+                [paperId]: {
+                    ...((prev[studentId] && prev[studentId][paperId]) || {}),
+                    [q.id]: processedVal
+                }
+            }
+        }));
+    };
+
+    // 極速自動跳轉邏輯
+    const handleAutoAdvance = (qId, newVal, qType, qMax) => {
+        if (newVal === '' || newVal === null) return;
+
+        let shouldAdvance = false;
+        if (qType === 'MC') {
+            const valid = newVal.toString().toUpperCase().trim();
+            // 輸入 ABCD 或 1/0 都會觸發跳轉
+            if (['A', 'B', 'C', 'D', '1', '0', 'X'].includes(valid)) shouldAdvance = true;
+        } else {
+            // LQ 題如果是單位數，輸入第一個數字就跳轉
+            if (newVal.toString().length >= 1 && (qMax || 1) < 10) shouldAdvance = true;
+        }
+
+        if (shouldAdvance) {
+            const currentIndex = map.questions.findIndex(item => item.id === qId);
+            if (currentIndex >= 0 && currentIndex < map.questions.length - 1) {
+                const nextQ = map.questions[currentIndex + 1];
+                setTimeout(() => {
+                    if (inputRefs.current[nextQ.id]) {
+                        inputRefs.current[nextQ.id].focus();
+                        inputRefs.current[nextQ.id].select();
+                    }
+                }, 10);
+            }
+        }
+    };
+
+    if (!map) return (
+        <div className="p-12 text-center text-slate-500 mt-10">
+            <Icon name="Database" size={48} className="mx-auto mb-4 text-slate-300" />
+            <h2 className="text-xl font-bold">尚未設定任何歷屆試題 (Pastpaper)</h2>
+            <p className="mt-2 text-sm">請先前往「Pastpaper 題庫設定」貼上您的 JSON 試卷藍圖。</p>
+        </div>
+    );
+
+    const currentStudentStats = selectedStudentId ? calculateStudentScore(selectedStudentId, selectedPaper) : null;
+    const mcQuestions = map.questions.filter(q => q.type === 'MC');
+    const lqQuestions = map.questions.filter(q => q.type !== 'MC');
+
+    return (
+        <div className="p-6 max-w-7xl mx-auto animate-fadeIn">
+            {/* 頂部標頭與控制區 */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 border-b pb-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                        <Icon name="Zap" className="text-indigo-600" /> Pastpaper 歷屆試題極速輸入
+                    </h1>
+                    <p className="text-sm text-slate-500 mt-1">
+                        💡 <strong className="text-indigo-600">極速秘訣</strong>：MC 區支援輸入 <kbd className="bg-slate-100 px-1 rounded border">A/B/C/D</kbd>，也支援直接輸入 <kbd className="bg-slate-100 px-1 rounded border">1</kbd> (對) 或 <kbd className="bg-slate-100 px-1 rounded border">0</kbd> (錯)，系統會自動給分並瞬間跳下一題！
+                    </p>
+                </div>
+                <div className="flex gap-3">
+                    <select 
+                        className="p-2.5 border border-slate-300 rounded-xl font-bold text-indigo-800 bg-indigo-50 focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm cursor-pointer"
+                        value={selectedPaper} 
+                        onChange={(e) => setSelectedPaper(e.target.value)}
+                    >
+                        {availablePapers.map(k => (
+                            <option key={k} value={k}>{k} - {window.PASTPAPER_MAPS[k].title}</option>
+                        ))}
+                    </select>
+                    <button 
+                        onClick={() => syncToCloud()}
+                        className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl shadow-md transition font-bold"
+                    >
+                        <Icon name="CloudUpload" size={18} /> 備份成績
+                    </button>
+                </div>
+            </div>
+
+            {/* 雙軸佈局：左側學生名單 / 右側輸入網格 */}
+            <div className="flex flex-col md:flex-row gap-6 h-[750px]">
+                
+                {/* 左側：學生選擇清單 */}
+                <div className="w-full md:w-1/3 lg:w-1/4 flex flex-col bg-white border border-slate-200 shadow-sm rounded-xl overflow-hidden">
+                    <div className="p-3 bg-slate-50 border-b border-slate-200 font-bold text-slate-700 flex justify-between items-center text-sm">
+                        <span>👥 選擇學生</span>
+                        <span className="text-[10px] bg-slate-200 px-2 py-0.5 rounded-full">{activeStudents.length} 人</span>
+                    </div>
+                    <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
+                        {activeStudents.map(s => {
+                            const stats = calculateStudentScore(s.id, selectedPaper);
+                            const isSelected = selectedStudentId === s.id;
+                            return (
+                                <button
+                                    key={s.id}
+                                    onClick={() => setSelectedStudentId(s.id)}
+                                    className={`w-full text-left px-3 py-2.5 rounded-lg flex justify-between items-center transition ${
+                                        isSelected ? 'bg-indigo-600 text-white shadow-md' : 'hover:bg-slate-50 text-slate-700'
+                                    }`}
+                                >
+                                    <div className="font-semibold text-sm">
+                                        <span className={`inline-block w-6 text-xs ${isSelected ? 'text-indigo-200' : 'text-slate-400'}`}>{s.num}.</span>
+                                        {s.name}
+                                    </div>
+                                    <div className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                                        stats.hasRecord 
+                                            ? (isSelected ? 'bg-indigo-500 text-white' : 'bg-emerald-100 text-emerald-700')
+                                            : (isSelected ? 'bg-indigo-400 text-white opacity-50' : 'bg-slate-100 text-slate-400')
+                                    }`}>
+                                        {stats.hasRecord ? `${stats.totalScore}/${stats.totalMax}` : '未入'}
+                                    </div>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* 右側：緊湊輸入網格 */}
+                <div className="w-full md:w-2/3 lg:w-3/4 flex flex-col bg-white border border-slate-200 shadow-sm rounded-xl overflow-hidden relative">
+                    {!selectedStudentId ? (
+                        <div className="flex-1 flex flex-col items-center justify-center text-slate-400">
+                            <Icon name="ArrowLeftCircle" size={48} className="mb-3 opacity-30 text-indigo-500" />
+                            <p>請先從左側選擇一位學生</p>
+                        </div>
+                    ) : (
+                        <>
+                            {/* 分數統計小看板 */}
+                            <div className="bg-gradient-to-r from-indigo-50 to-white p-4 border-b border-slate-200 flex justify-between items-center sticky top-0 z-10">
+                                <div>
+                                    <div className="text-xs text-indigo-500 font-bold mb-0.5">正在輸入成績</div>
+                                    <h2 className="text-xl font-black text-slate-800">
+                                        {activeStudents.find(s => s.id === selectedStudentId)?.name}
+                                    </h2>
+                                </div>
+                                <div className="flex gap-4 text-center">
+                                    {mcQuestions.length > 0 && (
+                                        <div>
+                                            <div className="text-[10px] text-slate-500 font-bold uppercase">MC 得分</div>
+                                            <div className="text-lg font-black text-purple-600">{currentStudentStats.mcScore}</div>
+                                        </div>
+                                    )}
+                                    {lqQuestions.length > 0 && (
+                                        <div>
+                                            <div className="text-[10px] text-slate-500 font-bold uppercase">LQ 得分</div>
+                                            <div className="text-lg font-black text-blue-600">{currentStudentStats.lqScore}</div>
+                                        </div>
+                                    )}
+                                    <div className="pl-4 border-l border-slate-200">
+                                        <div className="text-[10px] text-slate-500 font-bold uppercase">總分</div>
+                                        <div className="text-xl font-black text-emerald-600">{currentStudentStats.totalScore}<span className="text-sm text-slate-400">/{currentStudentStats.totalMax}</span></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 題目輸入區 (可滾動) */}
+                            <div className="flex-1 overflow-y-auto p-5 custom-scrollbar">
+                                
+                                {/* MC 緊湊網格區 (10題一排) */}
+                                {mcQuestions.length > 0 && (
+                                    <div className="mb-8">
+                                        <h3 className="font-bold text-slate-700 flex items-center gap-2 mb-3 bg-purple-50 p-2 rounded-lg text-sm border border-purple-100">
+                                            <span className="bg-purple-600 text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px]">A</span>
+                                            多項選擇題 (MC)
+                                        </h3>
+                                        <div className="grid grid-cols-5 md:grid-cols-8 lg:grid-cols-10 gap-2">
+                                            {mcQuestions.map((q, index) => {
+                                                const currentVal = (pastpaperScores[selectedStudentId]?.[selectedPaper] || {})[q.id] || '';
+                                                // 擷取最後的題號數字，例如 "2014-MC-05" 變成 "05"
+                                                const shortId = q.id.split('-').pop();
+                                                
+                                                return (
+                                                    <div key={q.id} className="flex flex-col bg-slate-50 border border-slate-200 rounded-md overflow-hidden focus-within:ring-2 focus-within:ring-purple-400 focus-within:border-purple-400 transition">
+                                                        <div className="bg-slate-200 text-center text-[10px] font-bold text-slate-600 py-0.5 border-b border-slate-200">
+                                                            {shortId}.
+                                                        </div>
+                                                        <input 
+                                                            ref={el => inputRefs.current[q.id] = el}
+                                                            type="text" 
+                                                            maxLength="1"
+                                                            className="w-full p-2 text-center font-bold text-base outline-none bg-white text-purple-700"
+                                                            value={currentVal}
+                                                            onChange={e => {
+                                                                const val = e.target.value;
+                                                                handleScoreChange(selectedStudentId, selectedPaper, q, val);
+                                                                handleAutoAdvance(q.id, val, q.type, q.max);
+                                                            }}
+                                                            onFocus={(e) => e.target.select()}
+                                                        />
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* LQ 網格區 */}
+                                {lqQuestions.length > 0 && (
+                                    <div>
+                                        <h3 className="font-bold text-slate-700 flex items-center gap-2 mb-3 bg-blue-50 p-2 rounded-lg text-sm border border-blue-100">
+                                            <span className="bg-blue-600 text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px]">B</span>
+                                            長題目 (LQ)
+                                        </h3>
+                                        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                                            {lqQuestions.map(q => {
+                                                const currentVal = (pastpaperScores[selectedStudentId]?.[selectedPaper] || {})[q.id] || '';
+                                                // 擷取短題號
+                                                const shortId = q.id.split('-').pop();
+
+                                                return (
+                                                    <div key={q.id} className="flex items-center bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm focus-within:ring-2 focus-within:ring-blue-400 transition">
+                                                        <div className="bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 border-r border-slate-200 min-w-[50px] text-center">
+                                                            {shortId}
+                                                        </div>
+                                                        <input 
+                                                            ref={el => inputRefs.current[q.id] = el}
+                                                            type="number" 
+                                                            min="0" 
+                                                            max={q.max}
+                                                            step="0.5"
+                                                            className="flex-1 w-full p-2 text-center font-bold text-blue-700 outline-none"
+                                                            value={currentVal}
+                                                            placeholder="-"
+                                                            onChange={e => {
+                                                                const val = e.target.value;
+                                                                handleScoreChange(selectedStudentId, selectedPaper, q, val);
+                                                                handleAutoAdvance(q.id, val, q.type, q.max);
+                                                            }}
+                                                            onFocus={(e) => e.target.select()}
+                                                        />
+                                                        <div className="px-2 text-xs text-slate-400 font-mono bg-slate-50 h-full flex items-center border-l border-slate-100">
+                                                            /{q.max}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
 
 // ==================== 新增：歷屆試題 (Pastpaper) 藍圖設定組件 (自動即時存檔版) ====================
 const PastpaperSettingsView = ({ syncToCloud }) => {
@@ -4919,7 +5231,11 @@ const PastpaperSettingsView = ({ syncToCloud }) => {
                             <div className="mt-6 mb-2 px-4 text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
                                 <Icon name="Database" size={14} /> 歷屆試題 (Pastpaper)
                             </div>
-                            {navButton('pastpaperSettings', 'Settings', 'Pastpaper 題庫設定', 'bg-indigo-600')}
+                            <div className="flex flex-col gap-1">
+                                {/* ★ 新增：歷屆試題輸入成績按鈕 */}
+                                {navButton('pastpaperScoresInput', 'Zap', '歷屆成績極速輸入', 'bg-indigo-600')}
+                                {navButton('pastpaperSettings', 'Settings', 'Pastpaper 題庫設定', 'bg-indigo-600')}
+                            </div>
 
                             <div className="border-t border-slate-700/50 my-1 mx-2"></div>
 
@@ -4951,13 +5267,15 @@ const App = () => {
             const [examScores, setExamScores] = React.useState({});
             const [homeworkScores, setHomeworkScores] = React.useState({});
             const [homeworkMaps, setHomeworkMaps] = React.useState({});
-            // 新增：雲端連線狀態
+            
+            // ★ 新增：Pastpaper 成績狀態
+            const [pastpaperScores, setPastpaperScores] = React.useState({});
+
             const [isLoading, setIsLoading] = React.useState(true);
             const [isSaving, setIsSaving] = React.useState(false);
-    // 在 App 內的 useState 區塊加入以下狀態：
             const [remediationProgress, setRemediationProgress] = React.useState({});
 
-           // 自動從現有學生名單中抓取所有不重複的群組名稱 (加入防護罩)
+            // 自動從現有學生名單中抓取所有不重複的群組名稱 (加入防護罩)
             const allCohorts = ['所有學生', ...new Set((students || []).map(s => s.cohort || '2024-2027'))];
             
             // 從老師的瀏覽器記憶中讀取上次選的群組，預設為 '所有學生'
@@ -4973,7 +5291,7 @@ const App = () => {
                 ? (students || [])
                 : (students || []).filter(s => (s.cohort || '2024-2027') === currentCohort);
     
- // 1. 初次載入時，從 Google 雲端讀取資料
+            // 1. 初次載入時，從 Google 雲端讀取資料
             React.useEffect(() => {
                 fetch(API_URL)
                     .then(res => res.json())
@@ -4988,15 +5306,18 @@ const App = () => {
                         if (typeof SYLLABUS_TOPICS !== 'undefined') SYLLABUS_TOPICS = window.SYLLABUS_TOPICS;
                         if (typeof QUIZ_MAPS !== 'undefined') QUIZ_MAPS = window.QUIZ_MAPS;
                         if (typeof EXAM_MAPS !== 'undefined') EXAM_MAPS = window.EXAM_MAPS;
+                        if (typeof PASTPAPER_MAPS !== 'undefined') PASTPAPER_MAPS = window.PASTPAPER_MAPS;
                         
                         setStudents(Array.isArray(data.students) ? data.students : []);
                         setScores((typeof data.scores === 'object' && data.scores !== null) ? data.scores : {});
                         setExamScores((typeof data.examScores === 'object' && data.examScores !== null) ? data.examScores : {});
                         setRemediationProgress((typeof data.remediationProgress === 'object' && data.remediationProgress !== null) ? data.remediationProgress : {});
                         
-                        // ★ 核心修復：正確載入功課狀態，重整網頁不再洗白
                         setHomeworkMaps((typeof data.homeworkMaps === 'object' && data.homeworkMaps !== null) ? data.homeworkMaps : {}); 
                         setHomeworkScores((typeof data.homeworkScores === 'object' && data.homeworkScores !== null) ? data.homeworkScores : {});
+                        
+                        // ★ 載入 Pastpaper 儲存成績
+                        setPastpaperScores((typeof data.pastpaperScores === 'object' && data.pastpaperScores !== null) ? data.pastpaperScores : {});
                         
                         setIsLoading(false);
                     })
@@ -5015,8 +5336,6 @@ const App = () => {
                     const safeSyllabus = typeof SYLLABUS_TOPICS !== 'undefined' ? SYLLABUS_TOPICS : (window.SYLLABUS_TOPICS || {});
                     const safeQuizMaps = typeof QUIZ_MAPS !== 'undefined' ? QUIZ_MAPS : (window.QUIZ_MAPS || {});
                     const safeExamMaps = typeof EXAM_MAPS !== 'undefined' ? EXAM_MAPS : (window.EXAM_MAPS || {});
-                    
-                    // ★ 補上這行：安全讀取 Pastpaper 資料
                     const safePastpaperMaps = typeof PASTPAPER_MAPS !== 'undefined' ? PASTPAPER_MAPS : (window.PASTPAPER_MAPS || {});
 
                     const payload = { 
@@ -5027,15 +5346,16 @@ const App = () => {
                         examScores: examScores,
                         examMaps: safeExamMaps,
                         remediationProgress: remediationProgress,
-                        homeworkMaps: homeworkMaps,      // 來自 React 最新狀態
-                        homeworkScores: homeworkScores,  // 來自 React 最新狀態
-                        pastpaperMaps: safePastpaperMaps, // ★ 這裡現在安全了
-                        ...overrideData                  // 強制使用當下操作的最新資料
+                        homeworkMaps: homeworkMaps,      
+                        homeworkScores: homeworkScores,  
+                        pastpaperMaps: safePastpaperMaps, 
+                        pastpaperScores: pastpaperScores, // ★ 將成績加入上傳封包
+                        ...overrideData                  
                     };
 
                     fetch(API_URL, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // 避免網路安全阻擋
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                         body: JSON.stringify(payload)
                     })
                     .then(res => res.json())
@@ -5051,14 +5371,11 @@ const App = () => {
                         setIsSaving(false);
                     });
                 } catch (error) {
-                    // 如果打包過程中依然發生未知錯誤，會抓住它，不會讓畫面卡死
                     console.error("系統打包存檔資料時發生嚴重錯誤:", error);
                     alert("系統內部錯誤：無法打包上傳資料。\n錯誤詳情: " + error.message);
                     setIsSaving(false);
                 }
             };
-
-
 
            
             
@@ -5187,7 +5504,10 @@ const App = () => {
                             syncToCloud={syncToCloud} 
                         />
                     )}
+                    {/* 新增：Pastpaper 成績輸入畫面 */}
+                    {view === 'pastpaperScoresInput' && <PastpaperScoresInputView currentCohort={currentCohort} activeStudents={activeStudents} pastpaperScores={pastpaperScores} setPastpaperScores={setPastpaperScores} syncToCloud={syncToCloud} />}
                     {view === 'pastpaperSettings' && <PastpaperSettingsView syncToCloud={syncToCloud} />}
+    
                     
                     {/* 更新：功課管理頁面傳入完整的狀態與更新函數 */}
                     {view === 'homeworkSettings' && <HomeworkSettingsView students={students} currentCohort={currentCohort} homeworkMaps={homeworkMaps} setHomeworkMaps={setHomeworkMaps} syncToCloud={syncToCloud} />}
