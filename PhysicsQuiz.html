@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.13 Physics Quiz Analyzer</title>
+    <title> V3.14 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -5589,6 +5589,345 @@ const PastpaperAnalysisView = ({ currentCohort, activeStudents, pastpaperScores 
         </div>
     );
 };
+
+// ==================== 第四步：全班跨年份數據與排行榜 (PastpaperSummaryView) ====================
+const PastpaperSummaryView = ({ currentCohort, activeStudents, pastpaperScores }) => {
+    const [activeTab, setActiveTab] = React.useState('heatmap'); // 'heatmap' 或是 'leaderboard'
+    
+    // 試卷選擇 (供熱力圖使用)
+    const availablePapers = Object.keys(window.PASTPAPER_MAPS || {}).sort();
+    const [selectedPaper, setSelectedPaper] = React.useState(availablePapers[0] || '');
+
+    // ★ 處理雙重答案的計分邏輯
+    const getStudentQScore = React.useCallback((studentId, paperId, q) => {
+        const record = pastpaperScores[studentId]?.[paperId];
+        if (!record) return 0;
+        const val = record[q.id];
+        
+        if (q.type === 'MC') {
+            if (!val || !q.ans) return 0;
+            const studentAns = val.toString().toUpperCase().trim();
+            const correctAnswers = q.ans.toString().split(',').map(a => a.trim().toUpperCase());
+            const cleanStudent = studentAns.replace(/[^A-D]/g, '');
+            if (cleanStudent.length === 1 && correctAnswers.includes(cleanStudent)) {
+                return q.max;
+            }
+            return 0;
+        }
+        return val === '' || val === undefined ? 0 : parseFloat(val);
+    }, [pastpaperScores]);
+
+    // ★ DSE 等級估算轉換函數 (標準百分比參考)
+    const getEstimatedGrade = (percentage) => {
+        if (percentage >= 0.85) return { grade: '5**', color: 'text-yellow-600 bg-yellow-50 border-yellow-200' };
+        if (percentage >= 0.75) return { grade: '5*', color: 'text-amber-600 bg-amber-50 border-amber-200' };
+        if (percentage >= 0.65) return { grade: '5', color: 'text-orange-600 bg-orange-50 border-orange-200' };
+        if (percentage >= 0.50) return { grade: '4', color: 'text-emerald-600 bg-emerald-50 border-emerald-200' };
+        if (percentage >= 0.40) return { grade: '3', color: 'text-blue-600 bg-blue-50 border-blue-200' };
+        if (percentage >= 0.30) return { grade: '2', color: 'text-indigo-600 bg-indigo-50 border-indigo-200' };
+        if (percentage >= 0.20) return { grade: '1', color: 'text-slate-600 bg-slate-50 border-slate-200' };
+        return { grade: 'U', color: 'text-red-600 bg-red-50 border-red-200' };
+    };
+
+    // ================== 資料運算區 ==================
+    
+    // 1. 熱力圖與該卷成績估算
+    const heatmapData = React.useMemo(() => {
+        if (!selectedPaper || !window.PASTPAPER_MAPS[selectedPaper]) return { qStats: [], studentGrades: [] };
+        const map = window.PASTPAPER_MAPS[selectedPaper];
+        const studentCount = activeStudents.length || 1;
+
+        // 題目熱力統計
+        const qStats = map.questions.map(q => {
+            let totalEarned = 0;
+            let answeredCount = 0; // 紀錄有多少人有作答這題
+
+            activeStudents.forEach(s => {
+                const record = pastpaperScores[s.id]?.[selectedPaper];
+                if (record && record[q.id] !== undefined && record[q.id] !== '') {
+                    answeredCount++;
+                    totalEarned += getStudentQScore(s.id, selectedPaper, q);
+                }
+            });
+
+            const passRate = answeredCount > 0 ? (totalEarned / (answeredCount * q.max)) : 0;
+            // 熱力顏色：深紅 < 40%, 淺紅 < 60%, 綠色 >= 60%
+            let heatColor = 'bg-slate-50 text-slate-400 border-slate-200'; // 沒人答
+            if (answeredCount > 0) {
+                if (passRate < 0.4) heatColor = 'bg-red-500 text-white border-red-600 shadow-sm';
+                else if (passRate < 0.6) heatColor = 'bg-orange-300 text-orange-900 border-orange-400 shadow-sm';
+                else if (passRate < 0.8) heatColor = 'bg-emerald-300 text-emerald-900 border-emerald-400 shadow-sm';
+                else heatColor = 'bg-emerald-500 text-white border-emerald-600 shadow-sm';
+            }
+
+            return { ...q, shortId: q.id.split('-').pop(), passRate, answeredCount, heatColor };
+        });
+
+        // 學生該卷成績與等級
+        const studentGrades = activeStudents.map(s => {
+            let totalEarned = 0;
+            let totalMax = 0;
+            let hasRecord = false;
+            map.questions.forEach(q => {
+                totalMax += q.max;
+                const record = pastpaperScores[s.id]?.[selectedPaper];
+                if (record && record[q.id] !== undefined && record[q.id] !== '') {
+                    hasRecord = true;
+                    totalEarned += getStudentQScore(s.id, selectedPaper, q);
+                }
+            });
+
+            const pct = totalMax > 0 ? totalEarned / totalMax : 0;
+            const gradeInfo = getEstimatedGrade(pct);
+
+            return { student: s, totalEarned, totalMax, pct, gradeInfo, hasRecord };
+        }).filter(s => s.hasRecord).sort((a, b) => b.pct - a.pct); // 依分數由高至低排
+
+        return { qStats, studentGrades };
+    }, [selectedPaper, activeStudents, pastpaperScores, getStudentQScore]);
+
+
+    // 2. 全期操卷排行榜 (Leaderboard)
+    const leaderboardData = React.useMemo(() => {
+        const maps = window.PASTPAPER_MAPS || {};
+        
+        const lb = activeStudents.map(s => {
+            const sScores = pastpaperScores[s.id] || {};
+            let papersDoneCount = 0;
+            let mcAttempted = 0;
+            let lqAttempted = 0;
+            let totalEarned = 0;
+            let totalMax = 0;
+
+            Object.keys(sScores).forEach(paperId => {
+                const record = sScores[paperId];
+                const map = maps[paperId];
+                if (!map || !map.questions || Object.keys(record).length === 0) return;
+                
+                papersDoneCount++;
+
+                map.questions.forEach(q => {
+                    const val = record[q.id];
+                    if (val !== undefined && val !== '') {
+                        if (q.type === 'MC') mcAttempted++;
+                        else lqAttempted++;
+                        
+                        totalMax += q.max;
+                        totalEarned += getStudentQScore(s.id, paperId, q);
+                    }
+                });
+            });
+
+            const accuracy = totalMax > 0 ? (totalEarned / totalMax) : 0;
+            const totalQuestions = mcAttempted + lqAttempted;
+
+            return { student: s, papersDoneCount, mcAttempted, lqAttempted, totalQuestions, accuracy };
+        });
+
+        // 預設以「做題總數」進行排名，鼓勵勤力
+        return lb.sort((a, b) => b.totalQuestions - a.totalQuestions || b.accuracy - a.accuracy);
+    }, [activeStudents, pastpaperScores, getStudentQScore]);
+
+    // ===============================================
+
+    return (
+        <div className="p-6 max-w-7xl mx-auto animate-fadeIn">
+            {/* 標頭 */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 border-b pb-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                        <Icon name="Activity" className="text-pink-600" /> Pastpaper 錯題熱力圖與排行榜
+                    </h1>
+                    <p className="text-sm text-slate-500 mt-1">透視單卷全班盲點，並透過排行榜激發學生的操卷動力。</p>
+                </div>
+                
+                {/* 雙切頁按鈕 */}
+                <div className="flex bg-slate-100 p-1 rounded-xl shadow-inner">
+                    <button 
+                        onClick={() => setActiveTab('heatmap')}
+                        className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'heatmap' ? 'bg-white text-pink-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                        <Icon name="Flame" size={16} /> 單卷熱力圖
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('leaderboard')}
+                        className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'leaderboard' ? 'bg-white text-yellow-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                        <Icon name="Trophy" size={16} /> 操卷狂人榜
+                    </button>
+                </div>
+            </div>
+
+            {/* 分頁一：單卷熱力圖與預測 */}
+            {activeTab === 'heatmap' && (
+                <div className="animate-fadeIn">
+                    <div className="mb-4 flex items-center gap-3">
+                        <label className="text-sm font-bold text-slate-700">選擇試卷：</label>
+                        <select 
+                            className="p-2 border border-slate-300 rounded-lg bg-white font-bold outline-none focus:ring-2 focus:ring-pink-500 shadow-sm min-w-[200px]"
+                            value={selectedPaper}
+                            onChange={e => setSelectedPaper(e.target.value)}
+                        >
+                            {availablePapers.length === 0 ? <option value="">無試卷資料</option> : availablePapers.map(k => <option key={k} value={k}>{k} - {window.PASTPAPER_MAPS[k].title}</option>)}
+                        </select>
+                    </div>
+
+                    {!selectedPaper ? (
+                        <div className="card p-16 text-center text-slate-400 border border-slate-200 shadow-sm border-dashed rounded-xl">
+                            <Icon name="Inbox" size={48} className="mx-auto mb-3 opacity-40 text-pink-300" />
+                            <p className="text-sm font-medium">系統中尚無 Pastpaper 藍圖資料</p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            
+                            {/* 左：熱力圖矩陣 */}
+                            <div className="lg:col-span-2 card p-5 border border-slate-200 shadow-sm rounded-xl bg-white flex flex-col h-[650px]">
+                                <div className="flex justify-between items-end mb-4 border-b border-slate-100 pb-2">
+                                    <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm">
+                                        <Icon name="Flame" className="text-pink-500" size={18} /> 全班錯題熱力分佈 (Error Heatmap)
+                                    </h3>
+                                    <div className="flex gap-2 text-[10px] font-bold">
+                                        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-500"></span>&lt; 40% (重災區)</span>
+                                        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-orange-300"></span>&lt; 60%</span>
+                                        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-emerald-300"></span>&lt; 80%</span>
+                                        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-emerald-500"></span>優秀</span>
+                                    </div>
+                                </div>
+
+                                <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
+                                    {heatmapData.qStats.length === 0 ? (
+                                        <div className="text-center py-10 text-slate-400">這份試卷目前無題目資料</div>
+                                    ) : (
+                                        <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
+                                            {heatmapData.qStats.map(q => (
+                                                <div 
+                                                    key={q.id} 
+                                                    title={`課題: ${q.topicId}\n考核點: ${q.topicDesc || '無'}\n全班答對率: ${(q.passRate*100).toFixed(0)}%`}
+                                                    className={`relative flex flex-col items-center justify-center p-2 rounded-lg border cursor-help hover:scale-105 transition-transform ${q.heatColor}`}
+                                                >
+                                                    <span className="text-[10px] font-bold opacity-80 mb-1">{q.type}</span>
+                                                    <span className="text-sm font-black">{q.shortId}</span>
+                                                    {q.answeredCount > 0 ? (
+                                                        <span className="text-[10px] font-bold mt-1 bg-white/30 px-1 rounded">{(q.passRate * 100).toFixed(0)}%</span>
+                                                    ) : (
+                                                        <span className="text-[9px] mt-1 opacity-50">無數據</span>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* 右：預期等級排行榜 */}
+                            <div className="card p-0 border border-slate-200 shadow-sm rounded-xl bg-white flex flex-col h-[650px] overflow-hidden">
+                                <div className="p-4 bg-slate-50 border-b border-slate-200">
+                                    <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm">
+                                        <Icon name="Award" className="text-yellow-500" size={18} /> 該卷模擬等級預測
+                                    </h3>
+                                    <p className="text-[10px] text-slate-500 mt-1">依據標準百分比換算，僅供參考。</p>
+                                </div>
+                                <div className="flex-1 overflow-y-auto custom-scrollbar">
+                                    {heatmapData.studentGrades.length === 0 ? (
+                                        <div className="text-center py-10 text-slate-400 text-sm">此試卷尚無學生成績紀錄</div>
+                                    ) : (
+                                        <div className="divide-y divide-slate-100">
+                                            {heatmapData.studentGrades.map((sg, idx) => (
+                                                <div key={sg.student.id} className="p-3 hover:bg-slate-50 flex items-center justify-between transition">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${idx < 3 ? 'bg-yellow-100 text-yellow-700' : 'bg-slate-100 text-slate-500'}`}>
+                                                            {idx + 1}
+                                                        </div>
+                                                        <div>
+                                                            <div className="font-bold text-slate-700 text-sm">{sg.student.name}</div>
+                                                            <div className="text-[10px] text-slate-400 font-mono">{sg.totalEarned}/{sg.totalMax}分 ({(sg.pct*100).toFixed(1)}%)</div>
+                                                        </div>
+                                                    </div>
+                                                    <div className={`px-2.5 py-1 rounded-lg border font-black text-sm shadow-sm ${sg.gradeInfo.color}`}>
+                                                        {sg.gradeInfo.grade}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* 分頁二：全期操卷排行榜 */}
+            {activeTab === 'leaderboard' && (
+                <div className="animate-fadeIn">
+                    <div className="card p-0 border border-slate-200 shadow-sm rounded-xl bg-white overflow-hidden max-w-4xl mx-auto">
+                        <div className="p-6 bg-gradient-to-br from-yellow-50 to-amber-100 border-b border-amber-200 text-center relative overflow-hidden">
+                            <Icon name="Trophy" size={80} className="absolute -right-4 -bottom-4 opacity-10 text-amber-500" />
+                            <h2 className="text-2xl font-black text-amber-800 flex justify-center items-center gap-2 relative z-10">
+                                🌟 Pastpaper 操卷狂人排行榜 🌟
+                            </h2>
+                            <p className="text-sm text-amber-700/80 mt-2 relative z-10">以學生「已作答的總題數 (MC+LQ)」作為戰鬥力排名！</p>
+                        </div>
+                        
+                        <div className="bg-white">
+                            <div className="grid grid-cols-12 gap-2 p-3 bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">
+                                <div className="col-span-2 md:col-span-1">排名</div>
+                                <div className="col-span-4 md:col-span-3 text-left">挑戰者</div>
+                                <div className="col-span-2 hidden md:block">完成卷數</div>
+                                <div className="col-span-3 md:col-span-2">戰鬥力 (作答題數)</div>
+                                <div className="col-span-3 md:col-span-3">綜合準確率</div>
+                            </div>
+                            
+                            <div className="divide-y divide-slate-100 max-h-[550px] overflow-y-auto custom-scrollbar">
+                                {leaderboardData.length === 0 ? (
+                                    <div className="py-12 text-center text-slate-400">目前沒有任何同學開始操卷，快去鼓勵他們吧！</div>
+                                ) : (
+                                    leaderboardData.map((data, idx) => {
+                                        // 獎牌邏輯
+                                        let medal = <span className="text-slate-400 font-black">{idx + 1}</span>;
+                                        if (idx === 0) medal = <span className="text-2xl" title="冠軍">🥇</span>;
+                                        if (idx === 1) medal = <span className="text-2xl" title="亞軍">🥈</span>;
+                                        if (idx === 2) medal = <span className="text-2xl" title="季軍">🥉</span>;
+
+                                        // 如果一題都沒做，降低透明度
+                                        const isZero = data.totalQuestions === 0;
+
+                                        return (
+                                            <div key={data.student.id} className={`grid grid-cols-12 gap-2 p-3 items-center text-center transition hover:bg-slate-50 ${isZero ? 'opacity-40' : ''}`}>
+                                                <div className="col-span-2 md:col-span-1 flex justify-center">{medal}</div>
+                                                <div className="col-span-4 md:col-span-3 text-left">
+                                                    <div className="font-bold text-slate-800">{data.student.name}</div>
+                                                    <div className="text-[10px] text-slate-400 font-mono">{data.student.class}({data.student.num})</div>
+                                                </div>
+                                                <div className="col-span-2 hidden md:block">
+                                                    <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded font-bold text-xs">{data.papersDoneCount} 份</span>
+                                                </div>
+                                                <div className="col-span-3 md:col-span-2">
+                                                    <div className="font-black text-lg text-amber-600">{data.totalQuestions}</div>
+                                                    <div className="text-[9px] text-slate-400 uppercase">題</div>
+                                                </div>
+                                                <div className="col-span-3 md:col-span-3 flex flex-col items-center justify-center">
+                                                    <div className="w-full max-w-[100px] bg-slate-200 rounded-full h-2 mb-1">
+                                                        <div 
+                                                            className={`h-2 rounded-full ${data.accuracy >= 0.6 ? 'bg-emerald-500' : 'bg-orange-400'}`} 
+                                                            style={{ width: `${data.accuracy * 100}%` }}
+                                                        ></div>
+                                                    </div>
+                                                    <span className="text-xs font-bold text-slate-600">{(data.accuracy * 100).toFixed(1)}%</span>
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
         
 // ==================== 升級版：分區模塊化 Sidebar (區分小測與考試版) ====================
             const Sidebar = ({ view, setView, currentCohort, setCurrentCohort, allCohorts, isSaving }) => {
@@ -5693,10 +6032,10 @@ const PastpaperAnalysisView = ({ currentCohort, activeStudents, pastpaperScores 
                             <div className="mt-6 mb-2 px-4 text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
                                 <Icon name="Database" size={14} /> 歷屆試題 (Pastpaper)
                             </div>
-                            <div className="flex flex-col gap-1">
+                           <div className="flex flex-col gap-1">
                                 {navButton('pastpaperScoresInput', 'Zap', '歷屆成績極速輸入', 'bg-indigo-600')}
-                                {/* ★ 新增這一行： */}
                                 {navButton('pastpaperAnalysis', 'LineChart', '跨年弱點追蹤與補底', 'bg-indigo-600')}
+                                {navButton('pastpaperSummary', 'Activity', '錯題熱力圖與排行榜', 'bg-pink-600')}
                                 {navButton('pastpaperSettings', 'Settings', 'Pastpaper 題庫設定', 'bg-indigo-600')}
                             </div>
 
@@ -5970,6 +6309,7 @@ const App = () => {
                     {/* 新增：Pastpaper 成績輸入畫面 */}
                     {view === 'pastpaperScoresInput' && <PastpaperScoresInputView currentCohort={currentCohort} activeStudents={activeStudents} pastpaperScores={pastpaperScores} setPastpaperScores={setPastpaperScores} syncToCloud={syncToCloud} />}
                     {view === 'pastpaperAnalysis' && <PastpaperAnalysisView currentCohort={currentCohort} activeStudents={activeStudents} pastpaperScores={pastpaperScores} />}
+                    {view === 'pastpaperSummary' && <PastpaperSummaryView currentCohort={currentCohort} activeStudents={activeStudents} pastpaperScores={pastpaperScores} />}
                     {view === 'pastpaperSettings' && <PastpaperSettingsView syncToCloud={syncToCloud} />}
     
                     
