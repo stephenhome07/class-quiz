@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.11 Physics Quiz Analyzer</title>
+    <title> V3.12 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -5156,7 +5156,7 @@ const PastpaperSettingsView = ({ syncToCloud }) => {
     );
 };
 
-// ==================== 第三步：歷屆試題個人弱點與補底生成 (PastpaperAnalysisView) ====================
+// ==================== 第三步：歷屆試題個人弱點與補底生成 (PastpaperAnalysisView) - 加入雷達圖與試卷篩選 ====================
 const PastpaperAnalysisView = ({ currentCohort, activeStudents, pastpaperScores }) => {
     const [selectedStudentId, setSelectedStudentId] = React.useState('');
     const [aiLang, setAiLang] = React.useState('雙語 (Bilingual)');
@@ -5164,8 +5164,14 @@ const PastpaperAnalysisView = ({ currentCohort, activeStudents, pastpaperScores 
     const [aiLqCount, setAiLqCount] = React.useState('2'); 
     const [selectedTopics, setSelectedTopics] = React.useState([]);
     const [generatedPrompt, setGeneratedPrompt] = React.useState('');
+    
+    // ★ 新增：選取的試卷 (Checkbox)
+    const [selectedPapers, setSelectedPapers] = React.useState([]);
 
-    // ★ 處理雙重答案的計分邏輯
+    const chartRef = React.useRef(null);
+    const chartInstance = React.useRef(null);
+
+    // 處理雙重答案的計分邏輯
     const getStudentQScore = React.useCallback((studentId, paperId, q) => {
         const record = pastpaperScores[studentId]?.[paperId];
         if (!record) return 0;
@@ -5184,39 +5190,63 @@ const PastpaperAnalysisView = ({ currentCohort, activeStudents, pastpaperScores 
         return val === '' || val === undefined ? 0 : parseFloat(val);
     }, [pastpaperScores]);
 
-    // ★ 核心運算：匯總該學生所有考過的 Pastpaper 數據
+    // ★ 取得該學生考過的所有試卷 (不論是否被勾選)，用於生成 Checkbox
+    const allPapersTaken = React.useMemo(() => {
+        if (!selectedStudentId) return [];
+        const sScores = pastpaperScores[selectedStudentId] || {};
+        return Object.keys(sScores).filter(pid => Object.keys(sScores[pid]).length > 0).sort();
+    }, [selectedStudentId, pastpaperScores]);
+
+    // 當切換學生時，預設「全選」他考過的所有試卷
+    React.useEffect(() => {
+        setSelectedPapers(allPapersTaken);
+        setSelectedTopics([]);
+        setGeneratedPrompt('');
+    }, [selectedStudentId, allPapersTaken]);
+
+    // Checkbox 狀態切換邏輯
+    const togglePaper = (paperId) => {
+        setSelectedPapers(prev => prev.includes(paperId) ? prev.filter(p => p !== paperId) : [...prev, paperId]);
+    };
+    const toggleAllPapers = () => {
+        if (selectedPapers.length === allPapersTaken.length) setSelectedPapers([]);
+        else setSelectedPapers([...allPapersTaken]);
+    };
+
+    // ★ 核心運算：匯總已勾選試卷 (selectedPapers) 的數據
     const studentAnalysis = React.useMemo(() => {
-        if (!selectedStudentId) return null;
+        if (!selectedStudentId || selectedPapers.length === 0) return { papersTaken: [], topics: [], domainStats: {} };
 
         const maps = window.PASTPAPER_MAPS || {};
-        const sScores = pastpaperScores[selectedStudentId] || {};
-        const papersTaken = Object.keys(sScores).filter(pid => Object.keys(sScores[pid]).length > 0).sort(); // 依年份排序
-
-        if (papersTaken.length === 0) return { papersTaken: [], topics: [] };
-
         const topicStats = {};
+        
+        // 用於雷達圖的 7 大領域統計
+        const domainStats = {
+            '1': { name: '熱學 (Heat)', max: 0, earned: 0 },
+            '2': { name: '力學 (Mechanics)', max: 0, earned: 0 },
+            '3': { name: '波動 (Waves)', max: 0, earned: 0 },
+            '4': { name: '電磁學 (E&M)', max: 0, earned: 0 },
+            '5': { name: '放射學 (Radioactivity)', max: 0, earned: 0 },
+            'E3': { name: '能量 (Energy)', max: 0, earned: 0 },
+            'E4': { name: '醫學 (Medical)', max: 0, earned: 0 }
+        };
 
-        // 遍歷該學生有分數的所有試卷
-        papersTaken.forEach(paperId => {
+        // 只遍歷「有被打勾」的試卷
+        selectedPapers.forEach(paperId => {
             const map = maps[paperId];
             if (!map || !map.questions) return;
 
             map.questions.forEach(q => {
                 const score = getStudentQScore(selectedStudentId, paperId, q);
                 
+                // 1. 處理課題統計 (Topic Stats)
                 if (!topicStats[q.topicId]) {
                     const syllabusInfo = window.SYLLABUS_TOPICS?.[q.topicId];
-                    const safeTopicName = typeof syllabusInfo === 'object' && syllabusInfo !== null ? syllabusInfo.topic : (syllabusInfo || '未定義');
-                    const safeSyllabusDesc = typeof syllabusInfo === 'object' && syllabusInfo !== null ? syllabusInfo.desc : '無';
-
                     topicStats[q.topicId] = {
                         topicId: q.topicId,
-                        topicName: safeTopicName,
-                        syllabusDesc: safeSyllabusDesc,
-                        totalMax: 0,
-                        totalEarned: 0,
-                        yearlyStats: {}, // 記錄每年的得分狀況
-                        errorDescList: new Set() // 記錄錯題的具體概念
+                        topicName: (syllabusInfo && syllabusInfo.topic) ? syllabusInfo.topic : '未定義',
+                        syllabusDesc: (syllabusInfo && syllabusInfo.desc) ? syllabusInfo.desc : '無',
+                        totalMax: 0, totalEarned: 0, yearlyStats: {}, errorDescList: new Set()
                     };
                 }
 
@@ -5229,43 +5259,108 @@ const PastpaperAnalysisView = ({ currentCohort, activeStudents, pastpaperScores 
                 topicStats[q.topicId].yearlyStats[paperId].max += q.max;
                 topicStats[q.topicId].yearlyStats[paperId].earned += score;
 
-                // 如果這題沒拿滿分，把錯題概念記錄下來餵給 AI
                 if (score < q.max && q.topicDesc) {
                     const safeDesc = typeof q.topicDesc === 'object' ? (q.topicDesc.topic || q.topicDesc.desc) : q.topicDesc;
                     topicStats[q.topicId].errorDescList.add(safeDesc);
                 }
+
+                // 2. 處理 7 大領域統計 (Domain Stats for Radar Chart)
+                let domainKey = '';
+                if (q.topicId.startsWith('E3')) domainKey = 'E3';
+                else if (q.topicId.startsWith('E4')) domainKey = 'E4';
+                else domainKey = q.topicId.charAt(0); // 取第 1 個字元 (1, 2, 3, 4, 5)
+
+                if (domainStats[domainKey]) {
+                    domainStats[domainKey].max += q.max;
+                    domainStats[domainKey].earned += score;
+                }
             });
         });
 
-        // 轉換為陣列並計算百分比，篩選出低於 60% 的弱點課題
         const processedTopics = Object.values(topicStats)
             .map(t => ({
                 ...t,
                 overallPct: t.totalMax > 0 ? (t.totalEarned / t.totalMax) : 0,
                 errorDescArray: Array.from(t.errorDescList)
             }))
-            .filter(t => t.totalMax > 0 && t.overallPct <= 0.6) // ★ 只顯示 <= 60% 的重災區
-            .sort((a, b) => a.overallPct - b.overallPct); // 從最弱的排到最不弱的
+            .filter(t => t.totalMax > 0 && t.overallPct <= 0.6) // 只顯示 <= 60% 的重災區
+            .sort((a, b) => a.overallPct - b.overallPct);
 
-        return { papersTaken, topics: processedTopics };
-    }, [selectedStudentId, pastpaperScores, getStudentQScore]);
+        return { papersTaken: selectedPapers, topics: processedTopics, domainStats };
+    }, [selectedStudentId, selectedPapers, pastpaperScores, getStudentQScore]);
 
-    // 切換學生時清空勾選
+    // ★ 繪製或更新雷達圖
     React.useEffect(() => {
-        setSelectedTopics([]);
-        setGeneratedPrompt('');
-    }, [selectedStudentId]);
+        if (!selectedStudentId || !studentAnalysis || selectedPapers.length === 0 || !chartRef.current) return;
+
+        const ctx = chartRef.current.getContext('2d');
+        const ds = studentAnalysis.domainStats;
+        
+        const labels = [];
+        const dataPoints = [];
+
+        Object.keys(ds).forEach(key => {
+            if (ds[key].max > 0) { // 只畫有考過的領域
+                labels.push(ds[key].name);
+                dataPoints.push(Math.round((ds[key].earned / ds[key].max) * 100));
+            }
+        });
+
+        if (chartInstance.current) {
+            chartInstance.current.destroy();
+        }
+
+        chartInstance.current = new Chart(ctx, {
+            type: 'radar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '綜合掌握度 (%)',
+                    data: dataPoints,
+                    backgroundColor: 'rgba(79, 70, 229, 0.2)', // Indigo
+                    borderColor: 'rgba(79, 70, 229, 0.8)',
+                    pointBackgroundColor: 'rgba(79, 70, 229, 1)',
+                    pointBorderColor: '#fff',
+                    pointHoverBackgroundColor: '#fff',
+                    pointHoverBorderColor: 'rgba(79, 70, 229, 1)',
+                    borderWidth: 2,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    r: {
+                        angleLines: { color: 'rgba(0, 0, 0, 0.1)' },
+                        grid: { color: 'rgba(0, 0, 0, 0.1)' },
+                        pointLabels: { font: { size: 10, weight: 'bold' }, color: '#475569' },
+                        ticks: { stepSize: 20, min: 0, max: 100, display: false } // 隱藏數值圈
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) { return ` 掌握度: ${context.raw}%`; }
+                        }
+                    }
+                }
+            }
+        });
+
+        return () => {
+            if (chartInstance.current) chartInstance.current.destroy();
+        };
+    }, [studentAnalysis, selectedStudentId, selectedPapers]);
 
     const handleTopicToggle = (topicId) => {
-        setSelectedTopics(prev => 
-            prev.includes(topicId) ? prev.filter(id => id !== topicId) : [...prev, topicId]
-        );
+        setSelectedTopics(prev => prev.includes(topicId) ? prev.filter(id => id !== topicId) : [...prev, topicId]);
     };
 
     // 動態產生 Prompt
     React.useEffect(() => {
-        if (!selectedStudentId || selectedTopics.length === 0 || !studentAnalysis) {
-            setGeneratedPrompt('👈 請先從左側選擇學生，並勾選至少一個弱點課題。');
+        if (!selectedStudentId || selectedTopics.length === 0 || !studentAnalysis || studentAnalysis.topics.length === 0) {
+            setGeneratedPrompt('👈 請先從下方勾選至少一個弱點課題。');
             return;
         }
 
@@ -5273,10 +5368,10 @@ const PastpaperAnalysisView = ({ currentCohort, activeStudents, pastpaperScores 
         const targetTopics = studentAnalysis.topics.filter(t => selectedTopics.includes(t.topicId));
 
         const weakTopicsText = targetTopics.map(t => {
-            return `- 課題 [${t.topicId} ${t.topicName}]:\n  全期平均得分率: ${(t.overallPct*100).toFixed(0)}%\n  官方學習要求: ${t.syllabusDesc}\n  歷年具體錯因: ${t.errorDescArray.join('; ') || '綜合概念薄弱'}`;
+            return `- 課題 [${t.topicId} ${t.topicName}]:\n  已選卷平均得分率: ${(t.overallPct*100).toFixed(0)}%\n  官方學習要求: ${t.syllabusDesc}\n  具體錯因: ${t.errorDescArray.join('; ') || '綜合概念薄弱'}`;
         }).join('\n\n');
 
-        const newPrompt = `你是一位香港 DSE 物理科權威專家。我的學生【${studentName}】在近幾年的 Pastpaper 操練中，於下列課題表現較弱（得分率低於 60%）。請針對他歷年做錯的具體概念，度身訂造一份強效補底卷。\n\n[基本設定]\n- 語言: ${aiLang}\n- 預期題型與數量:\n  * DSE 級別 多項選擇題 (MC)：${aiMcCount} 題\n  * DSE 級別 長題目 (LQ)：${aiLqCount} 題\n\n[學生重災區課題與歷年錯因]\n${weakTopicsText}\n\n[生成要求]\n1. 針對上述「歷年具體錯因」，設計極具針對性的陷阱題，幫他釐清最常混淆的物理觀念。\n2. MC 必須附帶 4 個選項，並為錯誤選項提供【陷阱破解分析】；LQ 必須包含【DSE 評分標準 (Marking Scheme)】與【解題思路】。\n3. 請在開頭以導師口吻給予【${studentName}】一段簡短而有力的鼓勵。`;
+        const newPrompt = `你是一位香港 DSE 物理科權威專家。我的學生【${studentName}】在近幾年的 Pastpaper 操練中，於下列課題表現較弱（得分率低於 60%）。請針對他做錯的具體概念，度身訂造一份強效補底卷。\n\n[基本設定]\n- 語言: ${aiLang}\n- 預期題型與數量:\n  * DSE 級別 多項選擇題 (MC)：${aiMcCount} 題\n  * DSE 級別 長題目 (LQ)：${aiLqCount} 題\n\n[學生重災區課題與具體錯因]\n${weakTopicsText}\n\n[生成要求]\n1. 針對上述「具體錯因」，設計極具針對性的陷阱題，幫他釐清最常混淆的物理觀念。\n2. MC 必須附帶 4 個選項，並為錯誤選項提供【陷阱破解分析】；LQ 必須包含【DSE 評分標準 (Marking Scheme)】與【解題思路】。\n3. 請在開頭以導師口吻給予【${studentName}】一段簡短而有力的鼓勵。`;
         
         setGeneratedPrompt(newPrompt);
     }, [aiLang, aiMcCount, aiLqCount, selectedTopics, selectedStudentId, studentAnalysis, activeStudents]);
@@ -5284,12 +5379,12 @@ const PastpaperAnalysisView = ({ currentCohort, activeStudents, pastpaperScores 
     return (
         <div className="p-6 max-w-7xl mx-auto animate-fadeIn">
             {/* 標頭 */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 border-b pb-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4 border-b pb-4">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
                         <Icon name="LineChart" className="text-indigo-600" /> Pastpaper 跨年弱點追蹤與補底
                     </h1>
-                    <p className="text-sm text-slate-500 mt-1">自動整合學生歷屆試題表現，透視跨年份概念盲區，一鍵產出 DSE 補底卷。</p>
+                    <p className="text-sm text-slate-500 mt-1">自動分析七大領域，並提供可篩選年份的錯題補底卷生成功能。</p>
                 </div>
                 <select 
                     className="p-2 border border-slate-300 rounded-lg bg-white font-bold outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm min-w-[200px]"
@@ -5302,139 +5397,192 @@ const PastpaperAnalysisView = ({ currentCohort, activeStudents, pastpaperScores 
             </div>
 
             {!selectedStudentId ? (
-                <div className="card p-16 text-center text-slate-400 border border-slate-200 shadow-sm border-dashed rounded-xl">
+                <div className="card p-16 text-center text-slate-400 border border-slate-200 shadow-sm border-dashed rounded-xl mt-6">
                     <Icon name="UserSearch" size={48} className="mx-auto mb-3 opacity-40 text-indigo-300" />
                     <p className="text-sm font-medium">請從右上角選擇一位學生，展開他的歷年 DSE 物理數據圖譜</p>
                 </div>
-            ) : !studentAnalysis || studentAnalysis.papersTaken.length === 0 ? (
-                <div className="card p-16 text-center text-slate-400 border border-slate-200 shadow-sm border-dashed rounded-xl">
+            ) : allPapersTaken.length === 0 ? (
+                <div className="card p-16 text-center text-slate-400 border border-slate-200 shadow-sm border-dashed rounded-xl mt-6">
                     <Icon name="Inbox" size={48} className="mx-auto mb-3 opacity-40 text-amber-300" />
                     <p className="text-sm font-medium">該學生目前尚未有任何 Pastpaper 成績紀錄</p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-                    {/* 左側：跨年課題掌握度雷達 (佔 3 列) */}
-                    <div className="lg:col-span-3 card p-5 border border-slate-200 shadow-sm flex flex-col h-[700px] rounded-xl bg-white">
-                        <div className="flex justify-between items-end mb-4 border-b border-slate-100 pb-2">
-                            <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm">
-                                <span className="p-1 bg-red-100 text-red-700 rounded"><Icon name="AlertTriangle" size={15} /></span>
-                                歷屆重災區課題 (得分率 &le; 60%)
-                            </h3>
-                            <div className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-1 rounded">
-                                已分析考卷：{studentAnalysis.papersTaken.join(', ')}
+                <div className="flex flex-col gap-6">
+                    
+                    {/* ★ 頂部：試卷篩選器與雷達圖 */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        
+                        {/* 左：試卷過濾器 */}
+                        <div className="lg:col-span-2 card p-5 border border-slate-200 shadow-sm rounded-xl bg-white">
+                            <div className="flex justify-between items-center mb-3 border-b border-slate-100 pb-2">
+                                <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm">
+                                    <Icon name="Filter" size={16} className="text-indigo-600" /> 分析範圍篩選 (年份/卷目)
+                                </h3>
+                                <button 
+                                    onClick={toggleAllPapers}
+                                    className="text-xs text-indigo-600 hover:text-indigo-800 font-bold underline"
+                                >
+                                    {selectedPapers.length === allPapersTaken.length ? '取消全選' : '全選所有試卷'}
+                                </button>
+                            </div>
+                            
+                            <div className="flex flex-wrap gap-2 max-h-[160px] overflow-y-auto custom-scrollbar pr-2">
+                                {allPapersTaken.map(pid => {
+                                    const isSelected = selectedPapers.includes(pid);
+                                    return (
+                                        <button 
+                                            key={pid}
+                                            onClick={() => togglePaper(pid)}
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition flex items-center gap-1.5 ${
+                                                isSelected ? 'bg-indigo-50 border-indigo-300 text-indigo-700 shadow-inner' : 'bg-white border-slate-200 text-slate-400 hover:bg-slate-50'
+                                            }`}
+                                        >
+                                            <Icon name={isSelected ? "CheckSquare" : "Square"} size={14} />
+                                            {window.PASTPAPER_MAPS[pid]?.title || pid}
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-2">
-                            {studentAnalysis.topics.length === 0 ? (
-                                <div className="text-center py-10 text-emerald-600 bg-emerald-50 rounded-lg font-bold">
-                                    🎉 太棒了！該生在所有已考的歷屆試題中，各課題得分率均高於 60%！
-                                </div>
+                        {/* 右：DSE 七大領域雷達圖 */}
+                        <div className="card p-4 border border-slate-200 shadow-sm rounded-xl bg-white flex flex-col h-[220px]">
+                            <h3 className="font-bold text-slate-800 text-sm text-center mb-1">🎯 DSE 七大領域綜合能力圖</h3>
+                            {selectedPapers.length === 0 ? (
+                                <div className="flex-1 flex items-center justify-center text-xs text-slate-400">請至少選擇一份試卷以生成圖表</div>
                             ) : (
-                                studentAnalysis.topics.map(t => {
-                                    const isSelected = selectedTopics.includes(t.topicId);
-                                    // 判斷整體嚴重程度
-                                    const isCritical = t.overallPct <= 0.4;
-                                    
-                                    return (
-                                        <div 
-                                            key={t.topicId} 
-                                            onClick={() => handleTopicToggle(t.topicId)}
-                                            className={`p-3 border rounded-xl cursor-pointer transition-all ${
-                                                isSelected ? 'border-indigo-500 bg-indigo-50/50 shadow-md ring-1 ring-indigo-500' : 'border-slate-200 bg-white hover:border-indigo-300 hover:bg-slate-50 shadow-sm'
-                                            }`}
-                                        >
-                                            <div className="flex justify-between items-start mb-2">
-                                                <div className="flex items-start gap-2">
-                                                    <div className={`mt-0.5 ${isSelected ? 'text-indigo-600' : 'text-slate-300'}`}>
-                                                        <Icon name={isSelected ? "CheckSquare" : "Square"} size={16} />
-                                                    </div>
-                                                    <div>
-                                                        <div className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
-                                                            <span className="font-mono bg-slate-100 text-slate-600 px-1.5 rounded text-xs">{t.topicId}</span>
-                                                            {t.topicName}
-                                                        </div>
-                                                        {isCritical && <span className="text-[9px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-bold uppercase mt-1 inline-block">極度薄弱</span>}
-                                                    </div>
-                                                </div>
-                                                <div className="text-right">
-                                                    <div className="text-[10px] text-slate-500 font-bold mb-0.5">全期平均</div>
-                                                    <div className={`text-lg font-black font-mono ${isCritical ? 'text-red-600' : 'text-amber-600'}`}>
-                                                        {(t.overallPct * 100).toFixed(0)}%
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* ★ 跨年份趨勢橫幅 */}
-                                            <div className="flex flex-wrap gap-2 mt-2 bg-slate-50 p-2 rounded-lg border border-slate-100">
-                                                {studentAnalysis.papersTaken.map(pid => {
-                                                    const stat = t.yearlyStats[pid];
-                                                    if (!stat || stat.max === 0) return null;
-                                                    const pct = stat.earned / stat.max;
-                                                    return (
-                                                        <div key={pid} className="flex items-center text-[10px] bg-white border border-slate-200 rounded overflow-hidden shadow-inner">
-                                                            <span className="bg-slate-200 text-slate-600 px-1.5 py-0.5 border-r border-slate-200 font-mono text-[9px]">{pid}</span>
-                                                            <span className={`px-1.5 py-0.5 font-bold ${pct < 0.5 ? 'text-red-500' : (pct < 0.7 ? 'text-amber-500' : 'text-emerald-600')}`}>
-                                                                {stat.earned}/{stat.max}
-                                                            </span>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-
-                                            <div className="text-[10px] text-slate-500 mt-2 line-clamp-2 border-t border-slate-100 pt-2 leading-relaxed">
-                                                <span className="font-bold text-slate-700">歷屆具體錯因：</span>{t.errorDescArray.join('； ') || '無具體描述'}
-                                            </div>
-                                        </div>
-                                    );
-                                })
+                                <div className="flex-1 relative w-full h-full">
+                                    <canvas ref={chartRef}></canvas>
+                                </div>
                             )}
                         </div>
                     </div>
 
-                    {/* 右側：專屬 AI 練習工廠 */}
-                    <div className="lg:col-span-2 card p-5 border-2 border-indigo-100 bg-gradient-to-br from-indigo-50/50 to-white shadow-sm flex flex-col h-[700px] rounded-xl">
-                        <div className="flex items-center gap-2 text-indigo-800 font-bold text-base mb-2">
-                            <Icon name="Cpu" className="text-indigo-600" />
-                            <span>DSE 專屬補底卷生成器</span>
-                        </div>
-                        <p className="text-[11px] text-slate-500 mb-4 leading-relaxed">
-                            請從左側勾選該生需優先克服的重災區。系統將結合官方考核要求與他的歷年錯題，生成超強提示詞。
-                        </p>
-                        
-                        <div className="grid grid-cols-2 gap-3 mb-4">
-                            <div className="flex flex-col gap-1 bg-white p-2 border rounded-lg shadow-sm">
-                                <label className="text-[10px] font-bold text-slate-500">輸出語言</label>
-                                <select className="text-xs p-1 outline-none font-bold text-slate-700 bg-transparent" value={aiLang} onChange={e=>setAiLang(e.target.value)}>
-                                    <option>繁體中文</option>
-                                    <option>English</option>
-                                </select>
-                            </div>
-                            <div className="flex flex-col gap-1 bg-white p-2 border rounded-lg shadow-sm">
-                                <label className="text-[10px] font-bold text-slate-500">題數分配</label>
-                                <div className="flex items-center gap-1 text-xs px-1">
-                                    MC:<input type="number" className="w-10 outline-none font-bold text-purple-700 border-b text-center mx-1 bg-transparent" value={aiMcCount} onChange={e=>setAiMcCount(e.target.value)} min="0" max="20" />
-                                    LQ:<input type="number" className="w-10 outline-none font-bold text-blue-700 border-b text-center mx-1 bg-transparent" value={aiLqCount} onChange={e=>setAiLqCount(e.target.value)} min="0" max="20" />
+                    {/* ★ 底部：重災區列表與 AI 生成 */}
+                    <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                        {/* 左：重災區列表 */}
+                        <div className="lg:col-span-3 card p-5 border border-slate-200 shadow-sm flex flex-col h-[600px] rounded-xl bg-white">
+                            <div className="flex justify-between items-end mb-4 border-b border-slate-100 pb-2">
+                                <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm">
+                                    <span className="p-1 bg-red-100 text-red-700 rounded"><Icon name="AlertTriangle" size={15} /></span>
+                                    重災區課題 (得分率 &le; 60%)
+                                </h3>
+                                <div className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-1 rounded">
+                                    共找到 {studentAnalysis.topics.length} 個弱點
                                 </div>
                             </div>
+
+                            <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-2">
+                                {selectedPapers.length === 0 ? (
+                                    <div className="text-center py-10 text-slate-400 border border-dashed rounded-lg">請從上方勾選要分析的試卷</div>
+                                ) : studentAnalysis.topics.length === 0 ? (
+                                    <div className="text-center py-10 text-emerald-600 bg-emerald-50 rounded-lg font-bold">
+                                        🎉 太棒了！該生在所選範圍內，各課題得分率均高於 60%！
+                                    </div>
+                                ) : (
+                                    studentAnalysis.topics.map(t => {
+                                        const isSelected = selectedTopics.includes(t.topicId);
+                                        const isCritical = t.overallPct <= 0.4;
+                                        
+                                        return (
+                                            <div 
+                                                key={t.topicId} 
+                                                onClick={() => handleTopicToggle(t.topicId)}
+                                                className={`p-3 border rounded-xl cursor-pointer transition-all ${
+                                                    isSelected ? 'border-indigo-500 bg-indigo-50/50 shadow-md ring-1 ring-indigo-500' : 'border-slate-200 bg-white hover:border-indigo-300 hover:bg-slate-50 shadow-sm'
+                                                }`}
+                                            >
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <div className="flex items-start gap-2">
+                                                        <div className={`mt-0.5 ${isSelected ? 'text-indigo-600' : 'text-slate-300'}`}>
+                                                            <Icon name={isSelected ? "CheckSquare" : "Square"} size={16} />
+                                                        </div>
+                                                        <div>
+                                                            <div className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                                                                <span className="font-mono bg-slate-100 text-slate-600 px-1.5 rounded text-xs">{t.topicId}</span>
+                                                                {t.topicName}
+                                                            </div>
+                                                            {isCritical && <span className="text-[9px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-bold uppercase mt-1 inline-block">極度薄弱</span>}
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <div className="text-[10px] text-slate-500 font-bold mb-0.5">平均得分率</div>
+                                                        <div className={`text-lg font-black font-mono ${isCritical ? 'text-red-600' : 'text-amber-600'}`}>
+                                                            {(t.overallPct * 100).toFixed(0)}%
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex flex-wrap gap-2 mt-2 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                                    {studentAnalysis.papersTaken.map(pid => {
+                                                        const stat = t.yearlyStats[pid];
+                                                        if (!stat || stat.max === 0) return null;
+                                                        const pct = stat.earned / stat.max;
+                                                        return (
+                                                            <div key={pid} className="flex items-center text-[10px] bg-white border border-slate-200 rounded overflow-hidden shadow-inner">
+                                                                <span className="bg-slate-200 text-slate-600 px-1.5 py-0.5 border-r border-slate-200 font-mono text-[9px]">{pid}</span>
+                                                                <span className={`px-1.5 py-0.5 font-bold ${pct < 0.5 ? 'text-red-500' : (pct < 0.7 ? 'text-amber-500' : 'text-emerald-600')}`}>
+                                                                    {stat.earned}/{stat.max}
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+
+                                                <div className="text-[10px] text-slate-500 mt-2 line-clamp-2 border-t border-slate-100 pt-2 leading-relaxed">
+                                                    <span className="font-bold text-slate-700">具體錯因：</span>{t.errorDescArray.join('； ') || '無具體描述'}
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
                         </div>
 
-                        <div className="flex-1 flex flex-col mb-4">
-                            <label className="text-xs font-bold text-slate-700 mb-1">📝 AI Prompt 預覽</label>
-                            <textarea 
-                                className="flex-1 w-full p-3 text-[11px] font-mono bg-white border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-400 outline-none shadow-inner resize-none leading-relaxed"
-                                value={generatedPrompt}
-                                readOnly
-                            />
-                        </div>
+                        {/* 右：AI 生成器 */}
+                        <div className="lg:col-span-2 card p-5 border-2 border-indigo-100 bg-gradient-to-br from-indigo-50/50 to-white shadow-sm flex flex-col h-[600px] rounded-xl">
+                            <div className="flex items-center gap-2 text-indigo-800 font-bold text-base mb-2">
+                                <Icon name="Cpu" className="text-indigo-600" />
+                                <span>DSE 專屬補底卷生成器</span>
+                            </div>
+                            <p className="text-[11px] text-slate-500 mb-4 leading-relaxed">
+                                請從左側勾選該生需優先克服的重災區。系統將結合官方考核要求與他的錯題，生成超強提示詞。
+                            </p>
+                            
+                            <div className="grid grid-cols-2 gap-3 mb-4">
+                                <div className="flex flex-col gap-1 bg-white p-2 border rounded-lg shadow-sm">
+                                    <label className="text-[10px] font-bold text-slate-500">輸出語言</label>
+                                    <select className="text-xs p-1 outline-none font-bold text-slate-700 bg-transparent" value={aiLang} onChange={e=>setAiLang(e.target.value)}>
+                                        <option>繁體中文</option>
+                                        <option>English</option>
+                                    </select>
+                                </div>
+                                <div className="flex flex-col gap-1 bg-white p-2 border rounded-lg shadow-sm">
+                                    <label className="text-[10px] font-bold text-slate-500">題數分配</label>
+                                    <div className="flex items-center gap-1 text-xs px-1">
+                                        MC:<input type="number" className="w-10 outline-none font-bold text-purple-700 border-b text-center mx-1 bg-transparent" value={aiMcCount} onChange={e=>setAiMcCount(e.target.value)} min="0" max="20" />
+                                        LQ:<input type="number" className="w-10 outline-none font-bold text-blue-700 border-b text-center mx-1 bg-transparent" value={aiLqCount} onChange={e=>setAiLqCount(e.target.value)} min="0" max="20" />
+                                    </div>
+                                </div>
+                            </div>
 
-                        <button 
-                            onClick={() => { navigator.clipboard.writeText(generatedPrompt); alert('📋 提示詞已複製！請前往 ChatGPT 貼上。'); }}
-                            className={`w-full font-bold py-3 rounded-xl shadow-md flex items-center justify-center gap-2 transition text-sm ${selectedTopics.length > 0 ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
-                            disabled={selectedTopics.length === 0}
-                        >
-                            <Icon name="Copy" size={16} /> 複製專屬補底 Prompt
-                        </button>
+                            <div className="flex-1 flex flex-col mb-4">
+                                <label className="text-xs font-bold text-slate-700 mb-1">📝 AI Prompt 預覽</label>
+                                <textarea 
+                                    className="flex-1 w-full p-3 text-[11px] font-mono bg-white border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-400 outline-none shadow-inner resize-none leading-relaxed"
+                                    value={generatedPrompt}
+                                    readOnly
+                                />
+                            </div>
+
+                            <button 
+                                onClick={() => { navigator.clipboard.writeText(generatedPrompt); alert('📋 提示詞已複製！請前往 ChatGPT 貼上。'); }}
+                                className={`w-full font-bold py-3 rounded-xl shadow-md flex items-center justify-center gap-2 transition text-sm ${selectedTopics.length > 0 ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
+                                disabled={selectedTopics.length === 0}
+                            >
+                                <Icon name="Copy" size={16} /> 複製專屬補底 Prompt
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
