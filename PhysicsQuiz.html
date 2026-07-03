@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.16a Physics Quiz Analyzer</title>
+    <title> V3.18 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -4773,23 +4773,25 @@ const PastpaperScoresInputView = ({ currentCohort, activeStudents, pastpaperScor
         return { mcScore, lqScore, totalScore: mcScore + lqScore, totalMax, hasRecord };
     };
 
-    // ★ 神級輸入處理：支援 ABCD 也能支援 1/0
+   // ★ 神級輸入處理：支援 ABCD 也能支援 1/0，並自動記錄「完成月份」
     const handleScoreChange = (studentId, paperId, q, val) => {
         let processedVal = val.toString().toUpperCase().trim();
         
         if (q.type === 'MC') {
-            // 如果老師追求極速，直接輸入 1 (代表對) 或 0 (代表錯)
             if (processedVal === '1') {
                 processedVal = q.ans ? q.ans.split(',')[0].trim().toUpperCase() : '1'; 
             } else if (processedVal === '0') {
-                processedVal = 'X'; // 用 X 代表已答但答錯
+                processedVal = 'X'; 
             } else if (processedVal !== '' && !['A', 'B', 'C', 'D', 'X'].includes(processedVal)) {
-                return; // 防呆：阻擋亂碼
+                return; 
             }
         } else {
             processedVal = val === '' ? '' : parseFloat(val);
-            if (processedVal > q.max) processedVal = q.max; // 防呆：不能超過滿分
+            if (processedVal > q.max) processedVal = q.max; 
         }
+
+        // 取得當前的真實月份 (例如 "2024-10")
+        const currentMonth = new Date().toISOString().substring(0, 7);
 
         setPastpaperScores(prev => ({
             ...prev,
@@ -4797,7 +4799,8 @@ const PastpaperScoresInputView = ({ currentCohort, activeStudents, pastpaperScor
                 ...(prev[studentId] || {}),
                 [paperId]: {
                     ...((prev[studentId] && prev[studentId][paperId]) || {}),
-                    [q.id]: processedVal
+                    [q.id]: processedVal,
+                    '_submitMonth': currentMonth // ★ 秘密加入時間戳！
                 }
             }
         }));
@@ -5590,7 +5593,7 @@ const PastpaperAnalysisView = ({ currentCohort, activeStudents, pastpaperScores 
     );
 };
 
-// ==================== 第四步：全班跨年份數據與排行榜 (PastpaperSummaryView) ====================
+// ==================== 第四步：全班跨年份數據與排行榜 (PastpaperSummaryView) - 支援真實月份篩選 ====================
 const PastpaperSummaryView = ({ currentCohort, activeStudents, pastpaperScores }) => {
     const [activeTab, setActiveTab] = React.useState('heatmap'); // 'heatmap' 或是 'leaderboard'
     
@@ -5598,13 +5601,16 @@ const PastpaperSummaryView = ({ currentCohort, activeStudents, pastpaperScores }
     const availablePapers = Object.keys(window.PASTPAPER_MAPS || {}).sort();
     const [selectedPaper, setSelectedPaper] = React.useState(availablePapers[0] || '');
 
-    // ★ 新增：熱力圖多選題目狀態
+    // 熱力圖多選題目狀態
     const [selectedHeatmapQs, setSelectedHeatmapQs] = React.useState([]);
+
+    // ★ 排行榜真實時間篩選狀態
+    const [leaderboardMonth, setLeaderboardMonth] = React.useState('all');
 
     const chartRef = React.useRef(null);
     const chartInstance = React.useRef(null);
 
-    // ★ 處理雙重答案的計分邏輯
+    // 處理雙重答案的計分邏輯
     const getStudentQScore = React.useCallback((studentId, paperId, q) => {
         const record = pastpaperScores[studentId]?.[paperId];
         if (!record) return 0;
@@ -5623,7 +5629,7 @@ const PastpaperSummaryView = ({ currentCohort, activeStudents, pastpaperScores }
         return val === '' || val === undefined ? 0 : parseFloat(val);
     }, [pastpaperScores]);
 
-    // ★ DSE 等級估算轉換函數
+    // DSE 等級估算轉換函數
     const getEstimatedGrade = (percentage) => {
         if (percentage >= 0.85) return { grade: '5**', color: 'text-yellow-600 bg-yellow-50 border-yellow-200' };
         if (percentage >= 0.75) return { grade: '5*', color: 'text-amber-600 bg-amber-50 border-amber-200' };
@@ -5651,23 +5657,24 @@ const PastpaperSummaryView = ({ currentCohort, activeStudents, pastpaperScores }
 
         activeStudents.forEach(s => {
             const sScores = pastpaperScores[s.id] || {};
-            Object.keys(sScores).forEach(paperId => {
-                const map = window.PASTPAPER_MAPS[paperId];
+            // 只統計目前選定的試卷
+            if (selectedPaper && sScores[selectedPaper]) {
+                const map = window.PASTPAPER_MAPS[selectedPaper];
                 if (!map || !map.questions) return;
                 map.questions.forEach(q => {
-                    const val = sScores[paperId][q.id];
+                    const val = sScores[selectedPaper][q.id];
                     if (val !== undefined && val !== '') {
                         let domainKey = q.topicId.startsWith('E3') ? 'E3' : q.topicId.startsWith('E4') ? 'E4' : q.topicId.charAt(0);
                         if (ds[domainKey]) {
                             ds[domainKey].max += q.max;
-                            ds[domainKey].earned += getStudentQScore(s.id, paperId, q);
+                            ds[domainKey].earned += getStudentQScore(s.id, selectedPaper, q);
                         }
                     }
                 });
-            });
+            }
         });
         return ds;
-    }, [activeStudents, pastpaperScores, getStudentQScore]);
+    }, [activeStudents, pastpaperScores, getStudentQScore, selectedPaper]);
 
     // 繪製全班雷達圖
     React.useEffect(() => {
@@ -5677,7 +5684,7 @@ const PastpaperSummaryView = ({ currentCohort, activeStudents, pastpaperScores }
         const dataPoints = [];
 
         Object.keys(classDomainStats).forEach(key => {
-            if (classDomainStats[key].max > 0) {
+            if (classDomainStats[key].max > 0) { // 該卷有涵蓋到的領域才顯示
                 labels.push(classDomainStats[key].name);
                 dataPoints.push(Math.round((classDomainStats[key].earned / classDomainStats[key].max) * 100));
             }
@@ -5713,7 +5720,7 @@ const PastpaperSummaryView = ({ currentCohort, activeStudents, pastpaperScores }
             }
         });
         return () => { if (chartInstance.current) chartInstance.current.destroy(); };
-    }, [classDomainStats, activeTab]);
+    }, [classDomainStats, activeTab, selectedPaper]);
 
     // 2. 熱力圖與該卷成績估算
     const heatmapData = React.useMemo(() => {
@@ -5766,6 +5773,7 @@ const PastpaperSummaryView = ({ currentCohort, activeStudents, pastpaperScores }
         setSelectedHeatmapQs([]);
     }, [selectedPaper]);
 
+
     // 3. 全期操卷排行榜 (Leaderboard) 及稱號系統
     const TITLE_POOL = {
         '1': ["熱力學宗師", "烈焰操卷王", "絕對零度行者", "熵增破壞者"],
@@ -5773,8 +5781,8 @@ const PastpaperSummaryView = ({ currentCohort, activeStudents, pastpaperScores }
         '3': ["波動幻影", "光學大師", "頻率共振者", "波粒二象使者"],
         '4': ["電磁霸主", "閃電領主", "庫侖之手", "法拉第先鋒"],
         '5': ["輻射剋星", "核能巨頭", "半衰期刺客", "量子漫步者"],
-        'E3': ["能量守恆者", "再生能源巨頭", "焦耳提煉師"],
-        'E4': ["醫學神醫", "透視眼行者", "超聲波獵人"]
+        'E3': ["能量守恆者", "再生能源巨頭", "焦耳提煉師", "綠能先鋒"],
+        'E4': ["醫學神醫", "透視眼行者", "超聲波獵人", "放射診斷師"]
     };
 
     const getStudentTitle = (studentId, bestDomain, totalQ, accuracy) => {
@@ -5782,11 +5790,24 @@ const PastpaperSummaryView = ({ currentCohort, activeStudents, pastpaperScores }
         if (totalQ > 100 && accuracy < 0.4) return "不屈狂戰士";
         if (totalQ > 150 && accuracy > 0.8) return "無情刷題機器";
         
-        // 根據 ID 計算穩定的隨機數來抽取稱號
         const charSum = studentId.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
         const pool = TITLE_POOL[bestDomain] || ["物理界泰斗", "薛丁格的學霸"];
         return pool[charSum % pool.length];
     };
+
+    // ★ 動態獲取真實的操卷月份 (從隱藏的 _submitMonth 中提取)
+    const availableMonths = React.useMemo(() => {
+        const months = new Set();
+        activeStudents.forEach(s => {
+            const sScores = pastpaperScores[s.id] || {};
+            Object.values(sScores).forEach(record => {
+                if (record['_submitMonth']) {
+                    months.add(record['_submitMonth']);
+                }
+            });
+        });
+        return Array.from(months).sort().reverse();
+    }, [activeStudents, pastpaperScores]);
 
     const leaderboardData = React.useMemo(() => {
         const maps = window.PASTPAPER_MAPS || {};
@@ -5801,6 +5822,10 @@ const PastpaperSummaryView = ({ currentCohort, activeStudents, pastpaperScores }
 
             Object.keys(sScores).forEach(paperId => {
                 const record = sScores[paperId];
+                
+                // ★ 時間篩選核心邏輯：比對偷偷塞進去的 _submitMonth
+                if (leaderboardMonth !== 'all' && record['_submitMonth'] !== leaderboardMonth) return;
+
                 const map = maps[paperId];
                 if (!map || !map.questions || Object.keys(record).length === 0) return;
                 
@@ -5850,7 +5875,8 @@ const PastpaperSummaryView = ({ currentCohort, activeStudents, pastpaperScores }
         });
 
         return lb.sort((a, b) => b.totalQuestions - a.totalQuestions || b.accuracy - a.accuracy);
-    }, [activeStudents, pastpaperScores, getStudentQScore]);
+    }, [activeStudents, pastpaperScores, getStudentQScore, leaderboardMonth]);
+
 
     // ===============================================
 
@@ -5875,6 +5901,7 @@ const PastpaperSummaryView = ({ currentCohort, activeStudents, pastpaperScores }
 
     return (
         <div className="p-6 max-w-7xl mx-auto animate-fadeIn">
+            {/* 標頭 */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 border-b pb-4">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
@@ -5883,6 +5910,7 @@ const PastpaperSummaryView = ({ currentCohort, activeStudents, pastpaperScores }
                     <p className="text-sm text-slate-500 mt-1">透視單卷全班盲點，並透過排行榜激發學生的操卷動力。</p>
                 </div>
                 
+                {/* 雙切頁按鈕 */}
                 <div className="flex bg-slate-100 p-1 rounded-xl shadow-inner">
                     <button onClick={() => setActiveTab('heatmap')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'heatmap' ? 'bg-white text-pink-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
                         <Icon name="Flame" size={16} /> 單卷熱力圖
@@ -5893,6 +5921,7 @@ const PastpaperSummaryView = ({ currentCohort, activeStudents, pastpaperScores }
                 </div>
             </div>
 
+            {/* 分頁一：單卷熱力圖與預測 */}
             {activeTab === 'heatmap' && (
                 <div className="animate-fadeIn">
                     {/* 頂部控制與雷達圖 */}
@@ -5910,7 +5939,7 @@ const PastpaperSummaryView = ({ currentCohort, activeStudents, pastpaperScores }
                         </div>
 
                         <div className="card p-4 border border-slate-200 shadow-sm rounded-xl bg-white flex flex-col h-[200px]">
-                            <h3 className="font-bold text-slate-800 text-sm text-center mb-1">🎯 全班總體七大領域能力</h3>
+                            <h3 className="font-bold text-slate-800 text-sm text-center mb-1">🎯 {selectedPaper ? `該卷覆蓋領域全班掌握度` : '全班總體能力'}</h3>
                             <div className="flex-1 relative w-full h-full">
                                 <canvas ref={chartRef}></canvas>
                             </div>
@@ -5924,6 +5953,7 @@ const PastpaperSummaryView = ({ currentCohort, activeStudents, pastpaperScores }
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            
                             {/* 左：熱力圖矩陣 */}
                             <div className="lg:col-span-2 card p-5 border border-slate-200 shadow-sm rounded-xl bg-white flex flex-col h-[650px]">
                                 <div className="flex justify-between items-end mb-4 border-b border-slate-100 pb-2">
@@ -6027,12 +6057,29 @@ const PastpaperSummaryView = ({ currentCohort, activeStudents, pastpaperScores }
             {activeTab === 'leaderboard' && (
                 <div className="animate-fadeIn">
                     <div className="card p-0 border border-slate-200 shadow-sm rounded-xl bg-white overflow-hidden max-w-5xl mx-auto">
-                        <div className="p-6 bg-gradient-to-br from-yellow-50 to-amber-100 border-b border-amber-200 text-center relative overflow-hidden">
-                            <Icon name="Trophy" size={80} className="absolute -right-4 -bottom-4 opacity-10 text-amber-500" />
-                            <h2 className="text-2xl font-black text-amber-800 flex justify-center items-center gap-2 relative z-10">
-                                🌟 Pastpaper 操卷狂人排行榜 🌟
-                            </h2>
-                            <p className="text-sm text-amber-700/80 mt-2 relative z-10">以學生「已作答的總題數 (MC+LQ)」作為戰鬥力排名！並展現個人專屬稱號。</p>
+                        <div className="p-6 bg-gradient-to-br from-yellow-50 to-amber-100 border-b border-amber-200 text-center relative overflow-hidden flex flex-col sm:flex-row justify-between items-center gap-4">
+                            <div className="text-left relative z-10">
+                                <h2 className="text-2xl font-black text-amber-800 flex items-center gap-2">
+                                    🌟 Pastpaper 操卷狂人榜 🌟
+                                </h2>
+                                <p className="text-sm text-amber-700/80 mt-1">以學生「已作答的總題數 (MC+LQ)」作為戰鬥力排名！並展現個人專屬稱號。</p>
+                            </div>
+                            
+                            {/* ★ 排行榜時間篩選器 */}
+                            <div className="relative z-10 flex items-center gap-2 bg-white/60 p-2 rounded-lg border border-amber-200 shadow-sm">
+                                <label className="text-xs font-bold text-amber-900">時間範圍：</label>
+                                <select 
+                                    className="p-1.5 border border-amber-300 rounded bg-white text-xs font-bold text-amber-800 outline-none focus:ring-2 focus:ring-amber-500"
+                                    value={leaderboardMonth}
+                                    onChange={e => setLeaderboardMonth(e.target.value)}
+                                >
+                                    <option value="all">🏆 全部時間 (總榜)</option>
+                                    {availableMonths.map(m => (
+                                        <option key={m} value={m}>📅 {m}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <Icon name="Trophy" size={100} className="absolute -right-4 -bottom-4 opacity-10 text-amber-500" />
                         </div>
                         
                         <div className="bg-white">
@@ -6047,7 +6094,7 @@ const PastpaperSummaryView = ({ currentCohort, activeStudents, pastpaperScores }
                             
                             <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto custom-scrollbar">
                                 {leaderboardData.length === 0 ? (
-                                    <div className="py-12 text-center text-slate-400">目前沒有任何同學開始操卷，快去鼓勵他們吧！</div>
+                                    <div className="py-12 text-center text-slate-400">在此時間範圍內，目前沒有任何同學開始操卷，快去鼓勵他們吧！</div>
                                 ) : (
                                     leaderboardData.map((data, idx) => {
                                         let medal = <span className="text-slate-400 font-black">{idx + 1}</span>;
