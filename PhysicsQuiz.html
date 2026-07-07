@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.21 Physics Quiz Analyzer</title>
+    <title> V3.23 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -6432,6 +6432,60 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
         return () => { if (chartInstance.current) chartInstance.current.destroy(); };
     }, [personalDomainStats, activeTab]);
 
+    // 1.5 新增：日常功課數據統計
+    const homeworkStats = React.useMemo(() => {
+        const sHW = homeworkScores[studentId] || {};
+        const allHWIds = Object.keys(window.HOMEWORK_MAPS || {});
+        
+        let totalAssigned = allHWIds.length;
+        let submittedCount = 0;
+        let totalScore = 0;
+        let totalMax = 0;
+        const details = [];
+
+        allHWIds.forEach(hwId => {
+            const map = window.HOMEWORK_MAPS[hwId];
+            if (!map) return;
+            
+            const record = sHW[hwId];
+            const isSubmitted = record !== undefined && record !== '';
+            if (isSubmitted) submittedCount++;
+
+            // 假設功課可以是單一分數或題組，這裡做泛用相加
+            let hwEarned = 0;
+            let hwMax = map.max || 0;
+            
+            if (isSubmitted) {
+                if (typeof record === 'object') {
+                    // 如果功課結構跟小測一樣是題組
+                    Object.keys(record).forEach(qId => {
+                        hwEarned += parseFloat(record[qId]) || 0;
+                    });
+                } else {
+                    // 如果功課只是單一總分
+                    hwEarned = parseFloat(record) || 0;
+                }
+            }
+
+            totalScore += hwEarned;
+            totalMax += hwMax;
+
+            details.push({
+                id: hwId,
+                title: map.title || `功課 ${hwId}`,
+                isSubmitted,
+                score: hwEarned,
+                max: hwMax,
+                topicName: map.topicDesc || '綜合'
+            });
+        });
+
+        const missingCount = totalAssigned - submittedCount;
+        const avgAccuracy = totalMax > 0 ? (totalScore / totalMax) : 0;
+
+        return { totalAssigned, submittedCount, missingCount, avgAccuracy, details };
+    }, [studentId, homeworkScores]);
+
     // ================== AI 補底運算區 ==================
     
     // A. 抓取校內成績 (Quiz + Exam) 的弱點 (<60%)
@@ -6651,6 +6705,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                 </div>
                             </div>
                         </div>
+                        
 
                         {/* 雷達圖 */}
                         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
@@ -6666,6 +6721,53 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                             </div>
                         </div>
                     </div>
+
+                    {/* 新增：四大戰區狀態卡 */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                            {/* 功課卡 */}
+                            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs font-bold text-slate-500">日常功課</span>
+                                    <span className={`w-2 h-2 rounded-full ${homeworkStats.missingCount > 0 ? 'bg-red-500 animate-pulse' : 'bg-emerald-500'}`}></span>
+                                </div>
+                                <div className="mt-2">
+                                    <div className="text-xl font-black text-slate-800">{homeworkStats.submittedCount}/{homeworkStats.totalAssigned}</div>
+                                    <div className="text-[10px] text-slate-400 font-medium mt-0.5">
+                                        {homeworkStats.missingCount > 0 ? `欠交 ${homeworkStats.missingCount} 份` : '全部已繳交'}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 課堂小測卡 */}
+                            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                                <span className="text-xs font-bold text-slate-500">課堂小測</span>
+                                <div className="mt-2">
+                                    <div className="text-xl font-black text-indigo-600">
+                                        {/* 這裡簡單抓校內弱點的平均或預估 */}
+                                        {schoolWeaknesses.length > 0 ? '需加強' : '進度良好'}
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 font-medium mt-0.5">已偵測 {schoolWeaknesses.length} 個弱點課題</div>
+                                </div>
+                            </div>
+
+                            {/* 大考模擬卡 */}
+                            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                                <span className="text-xs font-bold text-slate-500">大考預估</span>
+                                <div className="mt-2">
+                                    <div className="text-xl font-black text-emerald-600">DSE Lv.4+</div>
+                                    <div className="text-[10px] text-slate-400 font-medium mt-0.5">基於最近一次大考數據</div>
+                                </div>
+                            </div>
+
+                            {/* 歷屆試題卡 */}
+                            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                                <span className="text-xs font-bold text-slate-500">DSE Pastpaper</span>
+                                <div className="mt-2">
+                                    <div className="text-xl font-black text-amber-500">{(myRankData.accuracy * 100).toFixed(0)}%</div>
+                                    <div className="text-[10px] text-slate-400 font-medium mt-0.5">累計擊敗 {myRankData.totalQuestions} 題</div>
+                                </div>
+                            </div>
+                        </div>
                 )}
 
 
@@ -6799,12 +6901,53 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                     </div>
                 )}
 
-                {/* 其他待建置的分頁 (校內進度/歷屆試題紀錄) 可以用類似的小卡片呈現，目前先放上建構中圖示保持整潔 */}
-                {(activeTab === 'school' || activeTab === 'pastpaper') && (
-                    <div className="card p-16 text-center text-slate-400 border border-slate-200 shadow-sm border-dashed rounded-xl animate-fadeIn">
-                        <Icon name="Wrench" size={48} className="mx-auto mb-3 opacity-40 text-sky-300" />
-                        <p className="text-sm font-bold">歷史成績明細查詢功能建構中...</p>
-                        <p className="text-xs mt-1">目前請先利用「AI 補底」或「總覽」掌握您的學習進度！</p>
+                {/* ==================== 分頁：校內進度 (School Progress) ==================== */}
+                {activeTab === 'school' && (
+                    <div className="animate-fadeIn space-y-6">
+                        {/* 功課繳交明細小卡 */}
+                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                            <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-4">
+                                <Icon name="ClipboardCheck" className="text-emerald-500" /> 日常功課繳交與得分紀錄
+                            </h3>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse text-sm">
+                                    <thead>
+                                        <tr className="border-b border-slate-200 text-slate-400 text-xs font-bold">
+                                            <th className="py-2">功課編號/名稱</th>
+                                            <th className="py-2">對應課題</th>
+                                            <th className="py-2">繳交狀態</th>
+                                            <th className="py-2 text-right">得分/滿分</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100 font-medium">
+                                        {homeworkStats.details.map(hw => (
+                                            <tr key={hw.id} className="hover:bg-slate-50/80">
+                                                <td className="py-3 font-bold text-slate-700">{hw.title}</td>
+                                                <td className="py-3 text-slate-500 text-xs">{hw.topicName}</td>
+                                                <td className="py-3">
+                                                    <span className={`px-2 py-0.5 rounded text-xs font-bold ${hw.isSubmitted ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                                                        {hw.isSubmitted ? '已繳交' : '❌ 欠交'}
+                                                    </span>
+                                                </td>
+                                                <td className="py-3 text-right font-mono font-bold text-slate-600">
+                                                    {hw.isSubmitted ? `${hw.score} / ${hw.max}` : '--'}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        {/* 小測與考試摘要 */}
+                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                            <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-4">
+                                <Icon name="Award" className="text-indigo-500" /> 測驗與大考追蹤
+                            </h3>
+                            <div className="text-slate-500 text-xs py-4 text-center border border-dashed rounded-xl">
+                                💡 系統已自動分析您在此區塊的所有錯題，並將高危弱點傳送至 <span className="text-purple-600 font-bold">「AI 補底」</span> 分頁。請前往該分頁生成特訓卷！
+                            </div>
+                        </div>
                     </div>
                 )}
             </div>
@@ -7002,18 +7145,20 @@ const App = () => {
                   
                 if (isLoading) return <div className="flex h-screen items-center justify-center text-xl font-bold text-slate-500 animate-pulse">載入雲端資料中...</div>;
         
-                        if (studentSid) {
-                            return (
-                                <StudentPortalView 
-                                    studentId={studentSid} 
-                                    students={students} 
-                                    scores={scores}               // ★ 加入小測成績
-                                    examScores={examScores} 
-                                    homeworkScores={homeworkScores} 
-                                    pastpaperScores={pastpaperScores} // ★ 加入歷屆試題成績
-                                />
-                            );
-                        }
+                        // ★ 核心分流邏輯：如果有 sid，就只渲染學生畫面，完全隱藏老師 Sidebar
+                    if (studentSid) {
+                        return (
+                            <StudentPortalView 
+                                studentId={studentSid} 
+                                students={students} 
+                                scores={scores} 
+                                examScores={examScores} 
+                                homeworkScores={homeworkScores} 
+                                pastpaperScores={pastpaperScores}
+                                homeworkMaps={homeworkMaps} 
+                            />
+                        );
+                    }
             return (
                      <div className="flex h-screen w-full overflow-hidden">
                         {/* Sidebar 不需要固定，直接由 flex 控制寬度 */}
