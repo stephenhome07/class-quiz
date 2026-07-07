@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.27 Physics Quiz Analyzer</title>
+    <title> V3.28 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -5336,7 +5336,7 @@ const PastpaperScoresInputView = ({ currentCohort, activeStudents, pastpaperScor
     );
 };
 
-// ==================== 新增：歷屆試題 (Pastpaper) 藍圖設定組件 (自動即時存檔版) ====================
+// ==================== 新增：歷屆試題 (Pastpaper) 藍圖設定組件 (自動即時存檔版 + AI Prompt) ====================
 const PastpaperSettingsView = ({ syncToCloud }) => {
     const [pastpaperText, setPastpaperText] = React.useState('');
     const [status, setStatus] = React.useState('');
@@ -5370,6 +5370,86 @@ const PastpaperSettingsView = ({ syncToCloud }) => {
         }
     };
 
+    // ---------- AI 快速 Prompt 內容 ----------
+    const quickPromptText = `【身份】你是一位專門為香港高中物理（HKDSE）出題與分析的老師，學生程度為 Band 3。
+
+【任務】我會上傳一份 HKDSE 物理科歷屆試卷（可能是 Paper 1A、Paper 1B、Paper 2 的 PDF / Word / 圖片），以及一個「課題 ID 對照表 Word 檔」。請你分析整份試卷，生成一個結構化的 JSON 物件，方便我直接貼到學校系統的 Pastpaper 題庫。
+
+【輸出格式】
+請輸出一個 JSON 物件（不要包含任何額外文字、註解或 Markdown 標記），格式如下：
+
+{
+  "{年份}-P1A": {
+    "title": "{年份} HKDSE Physics - Paper 1A (MC)",
+    "questions": [ ... ]
+  },
+  "{年份}-P1B": {
+    "title": "{年份} HKDSE Physics - Paper 1B (LQ)",
+    "questions": [ ... ]
+  },
+  "{年份}-P2": {
+    "title": "{年份} HKDSE Physics - Paper 2 (Electives)",
+    "questions": [ ... ]
+  }
+}
+
+每個 question 物件包含以下欄位：
+- id: 字串，題目 ID（規則見下）
+- type: "MC" 或 "LQ"
+- max: 數字，滿分
+- level: 字串，"淺"、"中" 或 "深"
+- topicId: 字串，從課題對照表比對出的編號（如 "1.1.1"、"E3.2.2"）
+- topicDesc: 字串，根據題目內容撰寫的 20-30 字簡短描述
+- ans: 字串，MC 題填正確選項代號 (A/B/C/D)，LQ 題填空字串 ""
+
+【題目 ID 命名規則】
+1. Paper 1A (全部 MC)
+   - 格式：{年份}-MC-{題號}，題號用兩位數，如 01, 02 ... 33
+   - 例：2014-MC-01
+
+2. Paper 1B (全部 LQ)
+   - 格式：{年份}-LQ-{大題號}{小題號}
+   - 大題號用兩位數（01, 02 ...），小題號用 a, b, c, ... 或 bi, bii, ci, cii 等
+   - 例：2014-LQ-01a, 2014-LQ-02bi, 2014-LQ-10biii
+
+3. Paper 2 (只處理 E3 和 E4，跳過 E1、E2)
+   - MC 題格式：{年份}-MC-E{3/4}-{題號}，題號用兩位數
+     - 例：2014-MC-E3-01, 2014-MC-E4-08
+   - LQ 題格式：{年份}-LQ-E{3/4}-{大題號}{小題號}
+     - Paper 2 的 LQ 大題號通常延續整卷編號，例如 E3 的 LQ 可能標示為 "Q3"，則使用 "03"
+     - 例：2014-LQ-E3-03a, 2014-LQ-E4-04bii
+   - 如果試卷上沒有明確的大題號，請根據題目順序自行編號（如第一題 LQ 為 "01a"）
+
+【滿分設定】
+- MC 題：一律設為 1 分。
+- LQ 題：請根據試卷標示的分數；若無標示，則依子題複雜度估計 (1-3 分，多步驟可 4 分以上)。LQ 子題的分數通常會在題目旁邊標明。
+
+【難度判斷】
+- 對象為香港 Band 3 學生。
+- 淺：直接代入公式、基礎概念、單一步驟。
+- 中：需兩步推理或結合兩個概念。
+- 深：多步驟分析、綜合應用、繪圖、或需分辨常見誤解（可標註「殺手題」特徵）。
+
+【課題對照 (topicId 與 topicDesc)】
+- topicId：請根據題目內容，比對我上傳的「課題 ID 對照表 Word 檔」，找出最相關的課題 ID（例如 1.2.2, 2.6.1, E3.4.1）。若找不到精確對應，選擇最接近的。若仍無法判斷，可留空字串 ""。
+- topicDesc：不要使用對照表中的原文，請你自己根據題目實際問的內容，用中文寫一個 20-30 字的描述。範例：
+  - 「分析真空瓶減少熱增益（輻射與傳導）的物理原理」
+  - 「利用 Snell's Law 計算半圓形玻璃塊對紅光的折射率」
+  - 「應用風力發電功率方程計算風速變化時的平均輸出功率」
+
+【MC 答案】
+- 請從試卷提供的答案 (Answer Key) 或試卷本身標記的正確選項提取。若試卷未提供答案，可根據你的物理知識推斷並填入大寫字母，但不需解釋。
+
+【絕對禁止】
+- 不要輸出任何說明、表頭、或 Markdown 標記（例如 json）。
+- 只輸出純 JSON 物件，且必須合法、可被 JSON.parse() 直接解析。
+- 題目必須按照試卷順序排列，不能跳題或合併。`;
+
+    const copyPromptToClipboard = () => {
+        navigator.clipboard.writeText(quickPromptText);
+        alert('Prompt 已複製！');
+    };
+
     return (
         <div className="p-6 max-w-6xl mx-auto animate-fadeIn">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 border-b pb-4">
@@ -5386,6 +5466,30 @@ const PastpaperSettingsView = ({ syncToCloud }) => {
                     </button>
                 </div>
             </div>
+
+            {/* ========== 快速 Prompt 複製區 ========== */}
+            <div className="mb-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
+                <div className="flex justify-between items-center mb-1">
+                    <span className="text-xs font-bold text-indigo-700">🤖 AI 自動生成 Pastpaper JSON 用 Prompt</span>
+                    <button 
+                        onClick={copyPromptToClipboard}
+                        className="text-xs bg-indigo-500 text-white px-2 py-1 rounded hover:bg-indigo-600"
+                    >
+                        複製 Prompt
+                    </button>
+                </div>
+                <textarea 
+                    readOnly 
+                    className="w-full h-24 text-xs font-mono bg-white border border-indigo-100 rounded p-2 outline-none resize-none"
+                    value={quickPromptText}
+                />
+                <div className="text-[10px] text-indigo-600 mt-1 space-y-0.5">
+                    <p>1. 點擊「複製 Prompt」。</p>
+                    <p>2. 到 ChatGPT / Claude 貼上，並 <b>同時上傳歷屆試卷檔案</b> 與 <b>課題 ID 對照表 Word 檔</b>。</p>
+                    <p>3. 將 AI 回應的純 JSON 直接貼入下方文字框，即可儲存。</p>
+                </div>
+            </div>
+            {/* ========== 快速 Prompt 複製區結束 ========== */}
 
             <div className="card p-5 border-2 border-indigo-100 bg-slate-50 shadow-sm flex flex-col h-[600px] rounded-xl">
                 <label className="text-xs font-bold text-slate-700 mb-2 flex justify-between">
