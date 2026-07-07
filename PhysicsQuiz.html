@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.23b Physics Quiz Analyzer</title>
+    <title> V3.24 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -4041,7 +4041,6 @@ const StudentPromotionView = ({ students, setStudents, scores, setScores, syncTo
         
 // ==================== 新增：學生專屬入口 (Student Portal) ====================
 
-
 // ==================== 升級版：功課內容與藍圖設定組件 ====================
 const HomeworkSettingsView = ({ students, currentCohort, homeworkMaps, setHomeworkMaps, syncToCloud }) => {
     const cohorts = Array.from(new Set(students.map(s => s.cohort))).filter(Boolean).sort();
@@ -4097,6 +4096,69 @@ const HomeworkSettingsView = ({ students, currentCohort, homeworkMaps, setHomewo
         !homeworkMaps[id].cohort || homeworkMaps[id].cohort === selectedCohort
     );
 
+    // ---------- 快速 Prompt 內容 ----------
+    const quickPromptText = `【身份】你是一位專門為香港高中物理（HKDSE）出題與分析的老師，學生程度為 Band 3。
+
+【任務】我會上傳一份物理功課（可能是 MC、LQ，或兩者混合的 PDF / Word / 圖片）以及一個「課題 ID 對照表 Word 檔」。請你分析這份功課，為「每一小題」產生一筆記錄，輸出成「Tab 分隔」的純文字格式，方便我直接貼到學校系統。
+
+【提取規則】
+
+一、題目 ID（必須嚴格遵守）
+- 如果是 MC 題，題號用整數，例如第1題寫成 MC1，第2題 MC2。
+- 如果是 LQ 題，題號必須包含大題號和小題號：
+  - 大題1的小題 a → LQ1a
+  - 大題1的小題 b(i) → LQ1bi
+  - 大題1的小題 b(ii) → LQ1bii
+  - 大題2的小題 a → LQ2a
+- 題號從 1 開始，依照功課原始順序排列。
+
+二、題型
+- MC 或 LQ（全大寫）。
+
+三、滿分（max）
+- 若功課上已標示分數，直接採用該分數。
+- 若無標示，請根據題目複雜度合理估計：
+  - MC 預設 1 分
+  - LQ 簡短計算/解釋題 2 分
+  - LQ 多步驟題 3-4 分
+- 輸出請寫數字。
+
+四、深淺度（level）
+- 對象為香港 Band 3 學生，程度偏弱。
+- 判斷標準：
+  - 淺：直接代入公式、單一步驟、基礎概念。
+  - 中：需兩步推理或結合兩個概念。
+  - 深：多步驟分析、繪圖、綜合應用或解釋現象。
+- 請用中文輸出：「淺」「中」「深」。
+
+五、topicId 和 topicDesc
+- topicId：請根據題目內容，與我提供的「課題 ID 對照表 Word 檔」進行比對，找出最相關的課題 ID（例如 1.1.1, 4.5.2）。若無法找到精確對應，請選擇最接近的一個。若完全無法對應，topicId 可留空。
+- topicDesc：不要使用對照表中的文字。請你根據該題目實際問的內容，用中文撰寫一個 20-30 字的簡短描述，說明這題在考什麼。
+  例：「計算長直載流導線在距離其 6 cm 處所產生的磁場量值。」
+  維持一句話，簡潔準確。
+
+六、答案欄
+- 全部留空，只需輸出一個 Tab 符號作結。
+
+【輸出格式】
+每一行代表一題，欄位以 Tab 分隔，順序為：
+題目ID [Tab] 題型 [Tab] 滿分 [Tab] 深淺度 [Tab] topicId [Tab] topicDesc [Tab] [空]
+
+例如：
+MC1	MC	1	淺	1.1.1	指出温度計所使用的物理性質。	
+LQ1a	LQ	2	中	4.5.2	計算長直載流導線在距離其 6 cm 處所產生的磁場量值。	
+LQ1bi	LQ	2	中	4.5.2	解釋螺線管長度和匝數加倍對磁場的影響。	
+
+【絕對禁止】
+- 不要輸出任何表格、標題、Markdown 語法或說明文字。
+- 只能輸出題目行，欄位數量固定為 7 個 Tab 分隔值（最後一個答案欄空白）。
+- topicDesc 必須是你自己歸納的 20-30 字描述，不可直接抄寫對照表中的長句。`;
+
+    const copyPromptToClipboard = () => {
+        navigator.clipboard.writeText(quickPromptText);
+        alert('Prompt 已複製！');
+    };
+
     return (
         <div className="p-6 max-w-5xl mx-auto animate-fadeIn">
             <div className="border-b pb-4 mb-6">
@@ -4146,6 +4208,31 @@ const HomeworkSettingsView = ({ students, currentCohort, homeworkMaps, setHomewo
                             <input type="text" className="w-full p-2 border rounded font-bold text-sm outline-none" value={hwTitle} onChange={e=>setHwTitle(e.target.value)} placeholder="第一章 磁場" />
                         </div>
                     </div>
+
+                    {/* ========== 快速 Prompt 複製區 ========== */}
+                    <div className="mb-3 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
+                        <div className="flex justify-between items-center mb-1">
+                            <span className="text-xs font-bold text-indigo-700">🤖 AI 自動生成題目清單用 Prompt</span>
+                            <button 
+                                onClick={copyPromptToClipboard}
+                                className="text-xs bg-indigo-500 text-white px-2 py-1 rounded hover:bg-indigo-600"
+                            >
+                                複製 Prompt
+                            </button>
+                        </div>
+                        <textarea 
+                            readOnly 
+                            className="w-full h-24 text-xs font-mono bg-white border border-indigo-100 rounded p-2 outline-none resize-none"
+                            value={quickPromptText}
+                        />
+                        <div className="text-[10px] text-indigo-600 mt-1 space-y-0.5">
+                            <p>1. 點擊「複製 Prompt」。</p>
+                            <p>2. 到 ChatGPT / Claude 貼上，並 <b>同時上傳功課檔案</b> 與 <b>課題 ID 對照表 Word 檔</b>。</p>
+                            <p>3. 將 AI 回應的純文字直接貼入下方文字框，即可儲存。</p>
+                        </div>
+                    </div>
+                    {/* ========== 快速 Prompt 複製區結束 ========== */}
+
                     <div>
                         <textarea className="w-full h-64 p-3 text-xs font-mono bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-amber-400" value={pasteData} onChange={e=>setPasteData(e.target.value)} placeholder="可直接包含首行標題列貼上..." />
                     </div>
