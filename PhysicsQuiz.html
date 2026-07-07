@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.19 Physics Quiz Analyzer</title>
+    <title> V3.20 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -6383,7 +6383,479 @@ const PastpaperSummaryView = ({ currentCohort, activeStudents, pastpaperScores }
                 );
             };
 
+// ==================== 學生專屬遊戲化儀表板 (StudentPortalView) ====================
+const StudentPortalView = ({ studentId, students, scores, examScores, homeworkScores, pastpaperScores }) => {
+    const [activeTab, setActiveTab] = React.useState('overview'); // overview, school, pastpaper, ai, leaderboard
+    const [aiSubTab, setAiSubTab] = React.useState('school'); // 'school' 或 'pastpaper'
     
+    // AI 補底相關狀態
+    const [selectedPPPapers, setSelectedPPPapers] = React.useState([]);
+    const [leaderboardMonth, setLeaderboardMonth] = React.useState('all');
+
+    // 取得當前學生與他的群組 (Cohort)
+    const currentStudent = students.find(s => s.id === studentId);
+    const studentCohort = currentStudent?.cohort || '2024-2027';
+    // 英雄榜只顯示同一個群組的同學
+    const peerStudents = students.filter(s => s.cohort === studentCohort);
+
+    const chartRef = React.useRef(null);
+    const chartInstance = React.useRef(null);
+
+    // 輔助函式：取得 Pastpaper 分數
+    const getPastpaperQScore = React.useCallback((sId, paperId, q) => {
+        const record = pastpaperScores[sId]?.[paperId];
+        if (!record) return 0;
+        const val = record[q.id];
+        if (q.type === 'MC') {
+            if (!val || !q.ans) return 0;
+            const studentAns = val.toString().toUpperCase().trim();
+            const correctAnswers = q.ans.toString().split(',').map(a => a.trim().toUpperCase());
+            const cleanStudent = studentAns.replace(/[^A-D]/g, '');
+            return (cleanStudent.length === 1 && correctAnswers.includes(cleanStudent)) ? q.max : 0;
+        }
+        return val === '' || val === undefined ? 0 : parseFloat(val);
+    }, [pastpaperScores]);
+
+    // ================== 個人數據運算區 ==================
+
+    // 1. 個人雷達圖數據 (基於 Pastpaper)
+    const personalDomainStats = React.useMemo(() => {
+        const ds = { '1': { name: '熱學', e: 0, m: 0 }, '2': { name: '力學', e: 0, m: 0 }, '3': { name: '波動', e: 0, m: 0 }, '4': { name: '電磁學', e: 0, m: 0 }, '5': { name: '放射學', e: 0, m: 0 }, 'E3': { name: '能量', e: 0, m: 0 }, 'E4': { name: '醫學', e: 0, m: 0 } };
+        const sScores = pastpaperScores[studentId] || {};
+        Object.keys(sScores).forEach(paperId => {
+            const map = window.PASTPAPER_MAPS[paperId];
+            if (!map || !map.questions) return;
+            map.questions.forEach(q => {
+                const val = sScores[paperId][q.id];
+                if (val !== undefined && val !== '') {
+                    let dKey = q.topicId.startsWith('E3') ? 'E3' : q.topicId.startsWith('E4') ? 'E4' : q.topicId.charAt(0);
+                    if (ds[dKey]) {
+                        ds[dKey].m += q.max;
+                        ds[dKey].e += getPastpaperQScore(studentId, paperId, q);
+                    }
+                }
+            });
+        });
+        return ds;
+    }, [studentId, pastpaperScores, getPastpaperQScore]);
+
+    // 繪製雷達圖
+    React.useEffect(() => {
+        if (activeTab !== 'overview' || !chartRef.current) return;
+        const ctx = chartRef.current.getContext('2d');
+        const labels = [];
+        const dataPoints = [];
+        Object.keys(personalDomainStats).forEach(key => {
+            if (personalDomainStats[key].m > 0) {
+                labels.push(personalDomainStats[key].name);
+                dataPoints.push(Math.round((personalDomainStats[key].e / personalDomainStats[key].m) * 100));
+            }
+        });
+
+        if (chartInstance.current) chartInstance.current.destroy();
+        chartInstance.current = new Chart(ctx, {
+            type: 'radar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '我的能力值 (%)',
+                    data: dataPoints,
+                    backgroundColor: 'rgba(56, 189, 248, 0.4)', // Sky blue
+                    borderColor: 'rgba(2, 132, 199, 1)',
+                    pointBackgroundColor: 'rgba(2, 132, 199, 1)',
+                    pointBorderColor: '#fff',
+                    borderWidth: 2,
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: { r: { angleLines: { color: 'rgba(0, 0, 0, 0.1)' }, grid: { color: 'rgba(0, 0, 0, 0.1)' }, pointLabels: { font: { size: 10, weight: 'bold' } }, ticks: { stepSize: 20, min: 0, max: 100, display: false } } },
+                plugins: { legend: { display: false } }
+            }
+        });
+        return () => { if (chartInstance.current) chartInstance.current.destroy(); };
+    }, [personalDomainStats, activeTab]);
+
+    // ================== AI 補底運算區 ==================
+    
+    // A. 抓取校內成績 (Quiz + Exam) 的弱點 (<60%)
+    const schoolWeaknesses = React.useMemo(() => {
+        const topicStats = {};
+        
+        // 掃描小測
+        const sQuiz = scores[studentId] || {};
+        Object.keys(sQuiz).forEach(quizId => {
+            const map = window.QUIZ_MAPS[quizId];
+            if (!map) return;
+            map.questions.forEach(q => {
+                const val = sQuiz[quizId][q.id];
+                if (val !== undefined && val !== '' && q.topicId) {
+                    if (!topicStats[q.topicId]) topicStats[q.topicId] = { id: q.topicId, name: q.topicDesc || '綜合', m: 0, e: 0, errorDesc: new Set() };
+                    topicStats[q.topicId].m += q.max;
+                    topicStats[q.topicId].e += parseFloat(val) || 0;
+                    if (parseFloat(val) < q.max && q.topicDesc) topicStats[q.topicId].errorDesc.add(q.topicDesc);
+                }
+            });
+        });
+
+        // 掃描大考
+        const sExam = examScores[studentId] || {};
+        Object.keys(sExam).forEach(examId => {
+            const map = window.EXAM_MAPS[examId];
+            if (!map) return;
+            map.questions.forEach(q => {
+                const val = sExam[examId][q.id];
+                if (val !== undefined && val !== '' && q.topicId) {
+                    if (!topicStats[q.topicId]) topicStats[q.topicId] = { id: q.topicId, name: q.topicDesc || '綜合', m: 0, e: 0, errorDesc: new Set() };
+                    topicStats[q.topicId].m += q.max;
+                    topicStats[q.topicId].e += parseFloat(val) || 0;
+                    if (parseFloat(val) < q.max && q.topicDesc) topicStats[q.topicId].errorDesc.add(q.topicDesc);
+                }
+            });
+        });
+
+        return Object.values(topicStats)
+            .map(t => ({ ...t, pct: t.e / t.m, descList: Array.from(t.errorDesc) }))
+            .filter(t => t.m >= 5 && t.pct <= 0.6) // 最少做過 5 分且小於 60% 才當作弱點
+            .sort((a, b) => a.pct - b.pct);
+    }, [scores, examScores, studentId]);
+
+    // B. 抓取 Pastpaper 弱點 (根據選定的年份/卷目)
+    const ppWeaknesses = React.useMemo(() => {
+        if (selectedPPPapers.length === 0) return [];
+        const topicStats = {};
+        const sScores = pastpaperScores[studentId] || {};
+
+        selectedPPPapers.forEach(paperId => {
+            const record = sScores[paperId] || {};
+            const map = window.PASTPAPER_MAPS[paperId];
+            if (!map) return;
+            map.questions.forEach(q => {
+                const val = record[q.id];
+                if (val !== undefined && val !== '') {
+                    if (!topicStats[q.topicId]) topicStats[q.topicId] = { id: q.topicId, name: q.topicDesc || '綜合', m: 0, e: 0, errorDesc: new Set() };
+                    topicStats[q.topicId].m += q.max;
+                    const eScore = getPastpaperQScore(studentId, paperId, q);
+                    topicStats[q.topicId].e += eScore;
+                    if (eScore < q.max && q.topicDesc) topicStats[q.topicId].errorDesc.add(q.topicDesc);
+                }
+            });
+        });
+
+        return Object.values(topicStats)
+            .map(t => ({ ...t, pct: t.e / t.m, descList: Array.from(t.errorDesc) }))
+            .filter(t => t.m > 0 && t.pct <= 0.6)
+            .sort((a, b) => a.pct - b.pct);
+    }, [selectedPPPapers, pastpaperScores, studentId, getPastpaperQScore]);
+
+
+    // ================== 英雄榜運算區 ==================
+    const TITLE_POOL = { '1': ["熱力學宗師", "絕對零度行者"], '2': ["力學戰神", "牛頓傳人"], '3': ["波動幻影", "光學大師"], '4': ["電磁霸主", "雷電行者"], '5': ["輻射剋星", "量子漫步者"], 'E3': ["能量守恆者", "綠能先鋒"], 'E4': ["醫學神醫", "透視眼行者"] };
+
+    const availableMonths = React.useMemo(() => {
+        const months = new Set();
+        peerStudents.forEach(s => {
+            const sScores = pastpaperScores[s.id] || {};
+            Object.values(sScores).forEach(r => { if (r['_submitMonth']) months.add(r['_submitMonth']); });
+        });
+        return Array.from(months).sort().reverse();
+    }, [peerStudents, pastpaperScores]);
+
+    const leaderboardData = React.useMemo(() => {
+        const lb = peerStudents.map(s => {
+            const sScores = pastpaperScores[s.id] || {};
+            let mcAttempted = 0, lqAttempted = 0, totalEarned = 0, totalMax = 0;
+            const dStats = { '1':{e:0,m:0}, '2':{e:0,m:0}, '3':{e:0,m:0}, '4':{e:0,m:0}, '5':{e:0,m:0}, 'E3':{e:0,m:0}, 'E4':{e:0,m:0} };
+
+            Object.keys(sScores).forEach(paperId => {
+                const record = sScores[paperId];
+                if (leaderboardMonth !== 'all' && record['_submitMonth'] !== leaderboardMonth) return;
+                const map = window.PASTPAPER_MAPS[paperId];
+                if (!map) return;
+                
+                map.questions.forEach(q => {
+                    const val = record[q.id];
+                    if (val !== undefined && val !== '') {
+                        if (q.type === 'MC') mcAttempted++; else lqAttempted++;
+                        const score = getPastpaperQScore(s.id, paperId, q);
+                        totalMax += q.max; totalEarned += score;
+                        let dKey = q.topicId.startsWith('E3') ? 'E3' : q.topicId.startsWith('E4') ? 'E4' : q.topicId.charAt(0);
+                        if (dStats[dKey]) { dStats[dKey].e += score; dStats[dKey].m += q.max; }
+                    }
+                });
+            });
+
+            let bestDomain = '1'; let highestPct = -1;
+            Object.keys(dStats).forEach(k => {
+                if (dStats[k].m >= 5) {
+                    const pct = dStats[k].e / dStats[k].m;
+                    if (pct > highestPct) { highestPct = pct; bestDomain = k; }
+                }
+            });
+
+            const totalQuestions = mcAttempted + lqAttempted;
+            const accuracy = totalMax > 0 ? (totalEarned / totalMax) : 0;
+            
+            let title = "潛水觀望者";
+            if (totalQuestions > 0) {
+                const charSum = s.id.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+                const pool = TITLE_POOL[bestDomain] || ["努力操卷者"];
+                title = pool[charSum % pool.length];
+            }
+
+            return { student: s, totalQuestions, accuracy, title, bestDomain };
+        });
+        return lb.sort((a, b) => b.totalQuestions - a.totalQuestions || b.accuracy - a.accuracy);
+    }, [peerStudents, pastpaperScores, getPastpaperQScore, leaderboardMonth]);
+
+    const myRankData = leaderboardData.find(d => d.student.id === studentId) || { totalQuestions: 0, title: '尚未起步', accuracy: 0 };
+    const myRankIndex = leaderboardData.findIndex(d => d.student.id === studentId);
+
+    // ================== 生成 AI Prompt ==================
+    const generatePrompt = () => {
+        const targetWeaknesses = aiSubTab === 'school' ? schoolWeaknesses : ppWeaknesses;
+        if (targetWeaknesses.length === 0) return '';
+
+        const weakText = targetWeaknesses.map(t => `- 課題 [${t.id}]: 得分率 ${(t.pct*100).toFixed(0)}%。經常錯在：${t.descList.join('; ') || '基礎觀念'}`).join('\n');
+
+        return `我是一名香港 DSE 物理科學生，目前就讀中五/中六。在最近的操練中，我發現自己在以下課題特別弱（得分率低於 60%）：\n\n${weakText}\n\n請你扮演一位幽默且有耐心的名師，幫我度身訂造一份「針對性補底特訓卷」。\n要求：\n1. 先用一句話鼓勵我。\n2. 出 3 題 DSE 程度的多項選擇題 (MC) 和 1 題長題目 (LQ)，全都是針對我上面的錯因設計的陷阱題。\n3. 先不要給我答案。等我回答後，你再給我詳細的 Marking Scheme 和解題思路！`;
+    };
+
+    const handleCopyAndGo = (platformUrl) => {
+        const p = generatePrompt();
+        if(!p) { alert('你目前沒有低於 60% 的弱點！去挑戰更多卷子吧！'); return; }
+        navigator.clipboard.writeText(p);
+        alert('📋 專屬特訓指令已複製！\n\n即將跳轉到 AI 平台，請直接「貼上 (Ctrl+V)」並發送給 AI 導師！');
+        window.open(platformUrl, '_blank');
+    };
+
+    if (!currentStudent) return <div className="p-10 text-center font-bold text-red-500">找不到學生資料！</div>;
+
+    return (
+        <div className="min-h-screen bg-slate-50 text-slate-800">
+            {/* 頂部導航 */}
+            <div className="bg-indigo-900 text-white shadow-md sticky top-0 z-50">
+                <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-gradient-to-tr from-sky-400 to-indigo-500 rounded-full flex items-center justify-center font-black text-lg border-2 border-indigo-300 shadow-sm">
+                            {currentStudent.name.charAt(0)}
+                        </div>
+                        <div>
+                            <div className="font-bold">{currentStudent.name}</div>
+                            <div className="text-[10px] text-indigo-300 font-mono">{currentStudent.cohort} | {myRankData.title}</div>
+                        </div>
+                    </div>
+                    {/* 隱藏版：退出按鈕 (若需要) */}
+                    <a href="?" className="text-xs text-indigo-300 hover:text-white flex items-center gap-1"><Icon name="LogOut" size={14}/> 登出</a>
+                </div>
+                
+                {/* 橫向捲動的分頁按鈕 */}
+                <div className="max-w-5xl mx-auto flex overflow-x-auto custom-scrollbar">
+                    {[
+                        { id: 'overview', icon: 'LayoutDashboard', label: '總覽' },
+                        { id: 'school', icon: 'PenTool', label: '校內進度' },
+                        { id: 'pastpaper', icon: 'BookOpen', label: '歷屆試題' },
+                        { id: 'ai', icon: 'Bot', label: 'AI 補底' },
+                        { id: 'leaderboard', icon: 'Trophy', label: '英雄榜' }
+                    ].map(tab => (
+                        <button 
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`flex items-center gap-2 px-5 py-3 text-sm font-bold whitespace-nowrap transition border-b-4 ${activeTab === tab.id ? 'border-sky-400 text-sky-300 bg-white/5' : 'border-transparent text-indigo-200 hover:text-white hover:bg-white/5'}`}
+                        >
+                            <Icon name={tab.icon} size={16} /> {tab.label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-6">
+                
+                {/* ==================== 分頁：總覽 (Overview) ==================== */}
+                {activeTab === 'overview' && (
+                    <div className="animate-fadeIn space-y-6">
+                        {/* Hero 歡迎區 */}
+                        <div className="bg-gradient-to-r from-sky-500 to-indigo-600 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
+                            <Icon name="Target" size={120} className="absolute -right-10 -bottom-10 opacity-10" />
+                            <h2 className="text-2xl font-black mb-1">準備好超越自己了嗎，{currentStudent.name}？</h2>
+                            <p className="text-sky-100 text-sm mb-6">保持紀律，今天的練習就是明天的 5**。你目前的稱號是 <strong className="text-yellow-300">「{myRankData.title}」</strong>。</p>
+                            
+                            <div className="grid grid-cols-3 gap-4">
+                                <div className="bg-black/20 rounded-xl p-3 text-center border border-white/10 backdrop-blur-sm">
+                                    <div className="text-[10px] text-sky-200 uppercase font-bold tracking-wider mb-1">班級戰力排名</div>
+                                    <div className="text-2xl font-black text-white">#{myRankIndex >= 0 ? myRankIndex + 1 : '-'}</div>
+                                </div>
+                                <div className="bg-black/20 rounded-xl p-3 text-center border border-white/10 backdrop-blur-sm">
+                                    <div className="text-[10px] text-sky-200 uppercase font-bold tracking-wider mb-1">已擊敗題數</div>
+                                    <div className="text-2xl font-black text-white">{myRankData.totalQuestions}</div>
+                                </div>
+                                <div className="bg-black/20 rounded-xl p-3 text-center border border-white/10 backdrop-blur-sm">
+                                    <div className="text-[10px] text-sky-200 uppercase font-bold tracking-wider mb-1">綜合命中率</div>
+                                    <div className="text-2xl font-black text-white">{(myRankData.accuracy * 100).toFixed(0)}%</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 雷達圖 */}
+                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                            <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-4">
+                                <Icon name="Activity" className="text-sky-500" /> 我的七大領域能力值 (基於歷屆試題)
+                            </h3>
+                            <div className="h-[250px] relative w-full flex items-center justify-center">
+                                {myRankData.totalQuestions === 0 ? (
+                                    <span className="text-slate-400 text-sm">快去做點 Pastpaper 喚醒你的雷達圖吧！</span>
+                                ) : (
+                                    <canvas ref={chartRef}></canvas>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+
+                {/* ==================== 分頁：AI 補底中心 (核心賣點) ==================== */}
+                {activeTab === 'ai' && (
+                    <div className="animate-fadeIn">
+                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                            <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-6 text-white text-center">
+                                <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3 backdrop-blur-sm border border-white/30">
+                                    <Icon name="Bot" size={32} className="text-white" />
+                                </div>
+                                <h2 className="text-2xl font-black mb-2">專屬 AI 補底特訓中心</h2>
+                                <p className="text-purple-100 text-sm max-w-md mx-auto">系統已自動偵測你的學習死角。按下按鈕，帶著專屬的 Prompt 去找 AI 導師進行「針對性 1 對 1 特訓」！</p>
+                            </div>
+
+                            {/* 子分頁切換 */}
+                            <div className="flex border-b border-slate-200 text-sm font-bold">
+                                <button onClick={()=>setAiSubTab('school')} className={`flex-1 py-4 text-center transition ${aiSubTab === 'school' ? 'border-b-2 border-purple-600 text-purple-700 bg-purple-50/50' : 'text-slate-500 hover:bg-slate-50'}`}>
+                                    🏫 針對校內測考 (功課/小測/大考)
+                                </button>
+                                <button onClick={()=>setAiSubTab('pastpaper')} className={`flex-1 py-4 text-center transition ${aiSubTab === 'pastpaper' ? 'border-b-2 border-purple-600 text-purple-700 bg-purple-50/50' : 'text-slate-500 hover:bg-slate-50'}`}>
+                                    📚 針對歷屆試題 (Pastpaper)
+                                </button>
+                            </div>
+
+                            <div className="p-6">
+                                {aiSubTab === 'pastpaper' && (
+                                    <div className="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                        <label className="text-xs font-bold text-slate-700 mb-2 block">1. 選擇要特訓的卷目 (可多選)：</label>
+                                        <div className="flex flex-wrap gap-2 max-h-[120px] overflow-y-auto custom-scrollbar">
+                                            {Object.keys(pastpaperScores[studentId] || {}).map(pid => (
+                                                <label key={pid} className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-slate-300 text-sm cursor-pointer hover:bg-indigo-50">
+                                                    <input type="checkbox" checked={selectedPPPapers.includes(pid)} onChange={(e) => {
+                                                        if(e.target.checked) setSelectedPPPapers([...selectedPPPapers, pid]);
+                                                        else setSelectedPPPapers(selectedPPPapers.filter(p => p !== pid));
+                                                    }} className="accent-indigo-600" />
+                                                    {window.PASTPAPER_MAPS[pid]?.title || pid}
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="mb-6">
+                                    <label className="text-xs font-bold text-slate-700 mb-2 block flex items-center gap-1"><Icon name="AlertCircle" size={14} className="text-amber-500"/> 系統為你找出的弱點 (得分率 &lt; 60%)：</label>
+                                    <div className="bg-slate-900 text-emerald-400 font-mono text-xs p-4 rounded-xl h-[120px] overflow-y-auto custom-scrollbar leading-relaxed">
+                                        {(aiSubTab === 'school' ? schoolWeaknesses : ppWeaknesses).length === 0 ? (
+                                            <span className="text-slate-500">太強了！在你選定的範圍內，目前沒有低於 60% 的嚴重弱點。</span>
+                                        ) : (
+                                            (aiSubTab === 'school' ? schoolWeaknesses : ppWeaknesses).map(t => (
+                                                <div key={t.id}>[{t.id}] {t.name} - 得分率: {(t.pct*100).toFixed(0)}%</div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    <button onClick={() => handleCopyAndGo('https://gemini.google.com/')} className="flex flex-col items-center justify-center p-4 bg-white border-2 border-[#4285F4]/30 hover:border-[#4285F4] hover:bg-[#4285F4]/5 rounded-xl transition group">
+                                        <div className="w-10 h-10 mb-2 rounded-full flex items-center justify-center bg-[#4285F4] text-white shadow-md group-hover:scale-110 transition"><Icon name="Sparkles" size={20}/></div>
+                                        <div className="font-bold text-slate-800 text-sm">前往 Google Gemini</div>
+                                        <div className="text-[10px] text-slate-500 mt-1">智能視覺與多模態分析</div>
+                                    </button>
+                                    <button onClick={() => handleCopyAndGo('https://chatgpt.com/')} className="flex flex-col items-center justify-center p-4 bg-white border-2 border-[#10A37F]/30 hover:border-[#10A37F] hover:bg-[#10A37F]/5 rounded-xl transition group">
+                                        <div className="w-10 h-10 mb-2 rounded-full flex items-center justify-center bg-[#10A37F] text-white shadow-md group-hover:scale-110 transition"><Icon name="MessageSquare" size={20}/></div>
+                                        <div className="font-bold text-slate-800 text-sm">前往 ChatGPT</div>
+                                        <div className="text-[10px] text-slate-500 mt-1">地表最強語言模型</div>
+                                    </button>
+                                    <button onClick={() => handleCopyAndGo('https://poe.com/')} className="flex flex-col items-center justify-center p-4 bg-white border-2 border-[#7C3AED]/30 hover:border-[#7C3AED] hover:bg-[#7C3AED]/5 rounded-xl transition group">
+                                        <div className="w-10 h-10 mb-2 rounded-full flex items-center justify-center bg-[#7C3AED] text-white shadow-md group-hover:scale-110 transition"><Icon name="Zap" size={20}/></div>
+                                        <div className="font-bold text-slate-800 text-sm">前往 Poe 平台</div>
+                                        <div className="text-[10px] text-slate-500 mt-1">聚合多款頂尖機器人</div>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* ==================== 分頁：英雄榜 (Leaderboard) ==================== */}
+                {activeTab === 'leaderboard' && (
+                    <div className="animate-fadeIn">
+                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                            <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                                <div>
+                                    <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                                        <Icon name="Trophy" className="text-amber-500" /> 群組操卷狂人榜
+                                    </h2>
+                                    <p className="text-xs text-slate-500 mt-1">看看同儕的努力，你也能成為榜首！(以答題數作為戰鬥力)</p>
+                                </div>
+                                <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-lg border border-slate-200">
+                                    <Icon name="Calendar" size={14} className="text-slate-400" />
+                                    <select 
+                                        className="bg-transparent text-sm font-bold text-slate-700 outline-none"
+                                        value={leaderboardMonth}
+                                        onChange={e => setLeaderboardMonth(e.target.value)}
+                                    >
+                                        <option value="all">全部時間 (總榜)</option>
+                                        {availableMonths.map(m => <option key={m} value={m}>{m}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="divide-y divide-slate-100">
+                                {leaderboardData.length === 0 ? (
+                                    <div className="p-10 text-center text-slate-400">這個月大家都還在潛水... 趕快去做一份 Pastpaper 拿下冠軍吧！</div>
+                                ) : (
+                                    leaderboardData.map((data, idx) => {
+                                        const isMe = data.student.id === studentId;
+                                        return (
+                                            <div key={data.student.id} className={`p-4 flex items-center gap-4 transition ${isMe ? 'bg-amber-50 border-l-4 border-amber-500' : 'hover:bg-slate-50'}`}>
+                                                <div className="w-8 text-center text-lg font-black text-slate-400">
+                                                    {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}
+                                                </div>
+                                                <div className="flex-1">
+                                                    <div className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                                                        {isMe ? <span className="bg-amber-500 text-white px-1.5 py-0.5 rounded text-[10px] uppercase">You</span> : null}
+                                                        {data.student.name}
+                                                    </div>
+                                                    <div className="text-xs text-indigo-600 font-bold mt-0.5">{data.title}</div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className="text-lg font-black text-amber-600">{data.totalQuestions} <span className="text-[10px] text-slate-400 uppercase font-normal">題</span></div>
+                                                    <div className="text-[10px] text-slate-500 font-bold">準確率: {(data.accuracy * 100).toFixed(0)}%</div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* 其他待建置的分頁 (校內進度/歷屆試題紀錄) 可以用類似的小卡片呈現，目前先放上建構中圖示保持整潔 */}
+                {(activeTab === 'school' || activeTab === 'pastpaper') && (
+                    <div className="card p-16 text-center text-slate-400 border border-slate-200 shadow-sm border-dashed rounded-xl animate-fadeIn">
+                        <Icon name="Wrench" size={48} className="mx-auto mb-3 opacity-40 text-sky-300" />
+                        <p className="text-sm font-bold">歷史成績明細查詢功能建構中...</p>
+                        <p className="text-xs mt-1">目前請先利用「AI 補底」或「總覽」掌握您的學習進度！</p>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+        
 const App = () => {
             // ★ 1. 偵測網址是否有帶入學生 ID (例如: ?sid=S5A-26)
             const urlParams = new URLSearchParams(window.location.search);
@@ -6574,18 +7046,18 @@ const App = () => {
                   
                 if (isLoading) return <div className="flex h-screen items-center justify-center text-xl font-bold text-slate-500 animate-pulse">載入雲端資料中...</div>;
         
-                // ★ 核心分流邏輯：如果有 sid，就只渲染學生畫面，完全隱藏老師 Sidebar
-                if (studentSid) {
-                    return (
-                        <StudentPortalView 
-                            studentId={studentSid} 
-                            students={students} 
-                            examScores={examScores} 
-                            homeworkScores={homeworkScores} 
-                        />
-                    );
-                }
-
+                        if (studentSid) {
+                            return (
+                                <StudentPortalView 
+                                    studentId={studentSid} 
+                                    students={students} 
+                                    scores={scores}               // ★ 加入小測成績
+                                    examScores={examScores} 
+                                    homeworkScores={homeworkScores} 
+                                    pastpaperScores={pastpaperScores} // ★ 加入歷屆試題成績
+                                />
+                            );
+                        }
             return (
                      <div className="flex h-screen w-full overflow-hidden">
                         {/* Sidebar 不需要固定，直接由 flex 控制寬度 */}
