@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.23 Physics Quiz Analyzer</title>
+    <title> V3.23a Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -6683,6 +6683,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                 
                 {/* ==================== 分頁：總覽 (Overview) ==================== */}
                 {activeTab === 'overview' && (
+                    <>
                     <div className="animate-fadeIn space-y-6">
                         {/* Hero 歡迎區 */}
                         <div className="bg-gradient-to-r from-sky-500 to-indigo-600 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
@@ -6767,7 +6768,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                     <div className="text-[10px] text-slate-400 font-medium mt-0.5">累計擊敗 {myRankData.totalQuestions} 題</div>
                                 </div>
                             </div>
-                        </div>
+                        </>
                 )}
 
 
