@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.24 Physics Quiz Analyzer</title>
+    <title> V3.26 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -1686,8 +1686,8 @@ const SyllabusSettingsView = ({ syncToCloud }) => {
     );
 };
 
-// ==================== 2. 小測內容設定組件 ====================
-// ==================== 1. 小測內容設定組件 (升級 9 欄版) ====================
+
+// ==================== 1. 小測內容設定組件 (升級 9 欄版 + AI Prompt) ====================
 const QuizSettingsView = ({ syncToCloud }) => {
     const [quizText, setQuizText] = React.useState('');
 
@@ -1728,6 +1728,85 @@ const QuizSettingsView = ({ syncToCloud }) => {
         } catch (err) { alert('❌ 儲存失敗！' + err); }
     };
 
+    // ---------- AI 快速 Prompt 內容 ----------
+    const quickPromptText = `【身份】你是一位專門為香港高中物理（HKDSE）出題與分析的老師，學生程度為 Band 3。
+
+【任務】我會上傳一份小測卷（可能是 MC、LQ 或混合題型的 PDF / Word / 圖片）以及一個「課題 ID 對照表 Word 檔」。請你分析這份小測卷，為「每一小題」產生一筆記錄，輸出成「Tab 分隔」的純文字格式，方便我直接貼到學校系統。
+
+【輸出欄位（共 9 欄，順序固定）】
+小測編號 [Tab] 小測標題 [Tab] 題目ID [Tab] 題型 [Tab] 滿分 [Tab] 難度 [Tab] 課題編號 [Tab] 題目描述 [Tab] 正確答案
+
+【提取規則】
+
+一、小測編號與小測標題
+- 如果我在對話中明確告知小測編號（例如 CH09）和標題（例如「09 功、能量和功率」），請直接使用。
+- 若未提供，請嘗試從上傳的檔案名稱或內容中推斷（例如檔名包含「CH09」或標題文字），並填寫推斷結果。
+- 若完全無法推斷，則小測編號與標題可暫時留空，後續我會手動補上。
+
+二、題目 ID（必須嚴格遵守）
+- MC 題：題號用整數，例如第1題寫成 MC1，第2題 MC2。
+- LQ 題：題號必須包含大題號和小題號：
+  - 大題1的小題 a → LQ1a
+  - 大題1的小題 b(i) → LQ1bi
+  - 大題1的小題 b(ii) → LQ1bii
+  - 大題2的小題 a → LQ2a
+- 題號從 1 開始，依照小測原始順序排列。
+
+三、題型
+- MC 或 LQ（全大寫）。
+
+四、滿分（max）
+- 若小測卷上已標示分數，直接採用該分數。
+- 若無標示，請根據題目複雜度合理估計：
+  - MC 預設 1 分
+  - LQ 簡短計算/解釋題 1-2 分
+  - LQ 多步驟題 3 分（特殊情況可至 4 分）
+- 輸出請寫數字。
+
+五、難度（level）
+- 對象為香港 Band 3 學生，程度偏弱。
+- 判斷標準：
+  - 淺：直接代入公式、單一步驟、基礎概念。
+  - 中：需兩步推理或結合兩個概念。
+  - 深：多步驟分析、繪圖、綜合應用或需分辨常見誤解（可標註「殺手題」特徵）。
+- 請用中文輸出：「淺」「中」「深」。
+
+六、課題編號（topicId）
+- 請根據題目內容，與我提供的「課題 ID 對照表 Word 檔」進行比對，找出最相關的課題 ID（例如 2.6.1, 2.9.2）。若找不到精確對應，請選擇最接近的一個。若完全無法對應，可留空。
+
+七、題目描述（topicDesc）
+- 不要使用對照表中的文字。請你根據該題目實際問的內容，用中文撰寫一個 20-30 字的簡短描述，說明這題在考什麼。
+- 範例：
+  - 「計算與位移成夾角的施力所作的功」
+  - 「利用能量守恆定律計算物體克服水阻力作功後的最大深度」
+  - 「分析勻加速運動中，作功與位移的線圖關係」
+- 若為 MC 題，可點出關鍵概念；若為 LQ 題，可概述任務。
+
+八、正確答案（ans）
+- MC 題：請填寫正確選項代號（A / B / C / D），注意大小寫統一使用大寫。
+- LQ 題：本欄留空（僅輸出 Tab 分隔符）。
+
+【輸出格式】
+每一行代表一題，欄位以 Tab 分隔，順序固定為：
+小測編號 [Tab] 小測標題 [Tab] 題目ID [Tab] 題型 [Tab] 滿分 [Tab] 難度 [Tab] 課題編號 [Tab] 題目描述 [Tab] 正確答案
+
+例如：
+CH09	09 功、能量和功率	MC1	MC	1	中	2.6.1	計算與位移成夾角的施力所作的功	A
+CH09	09 功、能量和功率	MC2	MC	1	淺	2.6.3	分析無摩擦斜面上物體的動能與勢能變化	B
+CH09	09 功、能量和功率	LQ1a	LQ	2	淺	2.6.2	計算石塊被拉至頂部時所增加的重力勢能	
+CH09	09 功、能量和功率	LQ3b	LQ	3	深	2.6.3	根據能量守恆定律，描繪對應的動能-時間線圖	
+
+【絕對禁止】
+- 不要輸出任何表格、標題、Markdown 語法或說明文字。
+- 只能輸出題目行，欄位數量固定為 9 個 Tab 分隔值。
+- 題目描述必須是你自己歸納的 20-30 字描述，不可直接抄寫對照表中的長句。
+- 除了 MC 題的正確答案欄需填寫 A/B/C/D 外，LQ 題的正確答案欄務必留空。`;
+
+    const copyPromptToClipboard = () => {
+        navigator.clipboard.writeText(quickPromptText);
+        alert('Prompt 已複製！');
+    };
+
     return (
         <div className="p-6 max-w-6xl mx-auto animate-fadeIn">
             <div className="flex justify-between items-center mb-6">
@@ -1737,7 +1816,37 @@ const QuizSettingsView = ({ syncToCloud }) => {
                 </div>
                 <button onClick={handleSave} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2"><Icon name="CloudUpload" size={18} /> 儲存至雲端</button>
             </div>
-            <textarea className="w-full h-[600px] p-4 text-sm font-mono bg-slate-50 border border-slate-200 rounded focus:ring-2 focus:ring-blue-500 overflow-x-auto whitespace-pre" wrap="off" value={quizText} onChange={(e) => setQuizText(e.target.value)} />
+
+            {/* ========== 快速 Prompt 複製區 ========== */}
+            <div className="mb-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
+                <div className="flex justify-between items-center mb-1">
+                    <span className="text-xs font-bold text-indigo-700">🤖 AI 自動生成小測題目清單用 Prompt</span>
+                    <button 
+                        onClick={copyPromptToClipboard}
+                        className="text-xs bg-indigo-500 text-white px-2 py-1 rounded hover:bg-indigo-600"
+                    >
+                        複製 Prompt
+                    </button>
+                </div>
+                <textarea 
+                    readOnly 
+                    className="w-full h-24 text-xs font-mono bg-white border border-indigo-100 rounded p-2 outline-none resize-none"
+                    value={quickPromptText}
+                />
+                <div className="text-[10px] text-indigo-600 mt-1 space-y-0.5">
+                    <p>1. 點擊「複製 Prompt」。</p>
+                    <p>2. 到 ChatGPT / Claude 貼上，並 <b>同時上傳小測卷檔案</b> 與 <b>課題 ID 對照表 Word 檔</b>（可額外告知小測編號與標題）。</p>
+                    <p>3. 將 AI 回應的純文字直接貼入下方文字框，即可儲存。</p>
+                </div>
+            </div>
+            {/* ========== 快速 Prompt 複製區結束 ========== */}
+
+            <textarea 
+                className="w-full h-[600px] p-4 text-sm font-mono bg-slate-50 border border-slate-200 rounded focus:ring-2 focus:ring-blue-500 overflow-x-auto whitespace-pre" 
+                wrap="off" 
+                value={quizText} 
+                onChange={(e) => setQuizText(e.target.value)} 
+            />
         </div>
     );
 };
