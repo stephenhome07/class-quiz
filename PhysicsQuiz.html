@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.28 Physics Quiz Analyzer</title>
+    <title> V3.28b Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -6845,7 +6845,8 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
     // 1.5 新增：日常功課數據統計
     const homeworkStats = React.useMemo(() => {
         const sHW = homeworkScores[studentId] || {};
-        const allHWIds = Object.keys(window.HOMEWORK_MAPS || {});
+        const allHWIds = Object.keys(homeworkMaps || {});
+        //const allHWIds = Object.keys(window.HOMEWORK_MAPS || {});
         
         let totalAssigned = allHWIds.length;
         let submittedCount = 0;
