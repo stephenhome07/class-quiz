@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.20 Physics Quiz Analyzer</title>
+    <title> V3.21 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -4040,50 +4040,6 @@ const StudentPromotionView = ({ students, setStudents, scores, setScores, syncTo
 };
         
 // ==================== 新增：學生專屬入口 (Student Portal) ====================
-const StudentPortalView = ({ studentId, students, examScores, homeworkScores }) => {
-    const studentInfo = students.find(s => s.id === studentId);
-
-    if (!studentInfo) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 text-slate-500">
-                <Icon name="UserX" size={64} className="mb-4 text-slate-300" />
-                <h1 className="text-2xl font-bold text-slate-700">找不到學生資料</h1>
-                <p>請確認您的專屬連結是否正確。</p>
-            </div>
-        );
-    }
-
-    return (
-        <div className="min-h-screen bg-slate-100 p-4 sm:p-6">
-            <div className="max-w-5xl mx-auto">
-                {/* 學生頭部資訊 */}
-                <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-6 text-white shadow-lg mb-6 flex justify-between items-center">
-                    <div>
-                        <h1 className="text-3xl font-bold mb-1">{studentInfo.name} 同學，歡迎回來！</h1>
-                        <p className="text-blue-100 opacity-90 font-mono">班別：{studentInfo.class} ({studentInfo.num}) | 物理科專屬學習檔案</p>
-                    </div>
-                    <div className="hidden sm:block p-3 bg-white/20 rounded-xl backdrop-blur-sm">
-                        <Icon name="GraduationCap" size={40} className="text-white opacity-90" />
-                    </div>
-                </div>
-
-                {/* 預留的三大板塊位置 */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="md:col-span-2 card p-6 h-64 flex items-center justify-center text-slate-400 border-dashed border-2">
-                        [板塊 A] 功課電子封面（開發中...）
-                    </div>
-                    <div className="card p-6 h-64 flex items-center justify-center text-slate-400 border-dashed border-2">
-                        [板塊 B] 考試與小測歷史（開發中...）
-                    </div>
-                    <div className="md:col-span-3 card p-6 h-64 flex items-center justify-center text-slate-400 border-dashed border-2">
-                        [板塊 C] 物理弱點牆與 AI 診斷（開發中...）
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-};
-
 
 
 // ==================== 升級版：功課內容與藍圖設定組件 ====================
