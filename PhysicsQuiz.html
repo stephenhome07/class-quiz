@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.41 Physics Quiz Analyzer</title>
+    <title> V3.41b Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -6786,6 +6786,8 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
     const [ppSelectedYear, setPpSelectedYear] = React.useState('');
     const [ppSelectedPaper, setPpSelectedPaper] = React.useState('');
     const [ppInputValues, setPpInputValues] = React.useState({});
+    // ==================== ★ 補上缺失的 leaderboardMonth 狀態 ====================
+    const [leaderboardMonth, setLeaderboardMonth] = React.useState('all');
 
     // ★ 完美修復：補上 AI 或篩選功能所需的 selectedPPPapers 狀態
     const [selectedPPPapers, setSelectedPPPapers] = React.useState([]);
