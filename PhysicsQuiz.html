@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.29a Physics Quiz Analyzer</title>
+    <title> V3.29b Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -6767,7 +6767,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
     const chartRef = React.useRef(null);
     const chartInstance = React.useRef(null);
 
-    // 2. 升級版：精細化計算功課狀態
+// 2. 升級版：精細化計算功課狀態 (修正版)
   const hwStats = React.useMemo(() => {
     // 篩選出屬於該學生的功課
     const availableHws = Object.keys(homeworkMaps || {}).filter(id => 
@@ -6782,8 +6782,8 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
       const hwInfo = homeworkMaps[hwId];
       const studentHw = homeworkScores?.[studentId]?.[hwId];
       
-      // 情況 A：完全沒有成績紀錄 -> 欠交
-      if (!studentHw || Object.keys(studentHw).length === 0) {
+      // ★ 修正 1：確保檢查的是 nested 的 scores 物件
+      if (!studentHw || !studentHw.scores || Object.keys(studentHw.scores).length === 0) {
         missing++;
         return { id: hwId, title: hwInfo.title, status: 'missing' };
       }
@@ -6794,7 +6794,8 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
       let totalMax = 0;
       
       hwInfo.questions.forEach(q => {
-        const qScore = Number(studentHw[q.id]) || 0;
+        // ★ 修正 2：改用 studentHw.scores[q.id] 來讀取正確分數
+        const qScore = Number(studentHw.scores[q.id]) || 0;
         const qMax = Number(q.max) || 1;
         totalEarned += qScore;
         totalMax += qMax;
@@ -6803,6 +6804,11 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
           isPerfect = false; // 只要有一題沒滿分，就是未改正
         }
       });
+
+      // ★ 修正 3：利用你資料庫中現有的 remakeStatus 作為雙重保障
+      if (studentHw.remakeStatus === 'PERFECT') {
+          isPerfect = true;
+      }
 
       if (isPerfect) {
         completed++;
