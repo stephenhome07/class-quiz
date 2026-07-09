@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.29b Physics Quiz Analyzer</title>
+    <title> V3.30 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -192,7 +192,7 @@
 
     
 // ==================== 升級版：小測成績輸入組件 (完美支援自動跳轉) ====================
-const ScoreInputView = ({ activeStudents, scores, setScores }) => {
+const ScoreInputView = ({ activeStudents, scores, setScores, syncToCloud }}) => {
     const [selectedQuiz, setSelectedQuiz] = React.useState(Object.keys(QUIZ_MAPS || {})[0] || '');
     const [selectedStudentId, setSelectedStudentId] = React.useState('');
     const map = QUIZ_MAPS[selectedQuiz];
@@ -275,6 +275,14 @@ const ScoreInputView = ({ activeStudents, scores, setScores }) => {
             <div className="flex-1 card p-6">
                 <div className="flex justify-between items-center border-b pb-4 mb-4">
                     <h2 className="text-xl font-bold">成績輸入</h2>
+
+                    <button
+                        onClick={syncToCloud}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all text-sm font-medium shadow-sm"
+                    >
+                        <Icon name="CloudUpload" size={16} />
+                        上傳至雲端
+                    </button>
                     
                     {/* 小測選擇下拉表單 */}
                     <select 
@@ -7683,7 +7691,7 @@ const App = () => {
                                 <div className="p-8">
                     {/* 更新：傳入 scores 和 syncToCloud，實現自動存檔 */}
                     {view === 'students' && <StudentView students={students} setStudents={setStudents} scores={scores} setScores={setScores} syncToCloud={syncToCloud} />}
-                    {view === 'scores' && <ScoreInputView activeStudents={activeStudents} scores={scores} setScores={setScores} />}
+                    {view === 'scores' && <ScoreInputView activeStudents={activeStudents} scores={scores} setScores={setScores} syncToCloud={syncToCloud} />}
                     {view === 'analysis' && <AnalysisView activeStudents={activeStudents} scores={scores} />}
       
                     {view === 'chart' && <StudentChartView activeStudents={activeStudents} scores={scores} />}
