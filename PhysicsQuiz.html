@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.32 Physics Quiz Analyzer</title>
+    <title> V3.32A Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -7489,7 +7489,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                                     {/* ★ 功課弱點顯示 */}
                                                     {hw.weaknesses && hw.weaknesses.length > 0 && (
                                                         <div className="mb-3">
-                                                            <span className="text-[10px] font-bold text-red-500 mb-1 block">⚠️ 需加強 (< 50%)：</span>
+                                                            <span className="text-[10px] font-bold text-red-500 mb-1 block">⚠️ 需加強 (&lt; 50%)：</span>
                                                             <ul className="text-[10px] text-slate-600 list-disc pl-4 space-y-0.5">
                                                                 {hw.weaknesses.slice(0, 3).map((w, i) => <li key={i} className="truncate" title={w}>{w}</li>)}
                                                                 {hw.weaknesses.length > 3 && <li>...及其他 {hw.weaknesses.length - 3} 項</li>}
@@ -7536,7 +7536,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                                         {/* ★ 小測弱點顯示 */}
                                                         {weaknesses.length > 0 && (
                                                             <div className="mb-3">
-                                                                <span className="text-[10px] font-bold text-red-500 mb-1 block">⚠️ 需加強 (< 50%)：</span>
+                                                                <span className="text-[10px] font-bold text-red-500 mb-1 block">⚠️ 需加強 (&lt; 50%)：</span>
                                                                 <ul className="text-[10px] text-slate-600 list-disc pl-4 space-y-0.5">
                                                                     {weaknesses.slice(0, 3).map((w, i) => <li key={i} className="truncate" title={w}>{w}</li>)}
                                                                     {weaknesses.length > 3 && <li>...及其他 {weaknesses.length - 3} 項</li>}
@@ -7582,7 +7582,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                                         {/* ★ 考試弱點顯示 */}
                                                         {weaknesses.length > 0 && (
                                                             <div className="mb-3">
-                                                                <span className="text-[10px] font-bold text-red-500 mb-1 block">⚠️ 需加強 (< 50%)：</span>
+                                                                <span className="text-[10px] font-bold text-red-500 mb-1 block">⚠️ 需加強 (&lt; 50%)：</span>
                                                                 <ul className="text-[10px] text-slate-600 list-disc pl-4 space-y-0.5">
                                                                     {weaknesses.slice(0, 3).map((w, i) => <li key={i} className="truncate" title={w}>{w}</li>)}
                                                                     {weaknesses.length > 3 && <li>...及其他 {weaknesses.length - 3} 項</li>}
