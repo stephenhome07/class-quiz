@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.45 Physics Quiz Analyzer</title>
+    <title> V3.45a Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -7618,25 +7618,22 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                     </button>
                                 </div>
 
-                                {/* ★ 溫馨鼓勵文字 (如果沒做過任何試卷) */}
                                 {(!ppStats || ppStats.totalCompleted === 0) ? (
                                     <div className="bg-amber-50 border border-amber-200 rounded-2xl p-8 text-center shadow-sm">
                                         <div className="text-4xl mb-3">✨</div>
                                         <h3 className="text-lg font-bold text-amber-800 mb-2">準備好開啟第一步了嗎？</h3>
                                         <p className="text-sm text-amber-700 max-w-md mx-auto">
-                                            目前尚未輸入任何歷屆試題成績。請點擊右上方的「新增/修改成績」，系統將立即為你解鎖 DSE 預期等級與個人弱點分析！
+                                            目前尚未輸入任何歷屆試題成績。請點擊右上方的「新增/修改成績」，系統將為你解鎖預期等級與雷達圖分析！
                                         </p>
                                     </div>
                                 ) : (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="grid grid-cols-1 gap-6">
                                         {Object.keys(ppStats?.byYear || {}).sort().reverse().map(year => {
                                             const stat = ppStats.byYear[year];
-                                            if (!stat) return null; // ★ 終極防護 1：避免 stat 為 undefined
+                                            if (!stat) return null;
                                             
                                             const percent = stat.totalMax > 0 ? (stat.totalEarned / stat.totalMax) : 0;
                                             const dseGrade = estimateDSEGrade(percent);
-                                            
-                                            // ★ 終極防護 2：確保 safePapers 一定是個 {} 物件，絕不讓 Object.keys 報錯崩潰
                                             const safePapers = stat.papers || {}; 
 
                                             return (
@@ -7647,25 +7644,32 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                                             <span className="inline-block mt-1 text-xs font-bold bg-indigo-50 text-indigo-600 px-2 py-1 rounded">已完成 {Object.keys(safePapers).length} 份卷</span>
                                                         </div>
                                                         <div className={`text-right p-3 rounded-xl ${dseGrade.bg}`}>
-                                                            <div className="text-[10px] text-slate-500 font-bold mb-0.5 uppercase tracking-wider">估算等級</div>
+                                                            <div className="text-[10px] text-slate-500 font-bold mb-0.5 uppercase tracking-wider">該年估算等級</div>
                                                             <div className={`text-4xl font-black ${dseGrade.color}`}>{dseGrade.grade}</div>
                                                             <div className="text-xs text-slate-600 font-bold mt-1">得分率: {(percent * 100).toFixed(1)}%</div>
                                                         </div>
                                                     </div>
 
-                                                    <div className="space-y-3">
-                                                        {Object.entries(safePapers).map(([pId, pData]) => {
-                                                            const pPercent = pData.max > 0 ? (pData.earned / pData.max) : 0;
-                                                            return (
-                                                                <div key={pId} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
-                                                                    <span className="text-sm font-bold text-slate-700 truncate">{pData.title || pId}</span>
-                                                                    <div className="flex items-center gap-4">
-                                                                        <span className="text-sm font-black text-slate-700">{pData.earned} <span className="text-xs text-slate-400">/ {pData.max}</span></span>
-                                                                        <span className={`text-sm font-black w-10 text-right ${estimateDSEGrade(pPercent).color}`}>{(pPercent * 100).toFixed(0)}%</span>
+                                                    {/* 雙欄排版：左邊放小雷達圖，右邊放試卷列表 */}
+                                                    <div className="flex flex-col md:flex-row gap-6">
+                                                        <div className="w-full md:w-1/3 bg-slate-50/70 rounded-xl p-3 border border-slate-100 flex flex-col items-center justify-center">
+                                                            <span className="text-[10px] font-bold text-slate-400 tracking-wider mb-2">該年各課題能力分佈</span>
+                                                            <YearlyRadarChart domainData={stat.domains} year={year} />
+                                                        </div>
+                                                        <div className="w-full md:w-2/3 space-y-3 flex flex-col justify-center">
+                                                            {Object.entries(safePapers).map(([pId, pData]) => {
+                                                                const pPercent = pData.max > 0 ? (pData.earned / pData.max) : 0;
+                                                                return (
+                                                                    <div key={pId} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                                                        <span className="text-sm font-bold text-slate-700 truncate">{pData.title || pId}</span>
+                                                                        <div className="flex items-center gap-4">
+                                                                            <span className="text-sm font-black text-slate-700">{pData.earned} <span className="text-xs text-slate-400">/ {pData.max}</span></span>
+                                                                            <span className={`text-sm font-black w-10 text-right ${estimateDSEGrade(pPercent).color}`}>{(pPercent * 100).toFixed(0)}%</span>
+                                                                        </div>
                                                                     </div>
-                                                                </div>
-                                                            );
-                                                        })}
+                                                                );
+                                                            })}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             );
@@ -7675,62 +7679,80 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                             </div>
                         ) : (
                             // ---------------- 輸入模式 ----------------
-                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                                <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
-                                    <h2 className="text-xl font-black text-indigo-600 flex items-center gap-2">
-                                        <Icon name="Edit3" /> 輸入歷屆試題成績
-                                    </h2>
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
+                                <div className="flex justify-between items-center border-b border-slate-100 pb-4">
+                                    <div>
+                                        <h3 className="text-lg font-black text-slate-800">輸入歷屆試題分數</h3>
+                                        <p className="text-xs text-slate-500 mt-0.5">選擇試卷年份與卷別，輸入完成後點擊儲存同步至雲端。</p>
+                                    </div>
                                     <button 
                                         onClick={() => setPpMode('view')}
-                                        className="text-slate-500 hover:text-slate-700 text-sm font-bold flex items-center gap-1 bg-slate-100 px-3 py-1.5 rounded-lg transition-colors"
+                                        className="text-slate-500 hover:text-slate-700 font-bold text-sm bg-slate-100 px-4 py-2 rounded-xl transition-colors"
                                     >
-                                        ➔ 返回檢視
+                                        返回檢視
                                     </button>
                                 </div>
-                                
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 border-b border-slate-100 pb-6">
+
+                                {/* 步驟 1 & 2：選擇試卷 */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
                                     <div>
-                                        <label className="block text-sm font-bold text-slate-700 mb-2">步驟 1：選擇年份</label>
+                                        <label className="block text-xs font-bold text-slate-500 mb-1">步驟 1：選擇年份</label>
                                         <select 
-                                            className="w-full p-3 border border-slate-300 rounded-xl text-slate-700 font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50"
+                                            className="w-full bg-white border border-slate-200 rounded-xl p-2.5 font-bold text-slate-700 outline-none focus:border-indigo-500 shadow-sm"
                                             value={ppSelectedYear}
-                                            onChange={(e) => setPpSelectedYear(e.target.value)}
+                                            onChange={(e) => {
+                                                const yr = e.target.value;
+                                                setPpSelectedYear(yr);
+                                                const available = Object.keys(pastpaperMaps || {}).filter(k => k.startsWith(yr));
+                                                if (available.length > 0) {
+                                                    setPpSelectedPaper(available[0]);
+                                                    const existing = pastpaperScores?.[studentId]?.[available[0]] || {};
+                                                    setPpInputValues(existing);
+                                                } else {
+                                                    setPpSelectedPaper('');
+                                                    setPpInputValues({});
+                                                }
+                                            }}
                                         >
-                                            <option value="">-- 請選擇 DSE 年份 --</option>
-                                            {(availableYears || []).map(year => <option key={year} value={year}>{year} 年 DSE</option>)}
+                                            <option value="">-- 請選擇年份 --</option>
+                                            {Array.from(new Set(Object.keys(pastpaperMaps || {}).map(k => k.split('-')[0]))).sort().reverse().map(yr => (
+                                                <option key={yr} value={yr}>{yr} 年</option>
+                                            ))}
                                         </select>
                                     </div>
+
                                     <div>
-                                        <label className="block text-sm font-bold text-slate-700 mb-2">步驟 2：選擇卷目</label>
+                                        <label className="block text-xs font-bold text-slate-500 mb-1">步驟 2：選擇卷別</label>
                                         <select 
-                                            className="w-full p-3 border border-slate-300 rounded-xl text-slate-700 font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50 disabled:opacity-50"
+                                            className="w-full bg-white border border-slate-200 rounded-xl p-2.5 font-bold text-slate-700 outline-none focus:border-indigo-500 shadow-sm"
                                             value={ppSelectedPaper}
                                             disabled={!ppSelectedYear}
                                             onChange={(e) => {
-                                                const paperId = e.target.value;
-                                                setPpSelectedPaper(paperId);
-                                                setPpInputValues(pastpaperScores?.[studentId]?.[paperId] || {});
+                                                const pId = e.target.value;
+                                                setPpSelectedPaper(pId);
+                                                const existing = pastpaperScores?.[studentId]?.[pId] || {};
+                                                setPpInputValues(existing);
                                             }}
                                         >
-                                            <option value="">-- 請選擇卷目 --</option>
-                                            {(availablePapers || []).map(paper => (
-                                                <option key={paper.id} value={paper.id}>{paper.type} - {paper.title}</option>
-                                            ))}
+                                            <option value="">-- 請選擇試卷 --</option>
+                                            {Object.keys(pastpaperMaps || {})
+                                                .filter(k => k.startsWith(ppSelectedYear))
+                                                .map(k => (
+                                                    <option key={k} value={k}>{pastpaperMaps[k].title || k}</option>
+                                                ))
+                                            }
                                         </select>
                                     </div>
                                 </div>
 
-                                {/* ★ 終極防護 3：即使卷目資料庫還沒載入，也不會崩潰 */}
-                                {ppSelectedPaper && pastpaperMaps?.[ppSelectedPaper] && (
-                                    <div className="animate-fadeIn">
+                                {/* 步驟 3：輸入格子 (每5題一行 + E3/E4分流 + 即時對答案) */}
+                                {ppSelectedPaper && pastpaperMaps[ppSelectedPaper] ? (
+                                    <div>
                                         <label className="block text-sm font-bold text-slate-700 mb-3">步驟 3：輸入答案或分數</label>
                                         
-                                        {/* 升級版：分段與 5 格網格輸入系統 */}
                                         <div className="space-y-6 mb-8">
-                                            {/* 將題目按照 E3, E4 或預設進行分組 */}
                                             {(() => {
                                                 const paperQuestions = pastpaperMaps[ppSelectedPaper].questions || [];
-                                                // 簡單分類：如果題目 ID 或 topicId 包含 E3, E4，就分入該組
                                                 const groups = { '預設': [], 'E3 (能量)': [], 'E4 (醫學)': [] };
                                                 
                                                 paperQuestions.forEach(q => {
@@ -7745,20 +7767,17 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
 
                                                     return (
                                                         <div key={groupName} className="mb-4">
-                                                            {/* 只有當真的有 E3 / E4 分類時，才顯示小標題 */}
                                                             {groupName !== '預設' && (
                                                                 <h4 className="text-sm font-black text-indigo-500 mb-3 border-b border-indigo-100 pb-1 flex items-center gap-1">
                                                                     <Icon name="Layers" size={14} /> {groupName} 區塊
                                                                 </h4>
                                                             )}
                                                             
-                                                            {/* 強制設定為 5 欄 (grid-cols-5) 方便閱讀 */}
                                                             <div className="grid grid-cols-5 gap-3">
-                                                                {qs.map((q, idx) => {
+                                                                {qs.map((q) => {
                                                                     const studentAns = ppInputValues[q.id];
                                                                     const isMC = q.type === 'MC';
                                                                     
-                                                                    // 動態計算 MC 格子的顏色
                                                                     let bgColor = "bg-slate-50";
                                                                     let borderColor = "border-slate-200";
                                                                     let textColor = "text-slate-700";
@@ -7774,105 +7793,97 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                                                             bgColor = "bg-red-50";
                                                                             borderColor = "border-red-300";
                                                                             textColor = "text-red-600";
-                                                                            showCorrectAns = true; // 答錯時顯示正解
+                                                                            showCorrectAns = true;
                                                                         }
                                                                     }
 
                                                                     return (
-                                                                    <div key={q.id} className={`${bgColor} p-2 rounded-xl border ${borderColor} flex flex-col justify-center items-center relative transition-colors`}>
-                                                                        
-                                                                        {/* 題目編號 */}
-                                                                        <label className="text-[10px] font-bold text-slate-500 mb-1 w-full text-center truncate" title={q.id.split('-').pop()}>
-                                                                            {q.id.split('-').pop()}
-                                                                        </label>
+                                                                        <div key={q.id} className={`${bgColor} p-2 rounded-xl border ${borderColor} flex flex-col justify-center items-center relative transition-colors`}>
+                                                                            <label className="text-[10px] font-bold text-slate-500 mb-1 w-full text-center truncate">
+                                                                                {q.id.split('-').pop()}
+                                                                            </label>
 
-                                                                        {/* 答錯時的正確答案小提示 (浮動於右上角) */}
-                                                                        {showCorrectAns && (
-                                                                            <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-sm">
-                                                                                {q.ans}
-                                                                            </span>
-                                                                        )}
+                                                                            {showCorrectAns && (
+                                                                                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-sm">
+                                                                                    {q.ans}
+                                                                                </span>
+                                                                            )}
 
-                                                                        {isMC ? (
-                                                                            <input 
-                                                                                id={`pp-input-${q.id}`} // 使用唯一 ID 方便跳轉
-                                                                                type="text" 
-                                                                                maxLength="1"
-                                                                                className={`w-full text-center font-black text-lg p-1.5 border border-slate-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none uppercase transition-all ${textColor}`}
-                                                                                value={studentAns || ''}
-                                                                                onChange={(e) => {
-                                                                                    const val = e.target.value.toUpperCase();
-                                                                                    if (val === '' || ['A','B','C','D'].includes(val)) {
-                                                                                        setPpInputValues(prev => ({...prev, [q.id]: val}));
-                                                                                        // 極速跳轉：找到下一題的 Input 並 Focus
-                                                                                        if (val !== '') {
-                                                                                            // 尋找當前題目在總陣列中的位置，然後跳下一題
-                                                                                            const allQs = paperQuestions;
-                                                                                            const currentGlobalIdx = allQs.findIndex(item => item.id === q.id);
-                                                                                            if (currentGlobalIdx !== -1 && currentGlobalIdx + 1 < allQs.length) {
-                                                                                                const nextId = allQs[currentGlobalIdx + 1].id;
-                                                                                                const nextInput = document.getElementById(`pp-input-${nextId}`);
-                                                                                                if (nextInput) nextInput.focus();
-                                                                                            }
-                                                                                        }
-                                                                                    }
-                                                                                }}
-                                                                            />
-                                                                        ) : (
-                                                                            <div className="flex items-center gap-1 w-full">
+                                                                            {isMC ? (
                                                                                 <input 
                                                                                     id={`pp-input-${q.id}`}
-                                                                                    type="number" 
-                                                                                    min="0"
-                                                                                    max={q.max}
-                                                                                    className="w-full text-center font-black text-base p-1.5 border border-slate-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all"
-                                                                                    value={studentAns !== undefined ? studentAns : ''}
+                                                                                    type="text" 
+                                                                                    maxLength="1"
+                                                                                    className={`w-full text-center font-black text-lg p-1.5 border border-slate-300 rounded-lg outline-none uppercase transition-all ${textColor}`}
+                                                                                    value={studentAns || ''}
                                                                                     onChange={(e) => {
-                                                                                        let val = e.target.value;
-                                                                                        if (val !== '') {
-                                                                                            val = Number(val);
-                                                                                            if (val < 0) val = 0;
-                                                                                            if (val > q.max) val = q.max;
-                                                                                        }
-                                                                                        setPpInputValues(prev => ({...prev, [q.id]: val}));
-                                                                                    }}
-                                                                                    onKeyDown={(e) => {
-                                                                                        if (e.key === 'Enter') {
-                                                                                            const allQs = paperQuestions;
-                                                                                            const currentGlobalIdx = allQs.findIndex(item => item.id === q.id);
-                                                                                            if (currentGlobalIdx !== -1 && currentGlobalIdx + 1 < allQs.length) {
-                                                                                                const nextId = allQs[currentGlobalIdx + 1].id;
-                                                                                                const nextInput = document.getElementById(`pp-input-${nextId}`);
-                                                                                                if (nextInput) nextInput.focus();
+                                                                                        const val = e.target.value.toUpperCase();
+                                                                                        if (val === '' || ['A','B','C','D'].includes(val)) {
+                                                                                            setPpInputValues(prev => ({...prev, [q.id]: val}));
+                                                                                            if (val !== '') {
+                                                                                                const allQs = paperQuestions;
+                                                                                                const currentGlobalIdx = allQs.findIndex(item => item.id === q.id);
+                                                                                                if (currentGlobalIdx !== -1 && currentGlobalIdx + 1 < allQs.length) {
+                                                                                                    const nextId = allQs[currentGlobalIdx + 1].id;
+                                                                                                    const nextInput = document.getElementById(`pp-input-${nextId}`);
+                                                                                                    if (nextInput) nextInput.focus();
+                                                                                                }
                                                                                             }
                                                                                         }
                                                                                     }}
                                                                                 />
-                                                                                <span className="text-[10px] text-slate-400 font-bold w-6">/{q.max}</span>
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                )})}
+                                                                            ) : (
+                                                                                <div className="flex items-center gap-1 w-full">
+                                                                                    <input 
+                                                                                        id={`pp-input-${q.id}`}
+                                                                                        type="number" 
+                                                                                        min="0"
+                                                                                        max={q.max}
+                                                                                        className="w-full text-center font-black text-base p-1.5 border border-slate-300 rounded-lg outline-none transition-all"
+                                                                                        value={studentAns !== undefined ? studentAns : ''}
+                                                                                        onChange={(e) => {
+                                                                                            let val = e.target.value;
+                                                                                            if (val !== '') {
+                                                                                                val = Number(val);
+                                                                                                if (val < 0) val = 0;
+                                                                                                if (val > q.max) val = q.max;
+                                                                                            }
+                                                                                            setPpInputValues(prev => ({...prev, [q.id]: val}));
+                                                                                        }}
+                                                                                        onKeyDown={(e) => {
+                                                                                            if (e.key === 'Enter') {
+                                                                                                const allQs = paperQuestions;
+                                                                                                const currentGlobalIdx = allQs.findIndex(item => item.id === q.id);
+                                                                                                if (currentGlobalIdx !== -1 && currentGlobalIdx + 1 < allQs.length) {
+                                                                                                    const nextId = allQs[currentGlobalIdx + 1].id;
+                                                                                                    const nextInput = document.getElementById(`pp-input-${nextId}`);
+                                                                                                    if (nextInput) nextInput.focus();
+                                                                                                }
+                                                                                            }
+                                                                                        }}
+                                                                                    />
+                                                                                    <span className="text-[10px] text-slate-400 font-bold w-6">/{q.max}</span>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    );
+                                                                })}
                                                             </div>
                                                         </div>
                                                     );
                                                 });
                                             })()}
                                         </div>
-                                        
-{/* ★ 修復版：儲存按鈕 (加入 _submitMonth 與 syncToCloud) */}
+
+                                        {/* 儲存按鈕 */}
                                         <div className="flex justify-end border-t border-slate-100 pt-5 mt-8">
                                             <button 
                                                 onClick={() => {
                                                     if (typeof setPastpaperScores === 'function') {
-                                                        // 1. 自動產生目前的 YYYY-MM
                                                         const currentMonth = new Date().toISOString().slice(0, 7);
-                                                        // 2. 將提交月份混入這次輸入的成績中
                                                         const newRecord = { ...ppInputValues, _submitMonth: currentMonth };
                                                         
                                                         let updatedScores = null;
-                                                        
-                                                        // 3. 更新 React State
                                                         setPastpaperScores(prev => {
                                                             updatedScores = {
                                                                 ...prev,
@@ -7884,11 +7895,8 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                                             return updatedScores;
                                                         });
 
-                                                        // 4. ★ 最重要的一步：觸發寫入 Google Sheet 資料庫
                                                         if (typeof syncToCloud === 'function' && updatedScores) {
                                                             syncToCloud(updatedScores, 'pastpaperScores');
-                                                        } else {
-                                                            console.warn("找不到 syncToCloud 函數，成績僅在本地更新。");
                                                         }
                                                         
                                                         alert('✅ 成績已成功更新並同步至資料庫！');
@@ -7900,6 +7908,10 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                                 <Icon name="Save" size={20} /> 儲存至資料庫
                                             </button>
                                         </div>
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-8 text-slate-400 font-bold text-sm bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                                        請先在上方選擇試卷年份與卷別。
                                     </div>
                                 )}
                             </div>
