@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.44 Physics Quiz Analyzer</title>
+    <title> V3.45 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -6756,7 +6756,68 @@ const PastpaperSummaryView = ({ currentCohort, activeStudents, pastpaperScores }
                     </div>
                 );
             };
+// ==================== 新增：每年度專屬小雷達圖組件 ====================
+const YearlyRadarChart = ({ domainData, year }) => {
+    const canvasRef = React.useRef(null);
+    const chartInst = React.useRef(null);
 
+    React.useEffect(() => {
+        if (!canvasRef.current || !domainData) return;
+        const ctx = canvasRef.current.getContext('2d');
+        const labels = [];
+        const dataPoints = [];
+
+        Object.keys(domainData).forEach(key => {
+            if (domainData[key].m > 0) {
+                labels.push(domainData[key].name);
+                dataPoints.push(Math.round((domainData[key].e / domainData[key].m) * 100));
+            }
+        });
+
+        if (labels.length === 0) return;
+
+        if (chartInst.current) chartInst.current.destroy();
+        chartInst.current = new Chart(ctx, {
+            type: 'radar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: `${year}年能力`,
+                    data: dataPoints,
+                    backgroundColor: 'rgba(99, 102, 241, 0.15)', // 透明靛藍色
+                    borderColor: 'rgba(99, 102, 241, 0.8)',
+                    pointBackgroundColor: 'rgba(99, 102, 241, 1)',
+                    pointBorderColor: '#fff',
+                    borderWidth: 1.5,
+                    pointRadius: 2
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: {
+                    r: {
+                        angleLines: { color: 'rgba(0, 0, 0, 0.05)' },
+                        grid: { color: 'rgba(0, 0, 0, 0.05)' },
+                        pointLabels: { font: { size: 9, weight: 'bold' }, color: '#64748b' },
+                        ticks: { display: false, min: 0, max: 100, stepSize: 25 }
+                    }
+                },
+                plugins: { legend: { display: false } }
+            }
+        });
+        return () => { if (chartInst.current) chartInst.current.destroy(); };
+    }, [domainData, year]);
+
+    return (
+        <div className="w-full h-36">
+            <canvas ref={canvasRef}></canvas>
+        </div>
+    );
+};
+
+// ==================== 學生專屬遊戲化儀表板 (StudentPortalView) ====================
+// ★ 注意：這裡的參數多加了 syncToCloud
+const StudentPortalView = ({ studentId, students, scores, examScores, homeworkScores, pastpaperScores, homeworkMaps, pastpaperMaps, setPastpaperScores, syncToCloud }) => {
 // ==================== 學生專屬遊戲化儀表板 (StudentPortalView) ====================
 const StudentPortalView = ({ studentId, students, scores, examScores, homeworkScores, pastpaperScores, homeworkMaps, pastpaperMaps, setPastpaperScores }) => {
     
@@ -6831,8 +6892,10 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
         return { grade: 'U', color: 'text-red-500', bg: 'bg-red-50' };
     };
 
-    // 計算學生個人歷屆試題統計
+// ---------------- 5. 計算學生個人歷屆試題統計 (★ 加入年度 7 大課題雷達圖數據) ----------------
     const ppStats = React.useMemo(() => {
+        const safePPMaps = pastpaperMaps || (typeof window !== 'undefined' ? window.PASTPAPER_MAPS : null) || {};
+        const safePPScores = pastpaperScores || (typeof window !== 'undefined' ? window.PASTPAPER_SCORES : null) || {};
         const studentPastpaper = safePPScores?.[studentId] || {};
         const stats = {};
         let totalCompleted = 0;
@@ -6842,7 +6905,13 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
             if (!yearMatch) return;
             const year = yearMatch[1];
             
-            if (!stats[year]) stats[year] = { papers: {}, totalEarned: 0, totalMax: 0 };
+            if (!stats[year]) {
+                stats[year] = { 
+                    papers: {}, totalEarned: 0, totalMax: 0,
+                    // ★ 準備給該年度小雷達圖的數據籃子
+                    domains: { '1': { name: '熱學', e: 0, m: 0 }, '2': { name: '力學', e: 0, m: 0 }, '3': { name: '波動', e: 0, m: 0 }, '4': { name: '電磁學', e: 0, m: 0 }, '5': { name: '放射學', e: 0, m: 0 }, 'E3': { name: '能量', e: 0, m: 0 }, 'E4': { name: '醫學', e: 0, m: 0 } }
+                };
+            }
             
             const mapInfo = safePPMaps[paperId];
             if (!mapInfo || !mapInfo.questions) return;
@@ -6856,12 +6925,26 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                 const qMax = Number(q.max) || 1;
                 paperMax += qMax;
                 
-                if (studentAns !== undefined && studentAns !== '') {
+                if (studentAns !== undefined && studentAns !== '' && studentAns !== null) {
+                    // 排除 _submitMonth 這類系統隱藏欄位
+                    if(q.id.startsWith('_')) return; 
+                    
                     hasAnswer = true;
+                    let earned = 0;
                     if (q.type === 'MC') {
-                        if (studentAns === q.ans) paperEarned += qMax;
+                        const sAns = studentAns.toString().toUpperCase().trim().replace(/[^A-D]/g, '');
+                        const cAns = q.ans ? q.ans.toString().split(',').map(a => a.trim().toUpperCase()) : [];
+                        if (sAns.length === 1 && cAns.includes(sAns)) earned = qMax;
                     } else {
-                        paperEarned += Number(studentAns) || 0;
+                        earned = Number(studentAns) || 0;
+                    }
+                    paperEarned += earned;
+
+                    // ★ 將該題分數派發到該年度對應的課題中 (雷達圖用)
+                    let dKey = q.topicId?.startsWith('E3') ? 'E3' : q.topicId?.startsWith('E4') ? 'E4' : q.topicId?.charAt(0);
+                    if (dKey && stats[year].domains[dKey]) {
+                        stats[year].domains[dKey].m += qMax;
+                        stats[year].domains[dKey].e += earned;
                     }
                 }
             });
@@ -7777,21 +7860,39 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                             })()}
                                         </div>
                                         
-                                        <div className="flex justify-end border-t border-slate-100 pt-5">
+{/* ★ 修復版：儲存按鈕 (加入 _submitMonth 與 syncToCloud) */}
+                                        <div className="flex justify-end border-t border-slate-100 pt-5 mt-8">
                                             <button 
                                                 onClick={() => {
                                                     if (typeof setPastpaperScores === 'function') {
-                                                        setPastpaperScores(prev => ({
-                                                            ...prev,
-                                                            [studentId]: {
-                                                                ...(prev[studentId] || {}),
-                                                                [ppSelectedPaper]: ppInputValues
-                                                            }
-                                                        }));
-                                                        alert('✅ 成績已成功更新！');
+                                                        // 1. 自動產生目前的 YYYY-MM
+                                                        const currentMonth = new Date().toISOString().slice(0, 7);
+                                                        // 2. 將提交月份混入這次輸入的成績中
+                                                        const newRecord = { ...ppInputValues, _submitMonth: currentMonth };
+                                                        
+                                                        let updatedScores = null;
+                                                        
+                                                        // 3. 更新 React State
+                                                        setPastpaperScores(prev => {
+                                                            updatedScores = {
+                                                                ...prev,
+                                                                [studentId]: {
+                                                                    ...(prev[studentId] || {}),
+                                                                    [ppSelectedPaper]: newRecord
+                                                                }
+                                                            };
+                                                            return updatedScores;
+                                                        });
+
+                                                        // 4. ★ 最重要的一步：觸發寫入 Google Sheet 資料庫
+                                                        if (typeof syncToCloud === 'function' && updatedScores) {
+                                                            syncToCloud(updatedScores, 'pastpaperScores');
+                                                        } else {
+                                                            console.warn("找不到 syncToCloud 函數，成績僅在本地更新。");
+                                                        }
+                                                        
+                                                        alert('✅ 成績已成功更新並同步至資料庫！');
                                                         setPpMode('view');
-                                                    } else {
-                                                        alert('⚠️ 系統找不到儲存功能，請確保外層已傳遞 setPastpaperScores。');
                                                     }
                                                 }}
                                                 className="bg-emerald-500 text-white px-8 py-3 rounded-xl font-black hover:bg-emerald-600 transition-colors flex items-center gap-2 shadow-md hover:shadow-lg"
@@ -8230,6 +8331,7 @@ const App = () => {
                                 pastpaperMaps={pastpaperMaps}
                                 pastpaperScores={pastpaperScores}
                                 setPastpaperScores={setPastpaperScores}
+                                syncToCloud={syncToCloud}
                                 
                                 // ← 添加这一行
                             />
