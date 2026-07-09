@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.41f Physics Quiz Analyzer</title>
+    <title> V3.44 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -6783,31 +6783,35 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
         return (students || []).filter(s => s.cohort === studentCohort);
     }, [students, studentCohort]);
 
-    // ---------------- 4. 學生專屬：歷屆試題 (Pastpaper) 狀態 ----------------
+  // ---------------- 4. 學生專屬：歷屆試題 (Pastpaper) 狀態 ----------------
+    
+    // ★ 雙保險：優先使用外部傳入的 prop，若沒有則尋找 window 全域變數，最後用空物件保底
+    const safePPMaps = pastpaperMaps || (typeof window !== 'undefined' ? window.PASTPAPER_MAPS : null) || {};
+    const safePPScores = pastpaperScores || (typeof window !== 'undefined' ? window.PASTPAPER_SCORES : null) || {};
+
     const [ppMode, setPpMode] = React.useState('view'); // 'view' | 'input'
     const [ppSelectedYear, setPpSelectedYear] = React.useState('');
     const [ppSelectedPaper, setPpSelectedPaper] = React.useState('');
     const [ppInputValues, setPpInputValues] = React.useState({});
     const [selectedPPPapers, setSelectedPPPapers] = React.useState([]); // AI 勾選分析用
 
-    // 動態解析可用年份
+    // 動態解析可用年份 (例如 2014, 2015)
     const availableYears = React.useMemo(() => {
-        if (!pastpaperMaps) return [];
-        const years = Object.keys(pastpaperMaps).map(key => key.split('-')[0]);
+        const years = Object.keys(safePPMaps).map(key => key.split('-')[0]);
         return [...new Set(years)].sort((a, b) => b - a);
-    }, [pastpaperMaps]);
+    }, [safePPMaps]);
 
-    // 當選擇年份後，動態篩選卷目
+    // 當選擇年份後，動態篩選卷目 (例如 P1A, P1B)
     const availablePapers = React.useMemo(() => {
-        if (!pastpaperMaps || !ppSelectedYear) return [];
-        return Object.keys(pastpaperMaps)
+        if (!ppSelectedYear) return [];
+        return Object.keys(safePPMaps)
             .filter(key => key.startsWith(ppSelectedYear))
             .map(key => ({
                 id: key,
                 type: key.replace(`${ppSelectedYear}-`, ""),
-                title: pastpaperMaps[key].title
+                title: safePPMaps[key].title || key
             }));
-    }, [pastpaperMaps, ppSelectedYear]);
+    }, [safePPMaps, ppSelectedYear]);
 
     // 年份改變時，自動清空選中的卷目
     React.useEffect(() => {
@@ -6829,7 +6833,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
 
     // 計算學生個人歷屆試題統計
     const ppStats = React.useMemo(() => {
-        const studentPastpaper = pastpaperScores?.[studentId] || {};
+        const studentPastpaper = safePPScores?.[studentId] || {};
         const stats = {};
         let totalCompleted = 0;
         
@@ -6840,7 +6844,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
             
             if (!stats[year]) stats[year] = { papers: {}, totalEarned: 0, totalMax: 0 };
             
-            const mapInfo = pastpaperMaps?.[paperId];
+            const mapInfo = safePPMaps[paperId];
             if (!mapInfo || !mapInfo.questions) return;
             
             let paperEarned = 0;
@@ -7637,60 +7641,140 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                 {ppSelectedPaper && pastpaperMaps?.[ppSelectedPaper] && (
                                     <div className="animate-fadeIn">
                                         <label className="block text-sm font-bold text-slate-700 mb-3">步驟 3：輸入答案或分數</label>
-                                        <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-3 mb-8">
-                                            {(pastpaperMaps[ppSelectedPaper].questions || []).map((q, idx) => (
-                                                <div key={q.id} className="bg-slate-50 p-2 rounded-xl border border-slate-200 flex flex-col justify-center items-center">
-                                                    <label className="text-[10px] font-bold text-slate-500 mb-1 w-full text-center truncate" title={q.id.split('-').pop()}>
-                                                        {q.id.split('-').pop()}
-                                                    </label>
-                                                    {q.type === 'MC' ? (
-                                                        <input 
-                                                            id={`pp-input-${idx}`}
-                                                            type="text" 
-                                                            maxLength="1"
-                                                            className="w-full text-center font-black text-lg p-1.5 border border-slate-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none uppercase transition-all"
-                                                            value={ppInputValues[q.id] || ''}
-                                                            onChange={(e) => {
-                                                                const val = e.target.value.toUpperCase();
-                                                                if (val === '' || ['A','B','C','D'].includes(val)) {
-                                                                    setPpInputValues(prev => ({...prev, [q.id]: val}));
-                                                                    if (val !== '') {
-                                                                        const nextInput = document.getElementById(`pp-input-${idx + 1}`);
-                                                                        if (nextInput) nextInput.focus();
+                                        
+                                        {/* 升級版：分段與 5 格網格輸入系統 */}
+                                        <div className="space-y-6 mb-8">
+                                            {/* 將題目按照 E3, E4 或預設進行分組 */}
+                                            {(() => {
+                                                const paperQuestions = pastpaperMaps[ppSelectedPaper].questions || [];
+                                                // 簡單分類：如果題目 ID 或 topicId 包含 E3, E4，就分入該組
+                                                const groups = { '預設': [], 'E3 (能量)': [], 'E4 (醫學)': [] };
+                                                
+                                                paperQuestions.forEach(q => {
+                                                    if (q.topicId && q.topicId.startsWith('E3')) groups['E3 (能量)'].push(q);
+                                                    else if (q.topicId && q.topicId.startsWith('E4')) groups['E4 (醫學)'].push(q);
+                                                    else groups['預設'].push(q);
+                                                });
+
+                                                return Object.keys(groups).map(groupName => {
+                                                    const qs = groups[groupName];
+                                                    if (qs.length === 0) return null;
+
+                                                    return (
+                                                        <div key={groupName} className="mb-4">
+                                                            {/* 只有當真的有 E3 / E4 分類時，才顯示小標題 */}
+                                                            {groupName !== '預設' && (
+                                                                <h4 className="text-sm font-black text-indigo-500 mb-3 border-b border-indigo-100 pb-1 flex items-center gap-1">
+                                                                    <Icon name="Layers" size={14} /> {groupName} 區塊
+                                                                </h4>
+                                                            )}
+                                                            
+                                                            {/* 強制設定為 5 欄 (grid-cols-5) 方便閱讀 */}
+                                                            <div className="grid grid-cols-5 gap-3">
+                                                                {qs.map((q, idx) => {
+                                                                    const studentAns = ppInputValues[q.id];
+                                                                    const isMC = q.type === 'MC';
+                                                                    
+                                                                    // 動態計算 MC 格子的顏色
+                                                                    let bgColor = "bg-slate-50";
+                                                                    let borderColor = "border-slate-200";
+                                                                    let textColor = "text-slate-700";
+                                                                    let showCorrectAns = false;
+
+                                                                    if (isMC && studentAns && q.ans) {
+                                                                        const isCorrect = studentAns === q.ans;
+                                                                        if (isCorrect) {
+                                                                            bgColor = "bg-emerald-50";
+                                                                            borderColor = "border-emerald-300";
+                                                                            textColor = "text-emerald-700";
+                                                                        } else {
+                                                                            bgColor = "bg-red-50";
+                                                                            borderColor = "border-red-300";
+                                                                            textColor = "text-red-600";
+                                                                            showCorrectAns = true; // 答錯時顯示正解
+                                                                        }
                                                                     }
-                                                                }
-                                                            }}
-                                                        />
-                                                    ) : (
-                                                        <div className="flex items-center gap-1 w-full">
-                                                            <input 
-                                                                id={`pp-input-${idx}`}
-                                                                type="number" 
-                                                                min="0"
-                                                                max={q.max}
-                                                                className="w-full text-center font-black text-base p-1.5 border border-slate-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all"
-                                                                value={ppInputValues[q.id] !== undefined ? ppInputValues[q.id] : ''}
-                                                                onChange={(e) => {
-                                                                    let val = e.target.value;
-                                                                    if (val !== '') {
-                                                                        val = Number(val);
-                                                                        if (val < 0) val = 0;
-                                                                        if (val > q.max) val = q.max;
-                                                                    }
-                                                                    setPpInputValues(prev => ({...prev, [q.id]: val}));
-                                                                }}
-                                                                onKeyDown={(e) => {
-                                                                    if (e.key === 'Enter') {
-                                                                        const nextInput = document.getElementById(`pp-input-${idx + 1}`);
-                                                                        if (nextInput) nextInput.focus();
-                                                                    }
-                                                                }}
-                                                            />
-                                                            <span className="text-[10px] text-slate-400 font-bold w-6">/{q.max}</span>
+
+                                                                    return (
+                                                                    <div key={q.id} className={`${bgColor} p-2 rounded-xl border ${borderColor} flex flex-col justify-center items-center relative transition-colors`}>
+                                                                        
+                                                                        {/* 題目編號 */}
+                                                                        <label className="text-[10px] font-bold text-slate-500 mb-1 w-full text-center truncate" title={q.id.split('-').pop()}>
+                                                                            {q.id.split('-').pop()}
+                                                                        </label>
+
+                                                                        {/* 答錯時的正確答案小提示 (浮動於右上角) */}
+                                                                        {showCorrectAns && (
+                                                                            <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-sm">
+                                                                                {q.ans}
+                                                                            </span>
+                                                                        )}
+
+                                                                        {isMC ? (
+                                                                            <input 
+                                                                                id={`pp-input-${q.id}`} // 使用唯一 ID 方便跳轉
+                                                                                type="text" 
+                                                                                maxLength="1"
+                                                                                className={`w-full text-center font-black text-lg p-1.5 border border-slate-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none uppercase transition-all ${textColor}`}
+                                                                                value={studentAns || ''}
+                                                                                onChange={(e) => {
+                                                                                    const val = e.target.value.toUpperCase();
+                                                                                    if (val === '' || ['A','B','C','D'].includes(val)) {
+                                                                                        setPpInputValues(prev => ({...prev, [q.id]: val}));
+                                                                                        // 極速跳轉：找到下一題的 Input 並 Focus
+                                                                                        if (val !== '') {
+                                                                                            // 尋找當前題目在總陣列中的位置，然後跳下一題
+                                                                                            const allQs = paperQuestions;
+                                                                                            const currentGlobalIdx = allQs.findIndex(item => item.id === q.id);
+                                                                                            if (currentGlobalIdx !== -1 && currentGlobalIdx + 1 < allQs.length) {
+                                                                                                const nextId = allQs[currentGlobalIdx + 1].id;
+                                                                                                const nextInput = document.getElementById(`pp-input-${nextId}`);
+                                                                                                if (nextInput) nextInput.focus();
+                                                                                            }
+                                                                                        }
+                                                                                    }
+                                                                                }}
+                                                                            />
+                                                                        ) : (
+                                                                            <div className="flex items-center gap-1 w-full">
+                                                                                <input 
+                                                                                    id={`pp-input-${q.id}`}
+                                                                                    type="number" 
+                                                                                    min="0"
+                                                                                    max={q.max}
+                                                                                    className="w-full text-center font-black text-base p-1.5 border border-slate-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all"
+                                                                                    value={studentAns !== undefined ? studentAns : ''}
+                                                                                    onChange={(e) => {
+                                                                                        let val = e.target.value;
+                                                                                        if (val !== '') {
+                                                                                            val = Number(val);
+                                                                                            if (val < 0) val = 0;
+                                                                                            if (val > q.max) val = q.max;
+                                                                                        }
+                                                                                        setPpInputValues(prev => ({...prev, [q.id]: val}));
+                                                                                    }}
+                                                                                    onKeyDown={(e) => {
+                                                                                        if (e.key === 'Enter') {
+                                                                                            const allQs = paperQuestions;
+                                                                                            const currentGlobalIdx = allQs.findIndex(item => item.id === q.id);
+                                                                                            if (currentGlobalIdx !== -1 && currentGlobalIdx + 1 < allQs.length) {
+                                                                                                const nextId = allQs[currentGlobalIdx + 1].id;
+                                                                                                const nextInput = document.getElementById(`pp-input-${nextId}`);
+                                                                                                if (nextInput) nextInput.focus();
+                                                                                            }
+                                                                                        }
+                                                                                    }}
+                                                                                />
+                                                                                <span className="text-[10px] text-slate-400 font-bold w-6">/{q.max}</span>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                )})}
+                                                            </div>
                                                         </div>
-                                                    )}
-                                                </div>
-                                            ))}
+                                                    );
+                                                });
+                                            })()}
                                         </div>
                                         
                                         <div className="flex justify-end border-t border-slate-100 pt-5">
@@ -7949,8 +8033,10 @@ const App = () => {
             const [homeworkScores, setHomeworkScores] = React.useState({});
             const [homeworkMaps, setHomeworkMaps] = React.useState({});
             
-            // ★ 新增：Pastpaper 成績狀態
+            // 👇 ★ 補上這兩行，讓 App 認識這兩個變數 👇
+            const [pastpaperMaps, setPastpaperMaps] = React.useState({});
             const [pastpaperScores, setPastpaperScores] = React.useState({});
+    
 
             const [isLoading, setIsLoading] = React.useState(true);
             const [isSaving, setIsSaving] = React.useState(false);
@@ -7998,7 +8084,11 @@ const App = () => {
                         setHomeworkScores((typeof data.homeworkScores === 'object' && data.homeworkScores !== null) ? data.homeworkScores : {});
                         
                         // ★ 載入 Pastpaper 儲存成績
+                        // 👇 ★ 補上這兩行，把雲端抓下來的資料存進剛剛宣告的變數裡 👇
+                        setPastpaperMaps(data.pastpaperMaps || {});
+                
                         setPastpaperScores((typeof data.pastpaperScores === 'object' && data.pastpaperScores !== null) ? data.pastpaperScores : {});
+                        
                         
                         setIsLoading(false);
                     })
@@ -8135,7 +8225,13 @@ const App = () => {
                                 examScores={examScores} 
                                 homeworkScores={homeworkScores} 
                                 pastpaperScores={pastpaperScores}
-                                homeworkMaps={homeworkMaps}   // ← 添加这一行
+                                homeworkMaps={homeworkMaps}
+                                // 👇 請務必補上這三行，把歷屆試題的資料傳給學生介面 👇
+                                pastpaperMaps={pastpaperMaps}
+                                pastpaperScores={pastpaperScores}
+                                setPastpaperScores={setPastpaperScores}
+                                
+                                // ← 添加这一行
                             />
                         );
                     }
