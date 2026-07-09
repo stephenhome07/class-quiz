@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.39 Physics Quiz Analyzer</title>
+    <title> V3.40 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -6758,118 +6758,118 @@ const PastpaperSummaryView = ({ currentCohort, activeStudents, pastpaperScores }
             };
 
 // ==================== 學生專屬遊戲化儀表板 (StudentPortalView) ====================
-const StudentPortalView = ({ studentId, students, scores, examScores, homeworkScores, pastpaperScores, homeworkMaps, pastpaperMaps, setPastpaperScores}) => {
-    const [activeTab, setActiveTab] = React.useState('overview'); // overview, school, pastpaper, ai, leaderboard
+const StudentPortalView = ({ studentId, students, scores, examScores, homeworkScores, pastpaperScores, homeworkMaps, pastpaperMaps, setPastpaperScores }) => {
+    // 1. 分頁控制狀態
+    const [activeTab, setActiveTab] = React.useState('overview');
     const [aiSubTab, setAiSubTab] = React.useState('school'); // 'school' 或 'pastpaper'
-    
-   // ==================== ★ 修正：將變數名稱改回 currentStudent ====================
-    // 1. 找出當前學生的詳細資料 (名字必須是 currentStudent)
+
+    // ==================== ★ 新增：修復圖表閃退所需的 React Refs ====================
+    const chartRef = React.useRef(null);
+    const radarRef = React.useRef(null);
+    const chartInstance = React.useRef(null);
+    const radarInstance = React.useRef(null);
+
+    // ==================== ★ 核心學生資訊與同儕名單 ====================
     const currentStudent = React.useMemo(() => {
         return (students || []).find(s => s.id === studentId) || {};
     }, [students, studentId]);
 
     const studentCohort = currentStudent.cohort || '';
 
-    // 2. 定義 peerStudents：篩選出「跟他同一個群組」的所有同學（用於排行榜與全班對比）
     const peerStudents = React.useMemo(() => {
         if (!studentCohort) return [];
         return (students || []).filter(s => s.cohort === studentCohort);
     }, [students, studentCohort]);
-    // =======================================================================
 
-    
-    // AI 補底相關狀態
-    const [selectedPPPapers, setSelectedPPPapers] = React.useState([]);
-    const [leaderboardMonth, setLeaderboardMonth] = React.useState('all');
-   
-    /// ==================== 學生專屬：歷屆試題 (Pastpaper) 狀態 ====================
-  const [ppMode, setPpMode] = React.useState('view'); // 'view' 檢視模式 | 'input' 輸入模式
-  const [ppSelectedYear, setPpSelectedYear] = React.useState('');
-  const [ppSelectedPaper, setPpSelectedPaper] = React.useState('');
-  const [ppInputValues, setPpInputValues] = React.useState({});
+    // ==================== ★ 學生專屬：歷屆試題 (Pastpaper) 狀態 ====================
+    const [ppMode, setPpMode] = React.useState('view'); // 'view' | 'input'
+    const [ppSelectedYear, setPpSelectedYear] = React.useState('');
+    const [ppSelectedPaper, setPpSelectedPaper] = React.useState('');
+    const [ppInputValues, setPpInputValues] = React.useState({});
 
-  // 1. 動態解析 availableYears (例如 2014, 2015)
-  const availableYears = React.useMemo(() => {
-    if (!pastpaperMaps) return [];
-    const years = Object.keys(pastpaperMaps).map(key => key.split('-')[0]);
-    return [...new Set(years)].sort((a, b) => b - a); // 新年份排前面
-  }, [pastpaperMaps]);
+    // 動態解析可用年份 (例如 2014, 2015)
+    const availableYears = React.useMemo(() => {
+        if (!pastpaperMaps) return [];
+        const years = Object.keys(pastpaperMaps).map(key => key.split('-')[0]);
+        return [...new Set(years)].sort((a, b) => b - a);
+    }, [pastpaperMaps]);
 
-  // 2. 當選擇年份後，動態篩選出該年的卷目 (例如 P1A, P1B)
-  const availablePapers = React.useMemo(() => {
-    if (!pastpaperMaps || !ppSelectedYear) return [];
-    return Object.keys(pastpaperMaps)
-      .filter(key => key.startsWith(ppSelectedYear))
-      .map(key => ({
-        id: key,
-        type: key.replace(`${ppSelectedYear}-`, ""),
-        title: pastpaperMaps[key].title
-      }));
-  }, [pastpaperMaps, ppSelectedYear]);
+    // 當選擇年份後，動態篩選卷目 (例如 P1A, P1B)
+    const availablePapers = React.useMemo(() => {
+        if (!pastpaperMaps || !ppSelectedYear) return [];
+        return Object.keys(pastpaperMaps)
+            .filter(key => key.startsWith(ppSelectedYear))
+            .map(key => ({
+                id: key,
+                type: key.replace(`${ppSelectedYear}-`, ""),
+                title: pastpaperMaps[key].title
+            }));
+    }, [pastpaperMaps, ppSelectedYear]);
 
-  // 當年份改變時，自動清空卷目
-  React.useEffect(() => {
-    setPpSelectedPaper('');
-    setPpInputValues({});
-  }, [ppSelectedYear]);
+    // 年份改變時，自動清空選中的卷目
+    React.useEffect(() => {
+        setPpSelectedPaper('');
+        setPpInputValues({});
+    }, [ppSelectedYear]);
 
-  // 3. 學生 DSE 等級估算工具
-  const estimateDSEGrade = (percent) => {
-    if (percent >= 0.85) return { grade: '5**', color: 'text-yellow-500', bg: 'bg-yellow-50' };
-    if (percent >= 0.75) return { grade: '5*', color: 'text-yellow-400', bg: 'bg-yellow-50' };
-    if (percent >= 0.65) return { grade: '5', color: 'text-emerald-500', bg: 'bg-emerald-50' };
-    if (percent >= 0.50) return { grade: '4', color: 'text-blue-500', bg: 'bg-blue-50' };
-    if (percent >= 0.40) return { grade: '3', color: 'text-indigo-500', bg: 'bg-indigo-50' };
-    if (percent >= 0.28) return { grade: '2', color: 'text-amber-500', bg: 'bg-amber-50' };
-    if (percent >= 0.15) return { grade: '1', color: 'text-orange-500', bg: 'bg-orange-50' };
-    return { grade: 'U', color: 'text-red-500', bg: 'bg-red-50' };
-  };
+    // DSE 等級估算工具
+    const estimateDSEGrade = (percent) => {
+        if (percent >= 0.85) return { grade: '5**', color: 'text-yellow-500', bg: 'bg-yellow-50' };
+        if (percent >= 0.75) return { grade: '5*', color: 'text-yellow-400', bg: 'bg-yellow-50' };
+        if (percent >= 0.65) return { grade: '5', color: 'text-emerald-500', bg: 'bg-emerald-50' };
+        if (percent >= 0.50) return { grade: '4', color: 'text-blue-500', bg: 'bg-blue-50' };
+        if (percent >= 0.40) return { grade: '3', color: 'text-indigo-500', bg: 'bg-indigo-50' };
+        if (percent >= 0.28) return { grade: '2', color: 'text-amber-500', bg: 'bg-amber-50' };
+        if (percent >= 0.15) return { grade: '1', color: 'text-orange-500', bg: 'bg-orange-50' };
+        return { grade: 'U', color: 'text-red-500', bg: 'bg-red-50' };
+    };
 
-  // 4. 計算學生個人的試卷統計
-  const ppStats = React.useMemo(() => {
-    const studentPastpaper = pastpaperScores?.[studentId] || {};
-    const stats = {};
-    let totalCompleted = 0;
-    
-    Object.keys(studentPastpaper).forEach(paperId => {
-      const yearMatch = paperId.match(/^(\d{4})/);
-      if (!yearMatch) return;
-      const year = yearMatch[1];
-      
-      if (!stats[year]) stats[year] = { papers: {}, totalEarned: 0, totalMax: 0 };
-      
-      const mapInfo = pastpaperMaps?.[paperId];
-      if (!mapInfo || !mapInfo.questions) return;
-      
-      let paperEarned = 0;
-      let paperMax = 0;
-      let hasAnswer = false;
-      
-      mapInfo.questions.forEach(q => {
-        const studentAns = studentPastpaper[paperId][q.id];
-        const qMax = Number(q.max) || 1;
-        paperMax += qMax;
+    // 計算學生個人試卷統計
+    const ppStats = React.useMemo(() => {
+        const studentPastpaper = pastpaperScores?.[studentId] || {};
+        const stats = {};
+        let totalCompleted = 0;
         
-        if (studentAns !== undefined && studentAns !== '') {
-          hasAnswer = true;
-          if (q.type === 'MC') {
-            if (studentAns === q.ans) paperEarned += qMax;
-          } else {
-            paperEarned += Number(studentAns) || 0;
-          }
-        }
-      });
-      
-      if (hasAnswer && paperMax > 0) {
-        stats[year].papers[paperId] = { earned: paperEarned, max: paperMax, title: mapInfo.title || paperId };
-        stats[year].totalEarned += paperEarned;
-        stats[year].totalMax += paperMax;
-        totalCompleted++;
-      }
-    });
-    
-    return { byYear: stats, totalCompleted };
-  }, [studentId, pastpaperScores, pastpaperMaps]);
+        Object.keys(studentPastpaper).forEach(paperId => {
+            const yearMatch = paperId.match(/^(\d{4})/);
+            if (!yearMatch) return;
+            const year = yearMatch[1];
+            
+            if (!stats[year]) stats[year] = { papers: {}, totalEarned: 0, totalMax: 0 };
+            
+            const mapInfo = pastpaperMaps?.[paperId];
+            if (!mapInfo || !mapInfo.questions) return;
+            
+            let paperEarned = 0;
+            let paperMax = 0;
+            let hasAnswer = false;
+            
+            mapInfo.questions.forEach(q => {
+                const studentAns = studentPastpaper[paperId][q.id];
+                const qMax = Number(q.max) || 1;
+                paperMax += qMax;
+                
+                if (studentAns !== undefined && studentAns !== '') {
+                    hasAnswer = true;
+                    if (q.type === 'MC') {
+                        if (studentAns === q.ans) paperEarned += qMax;
+                    } else {
+                        paperEarned += Number(studentAns) || 0;
+                    }
+                }
+            });
+            
+            if (hasAnswer && paperMax > 0) {
+                stats[year].papers[paperId] = { earned: paperEarned, max: paperMax, title: mapInfo.title || paperId };
+                stats[year].totalEarned += paperEarned;
+                stats[year].totalMax += paperMax;
+                totalCompleted++;
+            }
+        });
+        
+        return { byYear: stats, totalCompleted };
+    }, [studentId, pastpaperScores, pastpaperMaps]);
+
 
 // ==================== 升級版：通用評估數據萃取函式 (小測與考試用) ====================
   const getAssessmentData = (record, mapInfo) => {
