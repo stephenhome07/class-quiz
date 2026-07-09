@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.41f Physics Quiz Analyzer</title>
+    <title> V3.43 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -6783,31 +6783,35 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
         return (students || []).filter(s => s.cohort === studentCohort);
     }, [students, studentCohort]);
 
-    // ---------------- 4. 學生專屬：歷屆試題 (Pastpaper) 狀態 ----------------
+  // ---------------- 4. 學生專屬：歷屆試題 (Pastpaper) 狀態 ----------------
+    
+    // ★ 雙保險：優先使用外部傳入的 prop，若沒有則尋找 window 全域變數，最後用空物件保底
+    const safePPMaps = pastpaperMaps || (typeof window !== 'undefined' ? window.PASTPAPER_MAPS : null) || {};
+    const safePPScores = pastpaperScores || (typeof window !== 'undefined' ? window.PASTPAPER_SCORES : null) || {};
+
     const [ppMode, setPpMode] = React.useState('view'); // 'view' | 'input'
     const [ppSelectedYear, setPpSelectedYear] = React.useState('');
     const [ppSelectedPaper, setPpSelectedPaper] = React.useState('');
     const [ppInputValues, setPpInputValues] = React.useState({});
     const [selectedPPPapers, setSelectedPPPapers] = React.useState([]); // AI 勾選分析用
 
-    // 動態解析可用年份
+    // 動態解析可用年份 (例如 2014, 2015)
     const availableYears = React.useMemo(() => {
-        if (!pastpaperMaps) return [];
-        const years = Object.keys(pastpaperMaps).map(key => key.split('-')[0]);
+        const years = Object.keys(safePPMaps).map(key => key.split('-')[0]);
         return [...new Set(years)].sort((a, b) => b - a);
-    }, [pastpaperMaps]);
+    }, [safePPMaps]);
 
-    // 當選擇年份後，動態篩選卷目
+    // 當選擇年份後，動態篩選卷目 (例如 P1A, P1B)
     const availablePapers = React.useMemo(() => {
-        if (!pastpaperMaps || !ppSelectedYear) return [];
-        return Object.keys(pastpaperMaps)
+        if (!ppSelectedYear) return [];
+        return Object.keys(safePPMaps)
             .filter(key => key.startsWith(ppSelectedYear))
             .map(key => ({
                 id: key,
                 type: key.replace(`${ppSelectedYear}-`, ""),
-                title: pastpaperMaps[key].title
+                title: safePPMaps[key].title || key
             }));
-    }, [pastpaperMaps, ppSelectedYear]);
+    }, [safePPMaps, ppSelectedYear]);
 
     // 年份改變時，自動清空選中的卷目
     React.useEffect(() => {
@@ -6829,7 +6833,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
 
     // 計算學生個人歷屆試題統計
     const ppStats = React.useMemo(() => {
-        const studentPastpaper = pastpaperScores?.[studentId] || {};
+        const studentPastpaper = safePPScores?.[studentId] || {};
         const stats = {};
         let totalCompleted = 0;
         
@@ -6840,7 +6844,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
             
             if (!stats[year]) stats[year] = { papers: {}, totalEarned: 0, totalMax: 0 };
             
-            const mapInfo = pastpaperMaps?.[paperId];
+            const mapInfo = safePPMaps[paperId];
             if (!mapInfo || !mapInfo.questions) return;
             
             let paperEarned = 0;
@@ -8135,7 +8139,13 @@ const App = () => {
                                 examScores={examScores} 
                                 homeworkScores={homeworkScores} 
                                 pastpaperScores={pastpaperScores}
-                                homeworkMaps={homeworkMaps}   // ← 添加这一行
+                                homeworkMaps={homeworkMaps}
+                                // 👇 請務必補上這三行，把歷屆試題的資料傳給學生介面 👇
+                                pastpaperMaps={pastpaperMaps}
+                                pastpaperScores={pastpaperScores}
+                                setPastpaperScores={setPastpaperScores}
+                                
+                                // ← 添加这一行
                             />
                         );
                     }
