@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.33 Physics Quiz Analyzer</title>
+    <title> V3.34 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -6830,23 +6830,40 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
     return { total: availableHws.length, completed, needsCorrection, missing, details };
   }, [studentId, studentCohort, homeworkMaps, homeworkScores]);
 
-// ==================== 新增：通用弱點萃取函式 (小測與考試用) ====================
-  const getAssessmentWeaknesses = (record, mapInfo) => {
-    if (!record || !mapInfo || !mapInfo.questions) return [];
+// ==================== 升級版：通用評估數據萃取函式 (小測與考試用) ====================
+  const getAssessmentData = (record, mapInfo) => {
+    if (!record || !mapInfo || !mapInfo.questions) {
+      return { scoreStr: '-', earned: 0, max: 0, pct: 0, weaknesses: [] };
+    }
+    
+    let totalEarned = 0;
+    let totalMax = 0;
     const weaknesses = [];
+    
     mapInfo.questions.forEach(q => {
-         const qScore = Number(record[q.id]) || 0;
-         const qMax = Number(q.max) || 1;
-         
-         // ★ 修正：條件改為 <= 0.5，並對應你的資料庫欄位名稱 topicDesc
-         if (qScore / qMax <= 0.5) {
-             const weaknessText = q.topicDesc || q.topicId || q.desc || q.topic || q.id;
-             if (!weaknesses.includes(weaknessText)) {
-                 weaknesses.push(weaknessText);
-             }
-         }
+      const qScore = Number(record[q.id]) || 0;
+      const qMax = Number(q.max) || 1;
+      totalEarned += qScore;
+      totalMax += qMax;
+      
+      // 得分率 <= 50% 納入弱點
+      if (qScore / qMax <= 0.5) {
+        const weaknessText = q.topicDesc || q.topicId || q.desc || q.topic || q.id;
+        if (!weaknesses.includes(weaknessText)) {
+          weaknesses.push(weaknessText);
+        }
+      }
     });
-    return weaknesses;
+    
+    const pct = totalMax > 0 ? (totalEarned / totalMax) : 0;
+    
+    return {
+      scoreStr: `${totalEarned}/${totalMax}`,
+      earned: totalEarned,
+      max: totalMax,
+      pct: pct,
+      weaknesses: weaknesses
+    };
   };
 
   // ==================== 升級版：AI 互動小測驗 Prompt 產生器 ====================
@@ -7485,21 +7502,47 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                         <Icon name="BookOpen" size={18} className="text-blue-500" /> 功課表現
                                     </h3>
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                        {hwStats.details.length === 0 ? <p className="text-sm text-slate-400">尚無功課紀錄</p> : hwStats.details.map(hw => (
-                                            <div key={hw.id} className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col justify-between hover:border-indigo-200 transition-colors">
+                                        {hwStats.details.length === 0 ? <p className="text-sm text-slate-400">尚無功課紀錄</p> : hwStats.details.map(hw => {
+                                            // 計算功課的百分比以推導走勢標籤
+                                            let pct = 0;
+                                            if (hw.score) {
+                                                const [e, m] = hw.score.split('/').map(Number);
+                                                if (m > 0) pct = e / m;
+                                            }
+                                            
+                                            return (
+                                            <div key={hw.id} className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col justify-between hover:border-indigo-200 transition-colors shadow-sm">
                                                 <div>
                                                     <div className="flex justify-between items-start mb-2">
-                                                        <h4 className="font-bold text-slate-700">{hw.title || hw.id}</h4>
-                                                        {hw.status === 'completed' && <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded font-bold">已改正</span>}
-                                                        {hw.status === 'needsCorrection' && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-1 rounded font-bold">未改正</span>}
-                                                        {hw.status === 'missing' && <span className="text-[10px] bg-red-100 text-red-600 px-2 py-1 rounded font-bold">欠交</span>}
+                                                        <h4 className="font-bold text-slate-700 truncate max-w-[140px]">{hw.title || hw.id}</h4>
+                                                        <div className="flex flex-col items-end gap-1">
+                                                            {hw.status === 'completed' && <span className="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold">已改正</span>}
+                                                            {hw.status === 'needsCorrection' && <span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold">未改正</span>}
+                                                            {hw.status === 'missing' && <span className="text-[9px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-bold">欠交</span>}
+                                                        </div>
                                                     </div>
-                                                    <p className="text-sm font-medium text-slate-600 mb-2">分數: {hw.score || '-'}</p>
                                                     
-                                                    {/* ★ 功課弱點顯示 */}
+                                                    {/* 分數與走勢定位列 */}
+                                                    <div className="flex justify-between items-center bg-white border border-slate-100 p-2 rounded-lg mb-3">
+                                                        <div>
+                                                            <span className="text-[10px] text-slate-400 block font-medium">實際分數</span>
+                                                            <span className="text-sm font-black text-slate-700">{hw.score || '無資料'}</span>
+                                                        </div>
+                                                        {hw.score && hw.status !== 'missing' && (
+                                                            <div className="text-right">
+                                                                <span className="text-[10px] text-slate-400 block font-medium">表現定位</span>
+                                                                {pct >= 0.85 && <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-0.5">🌟 表現卓越</span>}
+                                                                {pct >= 0.70 && pct < 0.85 && <span className="text-[10px] text-indigo-600 font-bold flex items-center gap-0.5">📈 進度平穩</span>}
+                                                                {pct >= 0.50 && pct < 0.70 && <span className="text-[10px] text-amber-600 font-bold flex items-center gap-0.5">⚖️ 合格邊緣</span>}
+                                                                {pct < 0.50 && <span className="text-[10px] text-red-500 font-bold flex items-center gap-0.5">🚨 需加強急救</span>}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    
+                                                    {/* 功課弱點顯示 */}
                                                     {hw.weaknesses && hw.weaknesses.length > 0 && (
                                                         <div className="mb-3">
-                                                            <span className="text-[10px] font-bold text-red-500 mb-1 block">⚠️ 需加強 (&lt; 50%)：</span>
+                                                            <span className="text-[10px] font-bold text-red-500 mb-1 block">⚠️ 需加強 (&le; 50%)：</span>
                                                             <ul className="text-[10px] text-slate-600 list-disc pl-4 space-y-0.5">
                                                                 {hw.weaknesses.slice(0, 3).map((w, i) => <li key={i} className="truncate" title={w}>{w}</li>)}
                                                                 {hw.weaknesses.length > 3 && <li>...及其他 {hw.weaknesses.length - 3} 項</li>}
@@ -7517,7 +7560,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                                     </button>
                                                 )}
                                             </div>
-                                        ))}
+                                        )})}
                                     </div>
                                 </section>
 
@@ -7533,29 +7576,46 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                             Object.keys(scores[studentId]).map(quizId => {
                                                 const quizMap = typeof QUIZ_MAPS !== 'undefined' ? QUIZ_MAPS[quizId] : {};
                                                 const quizRecord = scores[studentId][quizId];
-                                                const weaknesses = getAssessmentWeaknesses(quizRecord, quizMap);
+                                                
+                                                // ★ 使用新版函式，同時獲取分數與弱點數據
+                                                const quizData = getAssessmentData(quizRecord, quizMap);
                                                 
                                                 return (
-                                                <div key={quizId} className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col justify-between hover:border-indigo-200 transition-colors">
+                                                <div key={quizId} className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col justify-between hover:border-indigo-200 transition-colors shadow-sm">
                                                     <div>
                                                         <div className="flex justify-between items-start mb-2">
-                                                            <h4 className="font-bold text-slate-700">{quizMap?.title || quizId}</h4>
-                                                            <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-1 rounded font-bold">已紀錄</span>
+                                                            <h4 className="font-bold text-slate-700 truncate max-w-[150px]">{quizMap?.title || quizId}</h4>
+                                                            <span className="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-bold">已紀錄</span>
                                                         </div>
                                                         
-                                                        {/* ★ 小測弱點顯示 */}
-                                                        {weaknesses.length > 0 && (
+                                                        {/* 分數與走勢定位列 */}
+                                                        <div className="flex justify-between items-center bg-white border border-slate-100 p-2 rounded-lg mb-3">
+                                                            <div>
+                                                                <span className="text-[10px] text-slate-400 block font-medium">小測分數</span>
+                                                                <span className="text-sm font-black text-slate-700">{quizData.scoreStr}</span>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <span className="text-[10px] text-slate-400 block font-medium">表現定位</span>
+                                                                {quizData.pct >= 0.85 && <span className="text-[10px] text-emerald-600 font-bold">🌟 表現卓越</span>}
+                                                                {quizData.pct >= 0.70 && quizData.pct < 0.85 && <span className="text-[10px] text-indigo-600 font-bold">📈 進度平穩</span>}
+                                                                {quizData.pct >= 0.50 && quizData.pct < 0.70 && <span className="text-[10px] text-amber-600 font-bold">⚖️ 合格邊緣</span>}
+                                                                {quizData.pct < 0.50 && <span className="text-[10px] text-red-500 font-bold">🚨 需加強急救</span>}
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        {/* 小測弱點顯示 */}
+                                                        {quizData.weaknesses.length > 0 && (
                                                             <div className="mb-3">
-                                                                <span className="text-[10px] font-bold text-red-500 mb-1 block">⚠️ 需加強 (&lt; 50%)：</span>
+                                                                <span className="text-[10px] font-bold text-red-500 mb-1 block">⚠️ 需加強 (&le; 50%)：</span>
                                                                 <ul className="text-[10px] text-slate-600 list-disc pl-4 space-y-0.5">
-                                                                    {weaknesses.slice(0, 3).map((w, i) => <li key={i} className="truncate" title={w}>{w}</li>)}
-                                                                    {weaknesses.length > 3 && <li>...及其他 {weaknesses.length - 3} 項</li>}
+                                                                    {quizData.weaknesses.slice(0, 3).map((w, i) => <li key={i} className="truncate" title={w}>{w}</li>)}
+                                                                    {quizData.weaknesses.length > 3 && <li>...及其他 {quizData.weaknesses.length - 3} 項</li>}
                                                                 </ul>
                                                             </div>
                                                         )}
                                                     </div>
                                                     <button 
-                                                        onClick={() => handleAskGemini(quizMap?.title || quizId, '課堂小測', weaknesses)}
+                                                        onClick={() => handleAskGemini(quizMap?.title || quizId, '課堂小測', quizData.weaknesses)}
                                                         className="mt-2 flex items-center justify-center gap-1 w-full py-1.5 bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-300 rounded-lg text-xs font-bold transition-all shadow-sm"
                                                     >
                                                         ✨ AI 互動式小測驗
@@ -7579,29 +7639,46 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                             Object.keys(examScores[studentId]).map(examId => {
                                                 const examMap = typeof EXAM_MAPS !== 'undefined' ? EXAM_MAPS[examId] : {};
                                                 const examRecord = examScores[studentId][examId];
-                                                const weaknesses = getAssessmentWeaknesses(examRecord, examMap);
+                                                
+                                                // ★ 使用新版函式，同時獲取分數與弱點數據
+                                                const examData = getAssessmentData(examRecord, examMap);
 
                                                 return (
-                                                <div key={examId} className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col justify-between hover:border-indigo-200 transition-colors">
+                                                <div key={examId} className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col justify-between hover:border-indigo-200 transition-colors shadow-sm">
                                                     <div>
                                                         <div className="flex justify-between items-start mb-2">
-                                                            <h4 className="font-bold text-slate-700">{examMap?.title || examId}</h4>
-                                                            <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-1 rounded font-bold">已紀錄</span>
+                                                            <h4 className="font-bold text-slate-700 truncate max-w-[150px]">{examMap?.title || examId}</h4>
+                                                            <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-bold">已紀錄</span>
                                                         </div>
 
-                                                        {/* ★ 考試弱點顯示 */}
-                                                        {weaknesses.length > 0 && (
+                                                        {/* 分數與走勢定位列 */}
+                                                        <div className="flex justify-between items-center bg-white border border-slate-100 p-2 rounded-lg mb-3">
+                                                            <div>
+                                                                <span className="text-[10px] text-slate-400 block font-medium">考試分數</span>
+                                                                <span className="text-sm font-black text-slate-700">{examData.scoreStr}</span>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <span className="text-[10px] text-slate-400 block font-medium">表現定位</span>
+                                                                {examData.pct >= 0.85 && <span className="text-[10px] text-emerald-600 font-bold">🌟 表現卓越</span>}
+                                                                {examData.pct >= 0.70 && examData.pct < 0.85 && <span className="text-[10px] text-indigo-600 font-bold">📈 進度平穩</span>}
+                                                                {examData.pct >= 0.50 && examData.pct < 0.70 && <span className="text-[10px] text-amber-600 font-bold">⚖️ 合格邊緣</span>}
+                                                                {examData.pct < 0.50 && <span className="text-[10px] text-red-500 font-bold">🚨 需加強急救</span>}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* 考試弱點顯示 */}
+                                                        {examData.weaknesses.length > 0 && (
                                                             <div className="mb-3">
-                                                                <span className="text-[10px] font-bold text-red-500 mb-1 block">⚠️ 需加強 (&lt; 50%)：</span>
+                                                                <span className="text-[10px] font-bold text-red-500 mb-1 block">⚠️ 需加強 (&le; 50%)：</span>
                                                                 <ul className="text-[10px] text-slate-600 list-disc pl-4 space-y-0.5">
-                                                                    {weaknesses.slice(0, 3).map((w, i) => <li key={i} className="truncate" title={w}>{w}</li>)}
-                                                                    {weaknesses.length > 3 && <li>...及其他 {weaknesses.length - 3} 項</li>}
+                                                                    {examData.weaknesses.slice(0, 3).map((w, i) => <li key={i} className="truncate" title={w}>{w}</li>)}
+                                                                    {examData.weaknesses.length > 3 && <li>...及其他 {examData.weaknesses.length - 3} 項</li>}
                                                                 </ul>
                                                             </div>
                                                         )}
                                                     </div>
                                                     <button 
-                                                        onClick={() => handleAskGemini(examMap?.title || examId, '校內考試', weaknesses)}
+                                                        onClick={() => handleAskGemini(examMap?.title || examId, '校內考試', examData.weaknesses)}
                                                         className="mt-2 flex items-center justify-center gap-1 w-full py-1.5 bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-300 rounded-lg text-xs font-bold transition-all shadow-sm"
                                                     >
                                                         ✨ AI 互動式小測驗
