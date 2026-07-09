@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.41c Physics Quiz Analyzer</title>
+    <title> V3.41e Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -6790,14 +6790,14 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
     const [ppInputValues, setPpInputValues] = React.useState({});
     const [selectedPPPapers, setSelectedPPPapers] = React.useState([]); // AI 勾選分析用
 
-    // 動態解析可用年份 (例如 2014, 2015)
+    // 動態解析可用年份
     const availableYears = React.useMemo(() => {
         if (!pastpaperMaps) return [];
         const years = Object.keys(pastpaperMaps).map(key => key.split('-')[0]);
         return [...new Set(years)].sort((a, b) => b - a);
     }, [pastpaperMaps]);
 
-    // 當選擇年份後，動態篩選卷目 (例如 P1A, P1B)
+    // 當選擇年份後，動態篩選卷目
     const availablePapers = React.useMemo(() => {
         if (!pastpaperMaps || !ppSelectedYear) return [];
         return Object.keys(pastpaperMaps)
@@ -6827,7 +6827,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
         return { grade: 'U', color: 'text-red-500', bg: 'bg-red-50' };
     };
 
-    // ---------------- 5. 計算學生個人歷屆試題統計 ----------------
+    // 計算學生個人歷屆試題統計
     const ppStats = React.useMemo(() => {
         const studentPastpaper = pastpaperScores?.[studentId] || {};
         const stats = {};
@@ -6873,65 +6873,101 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
         return { byYear: stats, totalCompleted };
     }, [studentId, pastpaperScores, pastpaperMaps]);
 
+    // ---------------- 5. ★ 功課狀態精細化計算 (包含 <= 50% 弱點追蹤) ----------------
+    const hwStats = React.useMemo(() => {
+        const availableHws = Object.keys(homeworkMaps || {}).filter(id => 
+            !homeworkMaps[id].cohort || homeworkMaps[id].cohort === studentCohort
+        );
 
-    
+        let completed = 0; let needsCorrection = 0; let missing = 0;
+        
+        const details = availableHws.map(hwId => {
+            const hwInfo = homeworkMaps[hwId];
+            const studentHw = homeworkScores?.[studentId]?.[hwId];
+            
+            if (!studentHw || !studentHw.scores || Object.keys(studentHw.scores).length === 0) {
+                missing++;
+                return { id: hwId, title: hwInfo.title, status: 'missing', weaknesses: [] };
+            }
 
-// ==================== 升級版：通用評估數據萃取函式 (小測與考試用) ====================
-  const getAssessmentData = (record, mapInfo) => {
-    if (!record || !mapInfo || !mapInfo.questions) {
-      return { scoreStr: '-', earned: 0, max: 0, pct: 0, weaknesses: [] };
-    }
-    
-    let totalEarned = 0;
-    let totalMax = 0;
-    const weaknesses = [];
-    
-    mapInfo.questions.forEach(q => {
-      const qScore = Number(record[q.id]) || 0;
-      const qMax = Number(q.max) || 1;
-      totalEarned += qScore;
-      totalMax += qMax;
-      
-      // 得分率 <= 50% 納入弱點
-      if (qScore / qMax <= 0.5) {
-        const weaknessText = q.topicDesc || q.topicId || q.desc || q.topic || q.id;
-        if (!weaknesses.includes(weaknessText)) {
-          weaknesses.push(weaknessText);
+            let isPerfect = true;
+            let totalEarned = 0;
+            let totalMax = 0;
+            let weaknesses = []; 
+            
+            hwInfo.questions.forEach(q => {
+                const qScore = Number(studentHw.scores[q.id]) || 0;
+                const qMax = Number(q.max) || 1;
+                totalEarned += qScore;
+                totalMax += qMax;
+                
+                if (qScore < qMax) isPerfect = false;
+                
+                if (qScore / qMax <= 0.5) {
+                    const weaknessText = q.topicDesc || q.topicId || q.desc || q.topic || q.id;
+                    if (!weaknesses.includes(weaknessText)) weaknesses.push(weaknessText);
+                }
+            });
+
+            if (studentHw.remakeStatus === 'PERFECT') isPerfect = true;
+
+            if (isPerfect) {
+                completed++;
+                return { id: hwId, title: hwInfo.title, status: 'completed', score: `${totalEarned}/${totalMax}`, weaknesses: [] };
+            } else {
+                needsCorrection++;
+                return { id: hwId, title: hwInfo.title, status: 'needsCorrection', score: `${totalEarned}/${totalMax}`, weaknesses };
+            }
+        });
+
+        return { total: availableHws.length, completed, needsCorrection, missing, details };
+    }, [studentId, studentCohort, homeworkMaps, homeworkScores]);
+
+    // ---------------- 6. ★ 通用評估數據萃取函式 (小測與考試用) ----------------
+    const getAssessmentData = (record, mapInfo) => {
+        if (!record || !mapInfo || !mapInfo.questions) {
+            return { scoreStr: '-', earned: 0, max: 0, pct: 0, weaknesses: [] };
         }
-      }
-    });
-    
-    const pct = totalMax > 0 ? (totalEarned / totalMax) : 0;
-    
-    return {
-      scoreStr: `${totalEarned}/${totalMax}`,
-      earned: totalEarned,
-      max: totalMax,
-      pct: pct,
-      weaknesses: weaknesses
+        
+        let totalEarned = 0;
+        let totalMax = 0;
+        const weaknesses = [];
+        
+        mapInfo.questions.forEach(q => {
+            const qScore = Number(record[q.id]) || 0;
+            const qMax = Number(q.max) || 1;
+            totalEarned += qScore;
+            totalMax += qMax;
+            
+            if (qScore / qMax <= 0.5) {
+                const weaknessText = q.topicDesc || q.topicId || q.desc || q.topic || q.id;
+                if (!weaknesses.includes(weaknessText)) weaknesses.push(weaknessText);
+            }
+        });
+        
+        const pct = totalMax > 0 ? (totalEarned / totalMax) : 0;
+        
+        return { scoreStr: `${totalEarned}/${totalMax}`, earned: totalEarned, max: totalMax, pct: pct, weaknesses: weaknesses };
     };
-  };
 
-  // ==================== 升級版：AI 互動小測驗 Prompt 產生器 ====================
-  const handleAskGemini = (title, category, weaknesses = []) => {
-    // 將弱點清單格式化為文字
-    const weaknessText = weaknesses.length > 0
-      ? `特別是以下幾個我得分不到一半的弱點概念：\n${weaknesses.map(w => `- ${w}`).join('\n')}\n\n`
-      : `有部分概念不太清晰。\n\n`;
+    // ---------------- 7. ★ AI 互動小測驗 Prompt 產生器 ----------------
+    const handleAskGemini = (title, category, weaknesses = []) => {
+        const weaknessText = weaknesses.length > 0
+            ? `特別是以下幾個我得分不到一半的弱點概念：\n${weaknesses.map(w => `- ${w}`).join('\n')}\n\n`
+            : `有部分概念不太清晰。\n\n`;
 
-    // 升級版 Prompt：強制要求「先給題目，不給答案」
-    const prompt = `我是一名修讀高中物理科的學生，我在最近的「${category}：${title}」中表現不太理想。\n\n${weaknessText}請用繁體中文、深入淺出地為我重新講解這些核心概念。講解完畢後，請以「互動小測驗」的形式，給我 1 到 2 條簡單的 MC（選擇題），讓我測試一下自己是否真的明白了。\n\n⚠️ 注意：請先只給我題目，絕對不要直接提供答案！等我回答後，你再給出正確答案與詳細解釋。`;
-    
-    navigator.clipboard.writeText(prompt).then(() => {
-      alert('✅ 已複製專屬 AI 提問詞！\n\n即將為您開啟 Gemini。\n請直接貼上 (Ctrl+V) 發問，AI 將會為您針對弱點進行互動測驗！');
-      window.open('https://gemini.google.com/', '_blank');
-    }).catch(err => {
-      console.error('複製失敗', err);
-      window.open('https://gemini.google.com/', '_blank');
-    });
-  };
-    
-    // 輔助函式：取得 Pastpaper 分數
+        const prompt = `我是一名修讀高中物理科的學生，我在最近的「${category}：${title}」中表現不太理想。\n\n${weaknessText}請用繁體中文、深入淺出地為我重新講解這些核心概念。講解完畢後，請以「互動小測驗」的形式，給我 1 到 2 條簡單的 MC（選擇題），讓我測試一下自己是否真的明白了。\n\n⚠️ 注意：請先只給我題目，絕對不要直接提供答案！等我回答後，你再給出正確答案與詳細解釋。`;
+        
+        navigator.clipboard.writeText(prompt).then(() => {
+            alert('✅ 已複製專屬 AI 提問詞！\n\n即將為您開啟 Gemini。\n請直接貼上 (Ctrl+V) 發問，AI 將會為您針對弱點進行互動測驗！');
+            window.open('https://gemini.google.com/', '_blank');
+        }).catch(err => {
+            console.error('複製失敗', err);
+            window.open('https://gemini.google.com/', '_blank');
+        });
+    };
+
+    // ---------------- 8. 輔助函式：取得 Pastpaper 分數 ----------------
     const getPastpaperQScore = React.useCallback((sId, paperId, q) => {
         const record = pastpaperScores[sId]?.[paperId];
         if (!record) return 0;
@@ -6953,7 +6989,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
         const ds = { '1': { name: '熱學', e: 0, m: 0 }, '2': { name: '力學', e: 0, m: 0 }, '3': { name: '波動', e: 0, m: 0 }, '4': { name: '電磁學', e: 0, m: 0 }, '5': { name: '放射學', e: 0, m: 0 }, 'E3': { name: '能量', e: 0, m: 0 }, 'E4': { name: '醫學', e: 0, m: 0 } };
         const sScores = pastpaperScores[studentId] || {};
         Object.keys(sScores).forEach(paperId => {
-            const map = window.PASTPAPER_MAPS[paperId];
+            const map = window.PASTPAPER_MAPS ? window.PASTPAPER_MAPS[paperId] : pastpaperMaps[paperId];
             if (!map || !map.questions) return;
             map.questions.forEach(q => {
                 const val = sScores[paperId][q.id];
@@ -6967,7 +7003,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
             });
         });
         return ds;
-    }, [studentId, pastpaperScores, getPastpaperQScore]);
+    }, [studentId, pastpaperScores, pastpaperMaps, getPastpaperQScore]);
 
     // 繪製雷達圖
     React.useEffect(() => {
@@ -7006,61 +7042,6 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
         return () => { if (chartInstance.current) chartInstance.current.destroy(); };
     }, [personalDomainStats, activeTab]);
 
-    // 1.5 新增：日常功課數據統計
-    const homeworkStats = React.useMemo(() => {
-        const sHW = homeworkScores[studentId] || {};
-        const allHWIds = Object.keys(homeworkMaps || {});
-        //const allHWIds = Object.keys(window.HOMEWORK_MAPS || {});
-        
-        let totalAssigned = allHWIds.length;
-        let submittedCount = 0;
-        let totalScore = 0;
-        let totalMax = 0;
-        const details = [];
-
-        allHWIds.forEach(hwId => {
-            const map = window.HOMEWORK_MAPS[hwId];
-            if (!map) return;
-            
-            const record = sHW[hwId];
-            const isSubmitted = record !== undefined && record !== '';
-            if (isSubmitted) submittedCount++;
-
-            // 假設功課可以是單一分數或題組，這裡做泛用相加
-            let hwEarned = 0;
-            let hwMax = map.max || 0;
-            
-            if (isSubmitted) {
-                if (typeof record === 'object') {
-                    // 如果功課結構跟小測一樣是題組
-                    Object.keys(record).forEach(qId => {
-                        hwEarned += parseFloat(record[qId]) || 0;
-                    });
-                } else {
-                    // 如果功課只是單一總分
-                    hwEarned = parseFloat(record) || 0;
-                }
-            }
-
-            totalScore += hwEarned;
-            totalMax += hwMax;
-
-            details.push({
-                id: hwId,
-                title: map.title || `功課 ${hwId}`,
-                isSubmitted,
-                score: hwEarned,
-                max: hwMax,
-                topicName: map.topicDesc || '綜合'
-            });
-        });
-
-        const missingCount = totalAssigned - submittedCount;
-        const avgAccuracy = totalMax > 0 ? (totalScore / totalMax) : 0;
-
-        return { totalAssigned, submittedCount, missingCount, avgAccuracy, details };
-    }, [studentId, homeworkScores]);
-
     // ================== AI 補底運算區 ==================
     
     // A. 抓取校內成績 (Quiz + Exam) 的弱點 (<60%)
@@ -7070,7 +7051,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
         // 掃描小測
         const sQuiz = scores[studentId] || {};
         Object.keys(sQuiz).forEach(quizId => {
-            const map = window.QUIZ_MAPS[quizId];
+            const map = window.QUIZ_MAPS ? window.QUIZ_MAPS[quizId] : null;
             if (!map) return;
             map.questions.forEach(q => {
                 const val = sQuiz[quizId][q.id];
@@ -7086,7 +7067,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
         // 掃描大考
         const sExam = examScores[studentId] || {};
         Object.keys(sExam).forEach(examId => {
-            const map = window.EXAM_MAPS[examId];
+            const map = window.EXAM_MAPS ? window.EXAM_MAPS[examId] : null;
             if (!map) return;
             map.questions.forEach(q => {
                 const val = sExam[examId][q.id];
@@ -7101,7 +7082,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
 
         return Object.values(topicStats)
             .map(t => ({ ...t, pct: t.e / t.m, descList: Array.from(t.errorDesc) }))
-            .filter(t => t.m >= 5 && t.pct <= 0.6) // 最少做過 5 分且小於 60% 才當作弱點
+            .filter(t => t.m >= 5 && t.pct <= 0.6)
             .sort((a, b) => a.pct - b.pct);
     }, [scores, examScores, studentId]);
 
@@ -7113,7 +7094,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
 
         selectedPPPapers.forEach(paperId => {
             const record = sScores[paperId] || {};
-            const map = window.PASTPAPER_MAPS[paperId];
+            const map = window.PASTPAPER_MAPS ? window.PASTPAPER_MAPS[paperId] : pastpaperMaps[paperId];
             if (!map) return;
             map.questions.forEach(q => {
                 const val = record[q.id];
@@ -7131,8 +7112,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
             .map(t => ({ ...t, pct: t.e / t.m, descList: Array.from(t.errorDesc) }))
             .filter(t => t.m > 0 && t.pct <= 0.6)
             .sort((a, b) => a.pct - b.pct);
-    }, [selectedPPPapers, pastpaperScores, studentId, getPastpaperQScore]);
-
+    }, [selectedPPPapers, pastpaperScores, studentId, pastpaperMaps, getPastpaperQScore]);
 
     // ================== 英雄榜運算區 ==================
     const TITLE_POOL = { '1': ["熱力學宗師", "絕對零度行者"], '2': ["力學戰神", "牛頓傳人"], '3': ["波動幻影", "光學大師"], '4': ["電磁霸主", "雷電行者"], '5': ["輻射剋星", "量子漫步者"], 'E3': ["能量守恆者", "綠能先鋒"], 'E4': ["醫學神醫", "透視眼行者"] };
@@ -7155,7 +7135,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
             Object.keys(sScores).forEach(paperId => {
                 const record = sScores[paperId];
                 if (leaderboardMonth !== 'all' && record['_submitMonth'] !== leaderboardMonth) return;
-                const map = window.PASTPAPER_MAPS[paperId];
+                const map = window.PASTPAPER_MAPS ? window.PASTPAPER_MAPS[paperId] : pastpaperMaps[paperId];
                 if (!map) return;
                 
                 map.questions.forEach(q => {
@@ -7191,7 +7171,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
             return { student: s, totalQuestions, accuracy, title, bestDomain };
         });
         return lb.sort((a, b) => b.totalQuestions - a.totalQuestions || b.accuracy - a.accuracy);
-    }, [peerStudents, pastpaperScores, getPastpaperQScore, leaderboardMonth]);
+    }, [peerStudents, pastpaperScores, pastpaperMaps, getPastpaperQScore, leaderboardMonth]);
 
     const myRankData = leaderboardData.find(d => d.student.id === studentId) || { totalQuestions: 0, title: '尚未起步', accuracy: 0 };
     const myRankIndex = leaderboardData.findIndex(d => d.student.id === studentId);
@@ -7214,7 +7194,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
         window.open(platformUrl, '_blank');
     };
 
-    if (!currentStudent) return <div className="p-10 text-center font-bold text-red-500">找不到學生資料！</div>;
+    if (!currentStudent || !currentStudent.id) return <div className="p-10 text-center font-bold text-red-500">找不到學生資料！</div>;
 
     return (
         <div className="min-h-screen bg-slate-50 text-slate-800">
