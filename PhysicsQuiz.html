@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.41b Physics Quiz Analyzer</title>
+    <title> V3.41c Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -6759,17 +6759,19 @@ const PastpaperSummaryView = ({ currentCohort, activeStudents, pastpaperScores }
 
 // ==================== 學生專屬遊戲化儀表板 (StudentPortalView) ====================
 const StudentPortalView = ({ studentId, students, scores, examScores, homeworkScores, pastpaperScores, homeworkMaps, pastpaperMaps, setPastpaperScores }) => {
-    // 1. 分頁控制狀態
+    
+    // ---------------- 1. 基礎分頁與 UI 狀態 ----------------
     const [activeTab, setActiveTab] = React.useState('overview');
     const [aiSubTab, setAiSubTab] = React.useState('school'); // 'school' 或 'pastpaper'
+    const [leaderboardMonth, setLeaderboardMonth] = React.useState('all'); 
 
-    // 圖表轉導 Refs
+    // ---------------- 2. 圖表轉導所需的 React Refs ----------------
     const chartRef = React.useRef(null);
     const radarRef = React.useRef(null);
     const chartInstance = React.useRef(null);
     const radarInstance = React.useRef(null);
 
-    // 核心學生資訊與同儕名單
+    // ---------------- 3. 核心學生資訊與同儕名單 ----------------
     const currentStudent = React.useMemo(() => {
         return (students || []).find(s => s.id === studentId) || {};
     }, [students, studentId]);
@@ -6781,25 +6783,21 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
         return (students || []).filter(s => s.cohort === studentCohort);
     }, [students, studentCohort]);
 
-    // 學生專屬：歷屆試題 (Pastpaper) 狀態
+    // ---------------- 4. 學生專屬：歷屆試題 (Pastpaper) 狀態 ----------------
     const [ppMode, setPpMode] = React.useState('view'); // 'view' | 'input'
     const [ppSelectedYear, setPpSelectedYear] = React.useState('');
     const [ppSelectedPaper, setPpSelectedPaper] = React.useState('');
     const [ppInputValues, setPpInputValues] = React.useState({});
-    // ==================== ★ 補上缺失的 leaderboardMonth 狀態 ====================
-    const [leaderboardMonth, setLeaderboardMonth] = React.useState('all');
+    const [selectedPPPapers, setSelectedPPPapers] = React.useState([]); // AI 勾選分析用
 
-    // ★ 完美修復：補上 AI 或篩選功能所需的 selectedPPPapers 狀態
-    const [selectedPPPapers, setSelectedPPPapers] = React.useState([]);
-
-    // 動態解析可用年份
+    // 動態解析可用年份 (例如 2014, 2015)
     const availableYears = React.useMemo(() => {
         if (!pastpaperMaps) return [];
         const years = Object.keys(pastpaperMaps).map(key => key.split('-')[0]);
         return [...new Set(years)].sort((a, b) => b - a);
     }, [pastpaperMaps]);
 
-    // 當選擇年份後，動態篩選卷目
+    // 當選擇年份後，動態篩選卷目 (例如 P1A, P1B)
     const availablePapers = React.useMemo(() => {
         if (!pastpaperMaps || !ppSelectedYear) return [];
         return Object.keys(pastpaperMaps)
@@ -6829,7 +6827,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
         return { grade: 'U', color: 'text-red-500', bg: 'bg-red-50' };
     };
 
-    // 計算學生個人試卷統計
+    // ---------------- 5. 計算學生個人歷屆試題統計 ----------------
     const ppStats = React.useMemo(() => {
         const studentPastpaper = pastpaperScores?.[studentId] || {};
         const stats = {};
@@ -6874,6 +6872,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
         
         return { byYear: stats, totalCompleted };
     }, [studentId, pastpaperScores, pastpaperMaps]);
+
 
     
 
