@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.32A Physics Quiz Analyzer</title>
+    <title> V3.33 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -6775,7 +6775,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
     const chartRef = React.useRef(null);
     const chartInstance = React.useRef(null);
 
-// 2. 升級版：精細化計算功課狀態 (加入 < 50% 弱點追蹤)
+// 2. 升級版：精細化計算功課狀態 (加入 <= 50% 弱點追蹤與自動去重)
   const hwStats = React.useMemo(() => {
     const availableHws = Object.keys(homeworkMaps || {}).filter(id => 
       !homeworkMaps[id].cohort || homeworkMaps[id].cohort === studentCohort
@@ -6795,7 +6795,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
       let isPerfect = true;
       let totalEarned = 0;
       let totalMax = 0;
-      let weaknesses = []; // ★ 新增弱點陣列
+      let weaknesses = []; 
       
       hwInfo.questions.forEach(q => {
         const qScore = Number(studentHw.scores[q.id]) || 0;
@@ -6805,9 +6805,14 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
         
         if (qScore < qMax) isPerfect = false;
         
-        // ★ 如果得分率低於 50%，加入弱點清單 (優先用 desc，沒有就用 topic)
-        if (qScore / qMax < 0.5) {
-          weaknesses.push(q.desc || q.topic || q.id);
+        // ★ 修正 1：條件改為 <= 0.5，包含只拿一半分數的題目
+        if (qScore / qMax <= 0.5) {
+          // ★ 修正 2：優先讀取 topicDesc，沒有才依序降級找 topicId 或 id
+          const weaknessText = q.topicDesc || q.topicId || q.desc || q.topic || q.id;
+          // ★ 修正 3：防止相同的概念描述重複出現
+          if (!weaknesses.includes(weaknessText)) {
+              weaknesses.push(weaknessText);
+          }
         }
       });
 
@@ -6832,8 +6837,13 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
     mapInfo.questions.forEach(q => {
          const qScore = Number(record[q.id]) || 0;
          const qMax = Number(q.max) || 1;
-         if (qScore / qMax < 0.5) {
-             weaknesses.push(q.desc || q.topic || q.id);
+         
+         // ★ 修正：條件改為 <= 0.5，並對應你的資料庫欄位名稱 topicDesc
+         if (qScore / qMax <= 0.5) {
+             const weaknessText = q.topicDesc || q.topicId || q.desc || q.topic || q.id;
+             if (!weaknesses.includes(weaknessText)) {
+                 weaknesses.push(weaknessText);
+             }
          }
     });
     return weaknesses;
