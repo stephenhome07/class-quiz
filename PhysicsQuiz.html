@@ -7953,8 +7953,10 @@ const App = () => {
             const [homeworkScores, setHomeworkScores] = React.useState({});
             const [homeworkMaps, setHomeworkMaps] = React.useState({});
             
-            // ★ 新增：Pastpaper 成績狀態
+            // 👇 ★ 補上這兩行，讓 App 認識這兩個變數 👇
+            const [pastpaperMaps, setPastpaperMaps] = React.useState({});
             const [pastpaperScores, setPastpaperScores] = React.useState({});
+    
 
             const [isLoading, setIsLoading] = React.useState(true);
             const [isSaving, setIsSaving] = React.useState(false);
@@ -8002,7 +8004,11 @@ const App = () => {
                         setHomeworkScores((typeof data.homeworkScores === 'object' && data.homeworkScores !== null) ? data.homeworkScores : {});
                         
                         // ★ 載入 Pastpaper 儲存成績
+                        // 👇 ★ 補上這兩行，把雲端抓下來的資料存進剛剛宣告的變數裡 👇
+                        setPastpaperMaps(data.pastpaperMaps || {});
+                
                         setPastpaperScores((typeof data.pastpaperScores === 'object' && data.pastpaperScores !== null) ? data.pastpaperScores : {});
+                        
                         
                         setIsLoading(false);
                     })
