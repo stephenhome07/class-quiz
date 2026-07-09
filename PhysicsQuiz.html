@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.30a Physics Quiz Analyzer</title>
+    <title> V3.30b Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -276,8 +276,8 @@ const ScoreInputView = ({ activeStudents, scores, setScores, syncToCloud }) => {
                 <div className="flex justify-between items-center border-b pb-4 mb-4">
                     <h2 className="text-xl font-bold">成績輸入</h2>
 
-                    <button
-                        onClick={syncToCloud}
+                   <button
+                        onClick={() => syncToCloud()} 
                         className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all text-sm font-medium shadow-sm"
                     >
                         <Icon name="CloudUpload" size={16} />
