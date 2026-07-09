@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.30b Physics Quiz Analyzer</title>
+    <title> V3.31 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -6830,6 +6830,20 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
     return { total: availableHws.length, completed, needsCorrection, missing, details };
   }, [studentId, studentCohort, homeworkMaps, homeworkScores]);
 
+    // ==================== 新增：AI 助教 Prompt 產生器 ====================
+  const handleAskGemini = (title, category) => {
+    const prompt = `我是一名修讀物理科的學生，我在最近的「${category}：${title}」中表現不太理想，有部分概念不太清晰。\n\n請用繁體中文、深入淺出地為我重新講解這部分的核心概念，並給我 1 到 2 條簡單的選擇題，讓我測試一下自己是否真的明白了。`;
+    
+    // 複製到剪貼簿並跳轉
+    navigator.clipboard.writeText(prompt).then(() => {
+      alert('✅ 已複製專屬 AI 提問詞！\n\n即將為您開啟 Gemini，請直接在對話框貼上 (Ctrl+V / Cmd+V) 開始發問。');
+      window.open('https://gemini.google.com/', '_blank');
+    }).catch(err => {
+      console.error('複製失敗', err);
+      // 就算複製失敗，依然幫學生打開網頁
+      window.open('https://gemini.google.com/', '_blank');
+    });
+  };
     
     // 輔助函式：取得 Pastpaper 分數
     const getPastpaperQScore = React.useCallback((sId, paperId, q) => {
@@ -7248,14 +7262,32 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                 )}
                             </div>
 
-                            {/* 課堂小測卡 */}
-                            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-                                <span className="text-xs font-bold text-slate-500">課堂小測</span>
-                                <div className="mt-2">
+                            {/* ★ 升級版：課堂小測卡 (加入點擊跳轉與詳細弱點) */}
+                            <div 
+                                onClick={() => setActiveTab('school')}
+                                className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between cursor-pointer hover:border-indigo-400 hover:shadow-md transition-all group"
+                            >
+                                <div className="flex justify-between items-center mb-1">
+                                    <span className="text-xs font-bold text-slate-500 group-hover:text-indigo-500 transition-colors">課堂小測</span>
+                                    <span className="text-[10px] text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity">點擊看詳情 ➔</span>
+                                </div>
+                                <div className="mt-1">
                                     <div className="text-xl font-black text-indigo-600">
                                         {schoolWeaknesses.length > 0 ? '需加強' : '進度良好'}
                                     </div>
-                                    <div className="text-[10px] text-slate-400 font-medium mt-0.5">已偵測 {schoolWeaknesses.length} 個弱點課題</div>
+                                    <div className="text-[10px] text-slate-400 font-medium mb-2">已偵測 {schoolWeaknesses.length} 個弱點課題</div>
+                                    
+                                    {/* 顯示最多兩個弱點標籤 */}
+                                    {schoolWeaknesses.length > 0 && (
+                                        <div className="space-y-1">
+                                            {schoolWeaknesses.slice(0, 2).map((weakness, idx) => (
+                                                <div key={idx} className="text-[10px] bg-red-50 text-red-600 px-1.5 py-1 rounded truncate border border-red-100">
+                                                    ⚠️ {weakness}
+                                                </div>
+                                            ))}
+                                            {schoolWeaknesses.length > 2 && <div className="text-[10px] text-slate-400 pl-1">...及其他 {schoolWeaknesses.length - 2} 個</div>}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
@@ -7416,56 +7448,107 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                 {/* ==================== 分頁：校內進度 (School Progress) ==================== */}
                 {activeTab === 'school' && (
                     <div className="animate-fadeIn space-y-6">
-                        {/* 功課繳交明細小卡 */}
-                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-                            <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-4">
-                                <Icon name="ClipboardCheck" className="text-emerald-500" /> 日常功課繳交與得分紀錄
-                            </h3>
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse text-sm">
-                                    <thead>
-                                        <tr className="border-b border-slate-200 text-slate-400 text-xs font-bold">
-                                            <th className="py-2">功課編號/名稱</th>
-                                            <th className="py-2">對應課題</th>
-                                            <th className="py-2">繳交狀態</th>
-                                            <th className="py-2 text-right">得分/滿分</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100 font-medium">
-                                        {homeworkStats.details.map(hw => (
-                                            <tr key={hw.id} className="hover:bg-slate-50/80">
-                                                <td className="py-3 font-bold text-slate-700">{hw.title}</td>
-                                                <td className="py-3 text-slate-500 text-xs">{hw.topicName}</td>
-                                                <td className="py-3">
-                                                    <span className={`px-2 py-0.5 rounded text-xs font-bold ${hw.isSubmitted ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
-                                                        {hw.isSubmitted ? '已繳交' : '❌ 欠交'}
-                                                    </span>
-                                                </td>
-                                                <td className="py-3 text-right font-mono font-bold text-slate-600">
-                                                    {hw.isSubmitted ? `${hw.score} / ${hw.max}` : '--'}
-                                                </td>
-                                            </tr>
+                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                            <h2 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2">
+                                <Icon name="Target" className="text-indigo-500" /> 校內進度與弱點分析
+                            </h2>
+                            
+                            <div className="space-y-8">
+                                
+                                {/* 1. 日常功課區塊 */}
+                                <section>
+                                    <h3 className="font-bold text-lg text-slate-700 border-b pb-2 mb-4 flex items-center gap-2">
+                                        <Icon name="BookOpen" size={18} className="text-blue-500" /> 功課表現
+                                    </h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                        {hwStats.details.length === 0 ? <p className="text-sm text-slate-400">尚無功課紀錄</p> : hwStats.details.map(hw => (
+                                            <div key={hw.id} className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col justify-between hover:border-indigo-200 transition-colors">
+                                                <div>
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <h4 className="font-bold text-slate-700">{hw.title || hw.id}</h4>
+                                                        {hw.status === 'completed' && <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded font-bold">已改正</span>}
+                                                        {hw.status === 'needsCorrection' && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-1 rounded font-bold">未改正</span>}
+                                                        {hw.status === 'missing' && <span className="text-[10px] bg-red-100 text-red-600 px-2 py-1 rounded font-bold">欠交</span>}
+                                                    </div>
+                                                    <p className="text-sm font-medium text-slate-600 mb-2">分數: {hw.score || '-'}</p>
+                                                </div>
+                                                
+                                                {/* AI 助教按鈕 (僅未滿分或欠交時顯示) */}
+                                                {(hw.status === 'needsCorrection' || hw.status === 'missing') && (
+                                                    <button 
+                                                        onClick={() => handleAskGemini(hw.title || hw.id, '日常功課')}
+                                                        className="mt-2 flex items-center justify-center gap-1 w-full py-1.5 bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-300 rounded-lg text-xs font-bold transition-all shadow-sm"
+                                                    >
+                                                        ✨ AI 助教幫我溫習
+                                                    </button>
+                                                )}
+                                            </div>
                                         ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
+                                    </div>
+                                </section>
 
-                        {/* 小測與考試摘要 */}
-                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-                            <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-4">
-                                <Icon name="Award" className="text-indigo-500" /> 測驗與大考追蹤
-                            </h3>
-                            <div className="text-slate-500 text-xs py-4 text-center border border-dashed rounded-xl">
-                                💡 系統已自動分析您在此區塊的所有錯題，並將高危弱點傳送至 <span className="text-purple-600 font-bold">「AI 補底」</span> 分頁。請前往該分頁生成特訓卷！
+                                {/* 2. 課堂小測區塊 */}
+                                <section>
+                                    <h3 className="font-bold text-lg text-slate-700 border-b pb-2 mb-4 flex items-center gap-2">
+                                        <Icon name="CheckSquare" size={18} className="text-amber-500" /> 課堂小測
+                                    </h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                        {(!scores || !scores[studentId] || Object.keys(scores[studentId]).length === 0) ? (
+                                            <p className="text-sm text-slate-400">尚無小測紀錄</p>
+                                        ) : (
+                                            Object.keys(scores[studentId]).map(quizId => (
+                                                <div key={quizId} className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col justify-between hover:border-indigo-200 transition-colors">
+                                                    <div>
+                                                        <div className="flex justify-between items-start mb-2">
+                                                            <h4 className="font-bold text-slate-700">{quizId}</h4>
+                                                            <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-1 rounded font-bold">已紀錄</span>
+                                                        </div>
+                                                    </div>
+                                                    <button 
+                                                        onClick={() => handleAskGemini(quizId, '課堂小測')}
+                                                        className="mt-2 flex items-center justify-center gap-1 w-full py-1.5 bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-300 rounded-lg text-xs font-bold transition-all shadow-sm"
+                                                    >
+                                                        ✨ AI 助教幫我溫習
+                                                    </button>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </section>
+
+                                {/* 3. 校內考試區塊 */}
+                                <section>
+                                    <h3 className="font-bold text-lg text-slate-700 border-b pb-2 mb-4 flex items-center gap-2">
+                                        <Icon name="Award" size={18} className="text-purple-500" /> 校內考試
+                                    </h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                        {(!examScores || !examScores[studentId] || Object.keys(examScores[studentId]).length === 0) ? (
+                                            <p className="text-sm text-slate-400">尚無考試紀錄</p>
+                                        ) : (
+                                            Object.keys(examScores[studentId]).map(examId => (
+                                                <div key={examId} className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col justify-between hover:border-indigo-200 transition-colors">
+                                                    <div>
+                                                        <div className="flex justify-between items-start mb-2">
+                                                            <h4 className="font-bold text-slate-700">{examId}</h4>
+                                                            <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-1 rounded font-bold">已紀錄</span>
+                                                        </div>
+                                                    </div>
+                                                    <button 
+                                                        onClick={() => handleAskGemini(examId, '校內考試')}
+                                                        className="mt-2 flex items-center justify-center gap-1 w-full py-1.5 bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-300 rounded-lg text-xs font-bold transition-all shadow-sm"
+                                                    >
+                                                        ✨ AI 助教幫我重點解說
+                                                    </button>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </section>
+                                
                             </div>
                         </div>
                     </div>
                 )}
-            </div>
-        </div>
-    );
-};
         
 const App = () => {
             // ★ 1. 偵測網址是否有帶入學生 ID (例如: ?sid=S5A-26)
