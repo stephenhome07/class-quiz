@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.29 Physics Quiz Analyzer</title>
+    <title> V3.29a Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -7142,7 +7142,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
 
             <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-6">
                 
-                {/* ==================== 分頁：總覽 (Overview) ==================== */}
+               {/* ==================== 分頁：總覽 (Overview) ==================== */}
                 {activeTab === 'overview' && (
                     <>
                     <div className="animate-fadeIn space-y-6">
@@ -7168,7 +7168,6 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                             </div>
                         </div>
                         
-
                         {/* 雷達圖 */}
                         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
                             <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-4">
@@ -7182,68 +7181,64 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                 )}
                             </div>
                         </div>
-                    </div>
-
-                    {/* 新增：四大戰區狀態卡 */}
+                        
+                        {/* 新增：四大戰區狀態卡 */}
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    {/* ★ 升級版：日常功課卡片 */}
-                              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                            
+                            {/* ★ 升級版：日常功課卡片 */}
+                            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
                                 <div className="flex items-center gap-3 mb-4">
-                                  <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg">
-                                    <Icon name="BookOpen" size={20} />
-                                  </div>
-                                  <h3 className="font-bold text-slate-800">日常功課狀態</h3>
+                                    <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg">
+                                        <Icon name="BookOpen" size={20} />
+                                    </div>
+                                    <h3 className="font-bold text-slate-800">日常功課狀態</h3>
                                 </div>
                                 
                                 <div className="mb-4">
-                                  <div className="text-3xl font-black text-indigo-600">
-                                    {hwStats.completed} <span className="text-sm text-slate-400 font-medium">/ {hwStats.total} 份已改正</span>
-                                  </div>
+                                    <div className="text-3xl font-black text-indigo-600">
+                                        {hwStats.completed} <span className="text-sm text-slate-400 font-medium">/ {hwStats.total} 份已改正</span>
+                                    </div>
                                 </div>
                     
                                 {/* 詳細狀態標籤 */}
                                 <div className="flex flex-col gap-2">
-                                  {hwStats.needsCorrection > 0 && (
-                                    <div className="flex justify-between items-center bg-amber-50 text-amber-700 px-3 py-2 rounded-md text-sm font-bold border border-amber-200">
-                                      <span>⚠️ 待改正 (已交)</span>
-                                      <span>{hwStats.needsCorrection} 份</span>
-                                    </div>
-                                  )}
-                                  {hwStats.missing > 0 && (
-                                    <div className="flex justify-between items-center bg-red-50 text-red-600 px-3 py-2 rounded-md text-sm font-bold border border-red-100">
-                                      <span>❌ 欠交 (未有成績)</span>
-                                      <span>{hwStats.missing} 份</span>
-                                    </div>
-                                  )}
-                                  {hwStats.total === 0 && (
-                                    <div className="text-sm text-slate-400 font-medium">目前尚無功課安排</div>
-                                  )}
+                                    {hwStats.needsCorrection > 0 && (
+                                        <div className="flex justify-between items-center bg-amber-50 text-amber-700 px-3 py-2 rounded-md text-sm font-bold border border-amber-200">
+                                            <span>⚠️ 待改正 (已交)</span>
+                                            <span>{hwStats.needsCorrection} 份</span>
+                                        </div>
+                                    )}
+                                    {hwStats.missing > 0 && (
+                                        <div className="flex justify-between items-center bg-red-50 text-red-600 px-3 py-2 rounded-md text-sm font-bold border border-red-100">
+                                            <span>❌ 欠交 (未有成績)</span>
+                                            <span>{hwStats.missing} 份</span>
+                                        </div>
+                                    )}
+                                    {hwStats.total === 0 && (
+                                        <div className="text-sm text-slate-400 font-medium">目前尚無功課安排</div>
+                                    )}
                                 </div>
                                 
-                                {/* 功課明細列表 (可選，讓學生看清楚是哪份) */}
+                                {/* 功課明細列表 */}
                                 {hwStats.details.length > 0 && (
-                                   <div className="mt-4 space-y-2 border-t pt-3">
-                                     {hwStats.details.map(hw => (
-                                       <div key={hw.id} className="flex justify-between items-center text-xs">
-                                         <span className="truncate w-32 text-slate-600">{hw.title || hw.id}</span>
-                                         {hw.status === 'completed' && <span className="text-emerald-600 font-bold">已改正 ({hw.score})</span>}
-                                         {hw.status === 'needsCorrection' && <span className="text-amber-600 font-bold">未改正 ({hw.score})</span>}
-                                         {hw.status === 'missing' && <span className="text-red-500 font-bold">欠交</span>}
-                                       </div>
-                                     ))}
-                                   </div>
+                                    <div className="mt-4 space-y-2 border-t pt-3">
+                                        {hwStats.details.map(hw => (
+                                            <div key={hw.id} className="flex justify-between items-center text-xs">
+                                                <span className="truncate w-32 text-slate-600">{hw.title || hw.id}</span>
+                                                {hw.status === 'completed' && <span className="text-emerald-600 font-bold">已改正 ({hw.score})</span>}
+                                                {hw.status === 'needsCorrection' && <span className="text-amber-600 font-bold">未改正 ({hw.score})</span>}
+                                                {hw.status === 'missing' && <span className="text-red-500 font-bold">欠交</span>}
+                                            </div>
+                                        ))}
+                                    </div>
                                 )}
-                              </div>
-                    
                             </div>
-                          )}
 
                             {/* 課堂小測卡 */}
                             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
                                 <span className="text-xs font-bold text-slate-500">課堂小測</span>
                                 <div className="mt-2">
                                     <div className="text-xl font-black text-indigo-600">
-                                        {/* 這裡簡單抓校內弱點的平均或預估 */}
                                         {schoolWeaknesses.length > 0 ? '需加強' : '進度良好'}
                                     </div>
                                     <div className="text-[10px] text-slate-400 font-medium mt-0.5">已偵測 {schoolWeaknesses.length} 個弱點課題</div>
@@ -7267,10 +7262,12 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                     <div className="text-[10px] text-slate-400 font-medium mt-0.5">累計擊敗 {myRankData.totalQuestions} 題</div>
                                 </div>
                             </div>
-                            </div>
-                        </>
+                            
+                        </div> {/* 結束 grid 四大戰區狀態卡 */}
+                        
+                    </div> {/* 結束 animate-fadeIn 區塊 */}
+                    </>
                 )}
-
 
                 {/* ==================== 分頁：AI 補底中心 (核心賣點) ==================== */}
                 {activeTab === 'ai' && (
