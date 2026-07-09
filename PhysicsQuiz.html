@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.38 Physics Quiz Analyzer</title>
+    <title> V3.39 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -6762,13 +6762,13 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
     const [activeTab, setActiveTab] = React.useState('overview'); // overview, school, pastpaper, ai, leaderboard
     const [aiSubTab, setAiSubTab] = React.useState('school'); // 'school' 或 'pastpaper'
     
-    // ==================== ★ 新增：修復 peerStudents 報錯的邏輯 ====================
-    // 1. 先找出當前學生的詳細資料，藉此取得他所屬的群組 (Cohort)
-    const currentStudentInfo = React.useMemo(() => {
-        return (students || []).find(s => s.id === studentId);
+   // ==================== ★ 修正：將變數名稱改回 currentStudent ====================
+    // 1. 找出當前學生的詳細資料 (名字必須是 currentStudent)
+    const currentStudent = React.useMemo(() => {
+        return (students || []).find(s => s.id === studentId) || {};
     }, [students, studentId]);
 
-    const studentCohort = currentStudentInfo?.cohort || '';
+    const studentCohort = currentStudent.cohort || '';
 
     // 2. 定義 peerStudents：篩選出「跟他同一個群組」的所有同學（用於排行榜與全班對比）
     const peerStudents = React.useMemo(() => {
