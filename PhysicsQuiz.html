@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.31B Physics Quiz Analyzer</title>
+    <title> V3.32 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -6775,72 +6775,85 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
     const chartRef = React.useRef(null);
     const chartInstance = React.useRef(null);
 
-// 2. 升級版：精細化計算功課狀態 (修正版)
+// 2. 升級版：精細化計算功課狀態 (加入 < 50% 弱點追蹤)
   const hwStats = React.useMemo(() => {
-    // 篩選出屬於該學生的功課
     const availableHws = Object.keys(homeworkMaps || {}).filter(id => 
       !homeworkMaps[id].cohort || homeworkMaps[id].cohort === studentCohort
     );
 
-    let completed = 0; // 全對/已改正
-    let needsCorrection = 0; // 已交但未改正
-    let missing = 0; // 欠交
+    let completed = 0; let needsCorrection = 0; let missing = 0;
     
     const details = availableHws.map(hwId => {
       const hwInfo = homeworkMaps[hwId];
       const studentHw = homeworkScores?.[studentId]?.[hwId];
       
-      // ★ 修正 1：確保檢查的是 nested 的 scores 物件
       if (!studentHw || !studentHw.scores || Object.keys(studentHw.scores).length === 0) {
         missing++;
-        return { id: hwId, title: hwInfo.title, status: 'missing' };
+        return { id: hwId, title: hwInfo.title, status: 'missing', weaknesses: [] };
       }
 
-      // 情況 B & C：有成績紀錄 -> 檢查是否所有題目都達到滿分
       let isPerfect = true;
       let totalEarned = 0;
       let totalMax = 0;
+      let weaknesses = []; // ★ 新增弱點陣列
       
       hwInfo.questions.forEach(q => {
-        // ★ 修正 2：改用 studentHw.scores[q.id] 來讀取正確分數
         const qScore = Number(studentHw.scores[q.id]) || 0;
         const qMax = Number(q.max) || 1;
         totalEarned += qScore;
         totalMax += qMax;
         
-        if (qScore < qMax) {
-          isPerfect = false; // 只要有一題沒滿分，就是未改正
+        if (qScore < qMax) isPerfect = false;
+        
+        // ★ 如果得分率低於 50%，加入弱點清單 (優先用 desc，沒有就用 topic)
+        if (qScore / qMax < 0.5) {
+          weaknesses.push(q.desc || q.topic || q.id);
         }
       });
 
-      // ★ 修正 3：利用你資料庫中現有的 remakeStatus 作為雙重保障
-      if (studentHw.remakeStatus === 'PERFECT') {
-          isPerfect = true;
-      }
+      if (studentHw.remakeStatus === 'PERFECT') isPerfect = true;
 
       if (isPerfect) {
         completed++;
-        return { id: hwId, title: hwInfo.title, status: 'completed', score: `${totalEarned}/${totalMax}` };
+        return { id: hwId, title: hwInfo.title, status: 'completed', score: `${totalEarned}/${totalMax}`, weaknesses: [] };
       } else {
         needsCorrection++;
-        return { id: hwId, title: hwInfo.title, status: 'needsCorrection', score: `${totalEarned}/${totalMax}` };
+        return { id: hwId, title: hwInfo.title, status: 'needsCorrection', score: `${totalEarned}/${totalMax}`, weaknesses };
       }
     });
 
     return { total: availableHws.length, completed, needsCorrection, missing, details };
   }, [studentId, studentCohort, homeworkMaps, homeworkScores]);
 
-    // ==================== 新增：AI 助教 Prompt 產生器 ====================
-  const handleAskGemini = (title, category) => {
-    const prompt = `我是一名修讀物理科的學生，我在最近的「${category}：${title}」中表現不太理想，有部分概念不太清晰。\n\n請用繁體中文、深入淺出地為我重新講解這部分的核心概念，並給我 1 到 2 條簡單的選擇題，讓我測試一下自己是否真的明白了。`;
+// ==================== 新增：通用弱點萃取函式 (小測與考試用) ====================
+  const getAssessmentWeaknesses = (record, mapInfo) => {
+    if (!record || !mapInfo || !mapInfo.questions) return [];
+    const weaknesses = [];
+    mapInfo.questions.forEach(q => {
+         const qScore = Number(record[q.id]) || 0;
+         const qMax = Number(q.max) || 1;
+         if (qScore / qMax < 0.5) {
+             weaknesses.push(q.desc || q.topic || q.id);
+         }
+    });
+    return weaknesses;
+  };
+
+  // ==================== 升級版：AI 互動小測驗 Prompt 產生器 ====================
+  const handleAskGemini = (title, category, weaknesses = []) => {
+    // 將弱點清單格式化為文字
+    const weaknessText = weaknesses.length > 0
+      ? `特別是以下幾個我得分不到一半的弱點概念：\n${weaknesses.map(w => `- ${w}`).join('\n')}\n\n`
+      : `有部分概念不太清晰。\n\n`;
+
+    // 升級版 Prompt：強制要求「先給題目，不給答案」
+    const prompt = `我是一名修讀高中物理科的學生，我在最近的「${category}：${title}」中表現不太理想。\n\n${weaknessText}請用繁體中文、深入淺出地為我重新講解這些核心概念。講解完畢後，請以「互動小測驗」的形式，給我 1 到 2 條簡單的 MC（選擇題），讓我測試一下自己是否真的明白了。\n\n⚠️ 注意：請先只給我題目，絕對不要直接提供答案！等我回答後，你再給出正確答案與詳細解釋。`;
     
-    // 複製到剪貼簿並跳轉
     navigator.clipboard.writeText(prompt).then(() => {
-      alert('✅ 已複製專屬 AI 提問詞！\n\n即將為您開啟 Gemini，請直接在對話框貼上 (Ctrl+V / Cmd+V) 開始發問。');
+      alert('✅ 已複製專屬 AI 提問詞！\n\n即將為您開啟 Gemini。\n請直接貼上 (Ctrl+V) 發問，AI 將會為您針對弱點進行互動測驗！');
       window.open('https://gemini.google.com/', '_blank');
     }).catch(err => {
       console.error('複製失敗', err);
-      // 就算複製失敗，依然幫學生打開網頁
       window.open('https://gemini.google.com/', '_blank');
     });
   };
@@ -7446,7 +7459,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                     </div>
                 )}
 
-              {/* ==================== 分頁：校內進度 (School Progress) ==================== */}
+{/* ==================== 分頁：校內進度 (School Progress) ==================== */}
                 {activeTab === 'school' && (
                     <div className="animate-fadeIn space-y-6">
                         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
@@ -7472,15 +7485,25 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                                         {hw.status === 'missing' && <span className="text-[10px] bg-red-100 text-red-600 px-2 py-1 rounded font-bold">欠交</span>}
                                                     </div>
                                                     <p className="text-sm font-medium text-slate-600 mb-2">分數: {hw.score || '-'}</p>
+                                                    
+                                                    {/* ★ 功課弱點顯示 */}
+                                                    {hw.weaknesses && hw.weaknesses.length > 0 && (
+                                                        <div className="mb-3">
+                                                            <span className="text-[10px] font-bold text-red-500 mb-1 block">⚠️ 需加強 (< 50%)：</span>
+                                                            <ul className="text-[10px] text-slate-600 list-disc pl-4 space-y-0.5">
+                                                                {hw.weaknesses.slice(0, 3).map((w, i) => <li key={i} className="truncate" title={w}>{w}</li>)}
+                                                                {hw.weaknesses.length > 3 && <li>...及其他 {hw.weaknesses.length - 3} 項</li>}
+                                                            </ul>
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 
-                                                {/* AI 助教按鈕 (僅未滿分或欠交時顯示) */}
                                                 {(hw.status === 'needsCorrection' || hw.status === 'missing') && (
                                                     <button 
-                                                        onClick={() => handleAskGemini(hw.title || hw.id, '日常功課')}
+                                                        onClick={() => handleAskGemini(hw.title || hw.id, '日常功課', hw.weaknesses)}
                                                         className="mt-2 flex items-center justify-center gap-1 w-full py-1.5 bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-300 rounded-lg text-xs font-bold transition-all shadow-sm"
                                                     >
-                                                        ✨ AI 助教幫我溫習
+                                                        ✨ AI 互動式小測驗
                                                     </button>
                                                 )}
                                             </div>
@@ -7497,22 +7520,39 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                         {(!scores || !scores[studentId] || Object.keys(scores[studentId]).length === 0) ? (
                                             <p className="text-sm text-slate-400">尚無小測紀錄</p>
                                         ) : (
-                                            Object.keys(scores[studentId]).map(quizId => (
+                                            Object.keys(scores[studentId]).map(quizId => {
+                                                const quizMap = typeof QUIZ_MAPS !== 'undefined' ? QUIZ_MAPS[quizId] : {};
+                                                const quizRecord = scores[studentId][quizId];
+                                                const weaknesses = getAssessmentWeaknesses(quizRecord, quizMap);
+                                                
+                                                return (
                                                 <div key={quizId} className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col justify-between hover:border-indigo-200 transition-colors">
                                                     <div>
                                                         <div className="flex justify-between items-start mb-2">
-                                                            <h4 className="font-bold text-slate-700">{quizId}</h4>
+                                                            <h4 className="font-bold text-slate-700">{quizMap?.title || quizId}</h4>
                                                             <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-1 rounded font-bold">已紀錄</span>
                                                         </div>
+                                                        
+                                                        {/* ★ 小測弱點顯示 */}
+                                                        {weaknesses.length > 0 && (
+                                                            <div className="mb-3">
+                                                                <span className="text-[10px] font-bold text-red-500 mb-1 block">⚠️ 需加強 (< 50%)：</span>
+                                                                <ul className="text-[10px] text-slate-600 list-disc pl-4 space-y-0.5">
+                                                                    {weaknesses.slice(0, 3).map((w, i) => <li key={i} className="truncate" title={w}>{w}</li>)}
+                                                                    {weaknesses.length > 3 && <li>...及其他 {weaknesses.length - 3} 項</li>}
+                                                                </ul>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                     <button 
-                                                        onClick={() => handleAskGemini(quizId, '課堂小測')}
+                                                        onClick={() => handleAskGemini(quizMap?.title || quizId, '課堂小測', weaknesses)}
                                                         className="mt-2 flex items-center justify-center gap-1 w-full py-1.5 bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-300 rounded-lg text-xs font-bold transition-all shadow-sm"
                                                     >
-                                                        ✨ AI 助教幫我溫習
+                                                        ✨ AI 互動式小測驗
                                                     </button>
                                                 </div>
-                                            ))
+                                            )
+                                            })
                                         )}
                                     </div>
                                 </section>
@@ -7526,22 +7566,39 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                         {(!examScores || !examScores[studentId] || Object.keys(examScores[studentId]).length === 0) ? (
                                             <p className="text-sm text-slate-400">尚無考試紀錄</p>
                                         ) : (
-                                            Object.keys(examScores[studentId]).map(examId => (
+                                            Object.keys(examScores[studentId]).map(examId => {
+                                                const examMap = typeof EXAM_MAPS !== 'undefined' ? EXAM_MAPS[examId] : {};
+                                                const examRecord = examScores[studentId][examId];
+                                                const weaknesses = getAssessmentWeaknesses(examRecord, examMap);
+
+                                                return (
                                                 <div key={examId} className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col justify-between hover:border-indigo-200 transition-colors">
                                                     <div>
                                                         <div className="flex justify-between items-start mb-2">
-                                                            <h4 className="font-bold text-slate-700">{examId}</h4>
+                                                            <h4 className="font-bold text-slate-700">{examMap?.title || examId}</h4>
                                                             <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-1 rounded font-bold">已紀錄</span>
                                                         </div>
+
+                                                        {/* ★ 考試弱點顯示 */}
+                                                        {weaknesses.length > 0 && (
+                                                            <div className="mb-3">
+                                                                <span className="text-[10px] font-bold text-red-500 mb-1 block">⚠️ 需加強 (< 50%)：</span>
+                                                                <ul className="text-[10px] text-slate-600 list-disc pl-4 space-y-0.5">
+                                                                    {weaknesses.slice(0, 3).map((w, i) => <li key={i} className="truncate" title={w}>{w}</li>)}
+                                                                    {weaknesses.length > 3 && <li>...及其他 {weaknesses.length - 3} 項</li>}
+                                                                </ul>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                     <button 
-                                                        onClick={() => handleAskGemini(examId, '校內考試')}
+                                                        onClick={() => handleAskGemini(examMap?.title || examId, '校內考試', weaknesses)}
                                                         className="mt-2 flex items-center justify-center gap-1 w-full py-1.5 bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-300 rounded-lg text-xs font-bold transition-all shadow-sm"
                                                     >
-                                                        ✨ AI 助教幫我重點解說
+                                                        ✨ AI 互動式小測驗
                                                     </button>
                                                 </div>
-                                            ))
+                                            )
+                                            })
                                         )}
                                     </div>
                                 </section>
