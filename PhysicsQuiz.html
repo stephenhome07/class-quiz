@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.36 Physics Quiz Analyzer</title>
+    <title> V3.37 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -6766,92 +6766,55 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
     const [selectedPPPapers, setSelectedPPPapers] = React.useState([]);
     const [leaderboardMonth, setLeaderboardMonth] = React.useState('all');
    
-    // ★ 2. 新增：歷屆試題分頁專用的狀態
-      const [ppMode, setPpMode] = React.useState('view'); // 'view' 檢視模式 | 'input' 輸入模式
-      const [ppSelectedPaper, setPpSelectedPaper] = React.useState('');
-      const [ppInputValues, setPpInputValues] = React.useState({});
-    
-    // 取得當前學生與他的群組 (Cohort)
-    const currentStudent = students.find(s => s.id === studentId);
-    const studentCohort = currentStudent?.cohort || '2024-2027';
-    // 英雄榜只顯示同一個群組的同學
-    const peerStudents = students.filter(s => s.cohort === studentCohort);
+    /// ==================== 學生專屬：歷屆試題 (Pastpaper) 狀態 ====================
+  const [ppMode, setPpMode] = React.useState('view'); // 'view' 檢視模式 | 'input' 輸入模式
+  const [ppSelectedYear, setPpSelectedYear] = React.useState('');
+  const [ppSelectedPaper, setPpSelectedPaper] = React.useState('');
+  const [ppInputValues, setPpInputValues] = React.useState({});
 
-    const chartRef = React.useRef(null);
-    const chartInstance = React.useRef(null);
+  // 1. 動態解析 availableYears (例如 2014, 2015)
+  const availableYears = React.useMemo(() => {
+    if (!pastpaperMaps) return [];
+    const years = Object.keys(pastpaperMaps).map(key => key.split('-')[0]);
+    return [...new Set(years)].sort((a, b) => b - a); // 新年份排前面
+  }, [pastpaperMaps]);
 
-// 2. 升級版：精細化計算功課狀態 (加入 <= 50% 弱點追蹤與自動去重)
-  const hwStats = React.useMemo(() => {
-    const availableHws = Object.keys(homeworkMaps || {}).filter(id => 
-      !homeworkMaps[id].cohort || homeworkMaps[id].cohort === studentCohort
-    );
+  // 2. 當選擇年份後，動態篩選出該年的卷目 (例如 P1A, P1B)
+  const availablePapers = React.useMemo(() => {
+    if (!pastpaperMaps || !ppSelectedYear) return [];
+    return Object.keys(pastpaperMaps)
+      .filter(key => key.startsWith(ppSelectedYear))
+      .map(key => ({
+        id: key,
+        type: key.replace(`${ppSelectedYear}-`, ""),
+        title: pastpaperMaps[key].title
+      }));
+  }, [pastpaperMaps, ppSelectedYear]);
 
-    let completed = 0; let needsCorrection = 0; let missing = 0;
-    
-    const details = availableHws.map(hwId => {
-      const hwInfo = homeworkMaps[hwId];
-      const studentHw = homeworkScores?.[studentId]?.[hwId];
-      
-      if (!studentHw || !studentHw.scores || Object.keys(studentHw.scores).length === 0) {
-        missing++;
-        return { id: hwId, title: hwInfo.title, status: 'missing', weaknesses: [] };
-      }
+  // 當年份改變時，自動清空卷目
+  React.useEffect(() => {
+    setPpSelectedPaper('');
+    setPpInputValues({});
+  }, [ppSelectedYear]);
 
-      let isPerfect = true;
-      let totalEarned = 0;
-      let totalMax = 0;
-      let weaknesses = []; 
-      
-      hwInfo.questions.forEach(q => {
-        const qScore = Number(studentHw.scores[q.id]) || 0;
-        const qMax = Number(q.max) || 1;
-        totalEarned += qScore;
-        totalMax += qMax;
-        
-        if (qScore < qMax) isPerfect = false;
-        
-        // ★ 修正 1：條件改為 <= 0.5，包含只拿一半分數的題目
-        if (qScore / qMax <= 0.5) {
-          // ★ 修正 2：優先讀取 topicDesc，沒有才依序降級找 topicId 或 id
-          const weaknessText = q.topicDesc || q.topicId || q.desc || q.topic || q.id;
-          // ★ 修正 3：防止相同的概念描述重複出現
-          if (!weaknesses.includes(weaknessText)) {
-              weaknesses.push(weaknessText);
-          }
-        }
-      });
-
-      if (studentHw.remakeStatus === 'PERFECT') isPerfect = true;
-
-      if (isPerfect) {
-        completed++;
-        return { id: hwId, title: hwInfo.title, status: 'completed', score: `${totalEarned}/${totalMax}`, weaknesses: [] };
-      } else {
-        needsCorrection++;
-        return { id: hwId, title: hwInfo.title, status: 'needsCorrection', score: `${totalEarned}/${totalMax}`, weaknesses };
-      }
-    });
-
-    return { total: availableHws.length, completed, needsCorrection, missing, details };
-  }, [studentId, studentCohort, homeworkMaps, homeworkScores]);
-
-    // ==================== 新增：歷屆試題 DSE 評估計算 ====================
+  // 3. 學生 DSE 等級估算工具
   const estimateDSEGrade = (percent) => {
-    if (percent >= 0.90) return { grade: '5**', color: 'text-yellow-500', bg: 'bg-yellow-50' };
-    if (percent >= 0.82) return { grade: '5*', color: 'text-yellow-400', bg: 'bg-yellow-50' };
-    if (percent >= 0.70) return { grade: '5', color: 'text-emerald-500', bg: 'bg-emerald-50' };
-    if (percent >= 0.55) return { grade: '4', color: 'text-blue-500', bg: 'bg-blue-50' };
+    if (percent >= 0.85) return { grade: '5**', color: 'text-yellow-500', bg: 'bg-yellow-50' };
+    if (percent >= 0.75) return { grade: '5*', color: 'text-yellow-400', bg: 'bg-yellow-50' };
+    if (percent >= 0.65) return { grade: '5', color: 'text-emerald-500', bg: 'bg-emerald-50' };
+    if (percent >= 0.50) return { grade: '4', color: 'text-blue-500', bg: 'bg-blue-50' };
     if (percent >= 0.40) return { grade: '3', color: 'text-indigo-500', bg: 'bg-indigo-50' };
     if (percent >= 0.28) return { grade: '2', color: 'text-amber-500', bg: 'bg-amber-50' };
     if (percent >= 0.15) return { grade: '1', color: 'text-orange-500', bg: 'bg-orange-50' };
     return { grade: 'U', color: 'text-red-500', bg: 'bg-red-50' };
   };
 
+  // 4. 計算學生個人的試卷統計
   const ppStats = React.useMemo(() => {
     const studentPastpaper = pastpaperScores?.[studentId] || {};
     const stats = {};
+    let totalCompleted = 0;
     
-    // 將學生的試卷按年份 (e.g. 2014) 分組
     Object.keys(studentPastpaper).forEach(paperId => {
       const yearMatch = paperId.match(/^(\d{4})/);
       if (!yearMatch) return;
@@ -6864,36 +6827,32 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
       
       let paperEarned = 0;
       let paperMax = 0;
+      let hasAnswer = false;
       
       mapInfo.questions.forEach(q => {
         const studentAns = studentPastpaper[paperId][q.id];
-        // 滿分計算：整份卷的該題滿分
         const qMax = Number(q.max) || 1;
         paperMax += qMax;
         
         if (studentAns !== undefined && studentAns !== '') {
+          hasAnswer = true;
           if (q.type === 'MC') {
-            // MC 如果答案正確就給滿分
             if (studentAns === q.ans) paperEarned += qMax;
           } else {
-            // LQ 直接讀取學生輸入的分數
             paperEarned += Number(studentAns) || 0;
           }
         }
       });
       
-      if (paperMax > 0) {
-        stats[year].papers[paperId] = { 
-          earned: paperEarned, 
-          max: paperMax, 
-          title: mapInfo.title || paperId
-        };
+      if (hasAnswer && paperMax > 0) {
+        stats[year].papers[paperId] = { earned: paperEarned, max: paperMax, title: mapInfo.title || paperId };
         stats[year].totalEarned += paperEarned;
         stats[year].totalMax += paperMax;
+        totalCompleted++;
       }
     });
     
-    return stats;
+    return { byYear: stats, totalCompleted };
   }, [studentId, pastpaperScores, pastpaperMaps]);
 
 // ==================== 升級版：通用評估數據萃取函式 (小測與考試用) ====================
