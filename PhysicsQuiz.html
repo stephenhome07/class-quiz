@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.41e Physics Quiz Analyzer</title>
+    <title> V3.41f Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -7512,11 +7512,11 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                     </div>
                 )}
 
-                {/* ==================== 分頁：歷屆試題 (Pastpaper) ==================== */}
+{/* ==================== 分頁：歷屆試題 (Pastpaper) ==================== */}
                 {activeTab === 'pastpaper' && (
                     <div className="animate-fadeIn space-y-6">
                         {ppMode === 'view' ? (
-                            // ---------------- 檢視模式：各年份成績與評估 ----------------
+                            // ---------------- 檢視模式 ----------------
                             <div className="space-y-6">
                                 <div className="flex justify-between items-center bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
                                     <div>
@@ -7531,25 +7531,33 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                     </button>
                                 </div>
 
-                                {Object.keys(ppStats).length === 0 ? (
-                                    <div className="bg-slate-50 py-12 rounded-2xl text-center border border-slate-200">
-                                        <div className="text-4xl mb-3">📝</div>
-                                        <h3 className="text-lg font-bold text-slate-700">目前尚無歷屆試題紀錄</h3>
-                                        <p className="text-sm text-slate-500 mt-1">點擊右上方開始輸入你的操卷分數吧！</p>
+                                {/* ★ 溫馨鼓勵文字 (如果沒做過任何試卷) */}
+                                {(!ppStats || ppStats.totalCompleted === 0) ? (
+                                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-8 text-center shadow-sm">
+                                        <div className="text-4xl mb-3">✨</div>
+                                        <h3 className="text-lg font-bold text-amber-800 mb-2">準備好開啟第一步了嗎？</h3>
+                                        <p className="text-sm text-amber-700 max-w-md mx-auto">
+                                            目前尚未輸入任何歷屆試題成績。請點擊右上方的「新增/修改成績」，系統將立即為你解鎖 DSE 預期等級與個人弱點分析！
+                                        </p>
                                     </div>
                                 ) : (
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        {Object.keys(ppStats).sort().reverse().map(year => {
-                                            const stat = ppStats[year];
+                                        {Object.keys(ppStats?.byYear || {}).sort().reverse().map(year => {
+                                            const stat = ppStats.byYear[year];
+                                            if (!stat) return null; // ★ 終極防護 1：避免 stat 為 undefined
+                                            
                                             const percent = stat.totalMax > 0 ? (stat.totalEarned / stat.totalMax) : 0;
                                             const dseGrade = estimateDSEGrade(percent);
+                                            
+                                            // ★ 終極防護 2：確保 safePapers 一定是個 {} 物件，絕不讓 Object.keys 報錯崩潰
+                                            const safePapers = stat.papers || {}; 
 
                                             return (
                                                 <div key={year} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 hover:border-indigo-300 transition-all">
                                                     <div className="flex justify-between items-start border-b border-slate-100 pb-4 mb-4">
                                                         <div>
                                                             <h3 className="text-2xl font-black text-slate-800">{year} 年 DSE</h3>
-                                                            <span className="inline-block mt-1 text-xs font-bold bg-indigo-50 text-indigo-600 px-2 py-1 rounded">已完成 {Object.keys(stat.papers).length} 份卷</span>
+                                                            <span className="inline-block mt-1 text-xs font-bold bg-indigo-50 text-indigo-600 px-2 py-1 rounded">已完成 {Object.keys(safePapers).length} 份卷</span>
                                                         </div>
                                                         <div className={`text-right p-3 rounded-xl ${dseGrade.bg}`}>
                                                             <div className="text-[10px] text-slate-500 font-bold mb-0.5 uppercase tracking-wider">估算等級</div>
@@ -7559,7 +7567,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                                     </div>
 
                                                     <div className="space-y-3">
-                                                        {Object.entries(stat.papers).map(([pId, pData]) => {
+                                                        {Object.entries(safePapers).map(([pId, pData]) => {
                                                             const pPercent = pData.max > 0 ? (pData.earned / pData.max) : 0;
                                                             return (
                                                                 <div key={pId} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
@@ -7579,7 +7587,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                 )}
                             </div>
                         ) : (
-                            // ---------------- 輸入模式：極速網格輸入 ----------------
+                            // ---------------- 輸入模式 ----------------
                             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                                 <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
                                     <h2 className="text-xl font-black text-indigo-600 flex items-center gap-2">
@@ -7593,28 +7601,44 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                     </button>
                                 </div>
                                 
-                                <div className="mb-8">
-                                    <label className="block text-sm font-bold text-slate-700 mb-2">步驟 1：選擇年份與卷目</label>
-                                    <select 
-                                        className="w-full md:w-1/2 p-3 border border-slate-300 rounded-xl text-slate-700 font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50"
-                                        value={ppSelectedPaper}
-                                        onChange={(e) => {
-                                            setPpSelectedPaper(e.target.value);
-                                            setPpInputValues(pastpaperScores?.[studentId]?.[e.target.value] || {});
-                                        }}
-                                    >
-                                        <option value="">-- 請下拉選擇 --</option>
-                                        {Object.keys(pastpaperMaps || {}).map(pId => (
-                                            <option key={pId} value={pId}>{pastpaperMaps[pId].title || pId}</option>
-                                        ))}
-                                    </select>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 border-b border-slate-100 pb-6">
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 mb-2">步驟 1：選擇年份</label>
+                                        <select 
+                                            className="w-full p-3 border border-slate-300 rounded-xl text-slate-700 font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50"
+                                            value={ppSelectedYear}
+                                            onChange={(e) => setPpSelectedYear(e.target.value)}
+                                        >
+                                            <option value="">-- 請選擇 DSE 年份 --</option>
+                                            {(availableYears || []).map(year => <option key={year} value={year}>{year} 年 DSE</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 mb-2">步驟 2：選擇卷目</label>
+                                        <select 
+                                            className="w-full p-3 border border-slate-300 rounded-xl text-slate-700 font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50 disabled:opacity-50"
+                                            value={ppSelectedPaper}
+                                            disabled={!ppSelectedYear}
+                                            onChange={(e) => {
+                                                const paperId = e.target.value;
+                                                setPpSelectedPaper(paperId);
+                                                setPpInputValues(pastpaperScores?.[studentId]?.[paperId] || {});
+                                            }}
+                                        >
+                                            <option value="">-- 請選擇卷目 --</option>
+                                            {(availablePapers || []).map(paper => (
+                                                <option key={paper.id} value={paper.id}>{paper.type} - {paper.title}</option>
+                                            ))}
+                                        </select>
+                                    </div>
                                 </div>
 
-                                {ppSelectedPaper && pastpaperMaps[ppSelectedPaper] && (
+                                {/* ★ 終極防護 3：即使卷目資料庫還沒載入，也不會崩潰 */}
+                                {ppSelectedPaper && pastpaperMaps?.[ppSelectedPaper] && (
                                     <div className="animate-fadeIn">
-                                        <label className="block text-sm font-bold text-slate-700 mb-3">步驟 2：輸入答案或分數</label>
+                                        <label className="block text-sm font-bold text-slate-700 mb-3">步驟 3：輸入答案或分數</label>
                                         <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-3 mb-8">
-                                            {pastpaperMaps[ppSelectedPaper].questions.map((q, idx) => (
+                                            {(pastpaperMaps[ppSelectedPaper].questions || []).map((q, idx) => (
                                                 <div key={q.id} className="bg-slate-50 p-2 rounded-xl border border-slate-200 flex flex-col justify-center items-center">
                                                     <label className="text-[10px] font-bold text-slate-500 mb-1 w-full text-center truncate" title={q.id.split('-').pop()}>
                                                         {q.id.split('-').pop()}
@@ -7630,7 +7654,6 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                                                 const val = e.target.value.toUpperCase();
                                                                 if (val === '' || ['A','B','C','D'].includes(val)) {
                                                                     setPpInputValues(prev => ({...prev, [q.id]: val}));
-                                                                    // MC 極速跳轉：輸入 A/B/C/D 後自動跳下一題
                                                                     if (val !== '') {
                                                                         const nextInput = document.getElementById(`pp-input-${idx + 1}`);
                                                                         if (nextInput) nextInput.focus();
@@ -7657,7 +7680,6 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                                                     setPpInputValues(prev => ({...prev, [q.id]: val}));
                                                                 }}
                                                                 onKeyDown={(e) => {
-                                                                    // LQ 按 Enter 跳下一題
                                                                     if (e.key === 'Enter') {
                                                                         const nextInput = document.getElementById(`pp-input-${idx + 1}`);
                                                                         if (nextInput) nextInput.focus();
@@ -7682,7 +7704,6 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                                                 [ppSelectedPaper]: ppInputValues
                                                             }
                                                         }));
-                                                        // 這裡可以選擇性加入自動同步 Google Sheet 的代碼
                                                         alert('✅ 成績已成功更新！');
                                                         setPpMode('view');
                                                     } else {
