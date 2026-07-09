@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.28c Physics Quiz Analyzer</title>
+    <title> V3.29 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -6767,6 +6767,56 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
     const chartRef = React.useRef(null);
     const chartInstance = React.useRef(null);
 
+    // 2. 升級版：精細化計算功課狀態
+  const hwStats = React.useMemo(() => {
+    // 篩選出屬於該學生的功課
+    const availableHws = Object.keys(homeworkMaps || {}).filter(id => 
+      !homeworkMaps[id].cohort || homeworkMaps[id].cohort === studentCohort
+    );
+
+    let completed = 0; // 全對/已改正
+    let needsCorrection = 0; // 已交但未改正
+    let missing = 0; // 欠交
+    
+    const details = availableHws.map(hwId => {
+      const hwInfo = homeworkMaps[hwId];
+      const studentHw = homeworkScores?.[studentId]?.[hwId];
+      
+      // 情況 A：完全沒有成績紀錄 -> 欠交
+      if (!studentHw || Object.keys(studentHw).length === 0) {
+        missing++;
+        return { id: hwId, title: hwInfo.title, status: 'missing' };
+      }
+
+      // 情況 B & C：有成績紀錄 -> 檢查是否所有題目都達到滿分
+      let isPerfect = true;
+      let totalEarned = 0;
+      let totalMax = 0;
+      
+      hwInfo.questions.forEach(q => {
+        const qScore = Number(studentHw[q.id]) || 0;
+        const qMax = Number(q.max) || 1;
+        totalEarned += qScore;
+        totalMax += qMax;
+        
+        if (qScore < qMax) {
+          isPerfect = false; // 只要有一題沒滿分，就是未改正
+        }
+      });
+
+      if (isPerfect) {
+        completed++;
+        return { id: hwId, title: hwInfo.title, status: 'completed', score: `${totalEarned}/${totalMax}` };
+      } else {
+        needsCorrection++;
+        return { id: hwId, title: hwInfo.title, status: 'needsCorrection', score: `${totalEarned}/${totalMax}` };
+      }
+    });
+
+    return { total: availableHws.length, completed, needsCorrection, missing, details };
+  }, [studentId, studentCohort, homeworkMaps, homeworkScores]);
+
+    
     // 輔助函式：取得 Pastpaper 分數
     const getPastpaperQScore = React.useCallback((sId, paperId, q) => {
         const record = pastpaperScores[sId]?.[paperId];
@@ -7136,19 +7186,57 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
 
                     {/* 新增：四大戰區狀態卡 */}
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                            {/* 功課卡 */}
-                            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-                                <div className="flex items-center justify-between">
-                                    <span className="text-xs font-bold text-slate-500">日常功課</span>
-                                    <span className={`w-2 h-2 rounded-full ${homeworkStats.missingCount > 0 ? 'bg-red-500 animate-pulse' : 'bg-emerald-500'}`}></span>
+                    {/* ★ 升級版：日常功課卡片 */}
+                              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                                <div className="flex items-center gap-3 mb-4">
+                                  <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg">
+                                    <Icon name="BookOpen" size={20} />
+                                  </div>
+                                  <h3 className="font-bold text-slate-800">日常功課狀態</h3>
                                 </div>
-                                <div className="mt-2">
-                                    <div className="text-xl font-black text-slate-800">{homeworkStats.submittedCount}/{homeworkStats.totalAssigned}</div>
-                                    <div className="text-[10px] text-slate-400 font-medium mt-0.5">
-                                        {homeworkStats.missingCount > 0 ? `欠交 ${homeworkStats.missingCount} 份` : '全部已繳交'}
+                                
+                                <div className="mb-4">
+                                  <div className="text-3xl font-black text-indigo-600">
+                                    {hwStats.completed} <span className="text-sm text-slate-400 font-medium">/ {hwStats.total} 份已改正</span>
+                                  </div>
+                                </div>
+                    
+                                {/* 詳細狀態標籤 */}
+                                <div className="flex flex-col gap-2">
+                                  {hwStats.needsCorrection > 0 && (
+                                    <div className="flex justify-between items-center bg-amber-50 text-amber-700 px-3 py-2 rounded-md text-sm font-bold border border-amber-200">
+                                      <span>⚠️ 待改正 (已交)</span>
+                                      <span>{hwStats.needsCorrection} 份</span>
                                     </div>
+                                  )}
+                                  {hwStats.missing > 0 && (
+                                    <div className="flex justify-between items-center bg-red-50 text-red-600 px-3 py-2 rounded-md text-sm font-bold border border-red-100">
+                                      <span>❌ 欠交 (未有成績)</span>
+                                      <span>{hwStats.missing} 份</span>
+                                    </div>
+                                  )}
+                                  {hwStats.total === 0 && (
+                                    <div className="text-sm text-slate-400 font-medium">目前尚無功課安排</div>
+                                  )}
                                 </div>
+                                
+                                {/* 功課明細列表 (可選，讓學生看清楚是哪份) */}
+                                {hwStats.details.length > 0 && (
+                                   <div className="mt-4 space-y-2 border-t pt-3">
+                                     {hwStats.details.map(hw => (
+                                       <div key={hw.id} className="flex justify-between items-center text-xs">
+                                         <span className="truncate w-32 text-slate-600">{hw.title || hw.id}</span>
+                                         {hw.status === 'completed' && <span className="text-emerald-600 font-bold">已改正 ({hw.score})</span>}
+                                         {hw.status === 'needsCorrection' && <span className="text-amber-600 font-bold">未改正 ({hw.score})</span>}
+                                         {hw.status === 'missing' && <span className="text-red-500 font-bold">欠交</span>}
+                                       </div>
+                                     ))}
+                                   </div>
+                                )}
+                              </div>
+                    
                             </div>
+                          )}
 
                             {/* 課堂小測卡 */}
                             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
