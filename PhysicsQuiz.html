@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.51 Physics Quiz Analyzer</title>
+    <title> V3.52 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -7030,7 +7030,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
             ? `特別是以下幾個我得分不到一半的弱點概念：\n${weaknesses.map(w => `- ${w}`).join('\n')}\n\n`
             : `有部分概念不太清晰。\n\n`;
 
-        const prompt = `我是一名修讀高中物理科的學生，我在最近的「${category}：${title}」中表現不太理想。\n\n${weaknessText}請用繁體中文、深入淺出地為我重新講解這些核心概念。講解完畢後，請以「互動小測驗」的形式，給我 1 到 2 條簡單的 MC（選擇題），讓我測試一下自己是否真的明白了。\n\n⚠️ 注意：請先只給我題目，絕對不要直接提供答案！等我回答後，你再給出正確答案與詳細解釋。`;
+        const prompt = `我是一名修讀高中物理科的學生，我在最近的「${category}：${title}」中表現不太理想。\n\n${weaknessText}請用繁體中文、深入淺出地為我重新講解這些核心概念。講解完畢後，請以「互動小測驗」的形式，給我5-8條簡單的 MC（選擇題），讓我測試一下自己是否真的明白了。\n\n⚠️ 注意：請先只給我題目，絕對不要直接提供答案！等我回答後，你再給出正確答案與詳細解釋。`;
         
         navigator.clipboard.writeText(prompt).then(() => {
             alert('✅ 已複製專屬 AI 提問詞！\n\n即將為您開啟 Gemini。\n請直接貼上 (Ctrl+V) 發問，AI 將會為您針對弱點進行互動測驗！');
@@ -7849,33 +7849,39 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                         </div>
                                         
                                         {/* ★ 升級版儲存按鈕：加入 _submitMonth 與雲端同步 syncToCloud */}
+                                        {/* ★ 升級版儲存按鈕：修復 React 非同步更新導致的雲端漏傳問題 */}
                                         <div className="flex justify-end border-t border-slate-100 pt-5">
                                             <button 
                                                 onClick={() => {
                                                     if (typeof setPastpaperScores === 'function') {
-                                                        // 取得當前月份 YYYY-MM
+                                                        // 1. 取得當前月份 YYYY-MM，並與新輸入的成績合併
                                                         const currentMonth = new Date().toISOString().slice(0, 7);
                                                         const newRecord = { ...ppInputValues, _submitMonth: currentMonth };
                                                         
-                                                        let updatedScores = null;
+                                                        // 2. 先抓取目前最新的歷屆試題總表
+                                                        const safePPScores = pastpaperScores || (typeof window !== 'undefined' ? window.PASTPAPER_SCORES : null) || {};
                                                         
-                                                        setPastpaperScores(prev => {
-                                                            updatedScores = {
-                                                                ...prev,
-                                                                [studentId]: {
-                                                                    ...(prev[studentId] || {}),
-                                                                    [ppSelectedPaper]: newRecord
-                                                                }
-                                                            };
-                                                            return updatedScores;
-                                                        });
+                                                        // 3. 【關鍵修復】先手動計算出完整的最新成績單！
+                                                        const finalUpdatedScores = {
+                                                            ...safePPScores,
+                                                            [studentId]: {
+                                                                ...(safePPScores[studentId] || {}),
+                                                                [ppSelectedPaper]: newRecord
+                                                            }
+                                                        };
                                                         
-                                                        // 呼叫雲端同步函數
-                                                        if (typeof syncToCloud === 'function' && updatedScores) {
-                                                            syncToCloud({ pastpaperScores: updatedScores });
+                                                        // 4. 更新畫面 (Local State)
+                                                        setPastpaperScores(finalUpdatedScores);
+                                                        
+                                                        // 5. 立即呼叫雲端同步，並傳入剛剛算好的最新成績單！
+                                                        if (typeof syncToCloud === 'function') {
+                                                            syncToCloud({ pastpaperScores: finalUpdatedScores });
+                                                            console.log("✅ 已觸發雲端同步！", finalUpdatedScores);
+                                                        } else {
+                                                            console.warn("找不到 syncToCloud 函數，成績僅在本地更新。");
                                                         }
                                                         
-                                                        alert('✅ 成績已成功更新並同步至資料庫！');
+                                                        alert('✅ 成績已成功更新並開始同步至資料庫！');
                                                         setPpMode('view');
                                                     } else {
                                                         alert('⚠️ 系統找不到儲存功能，請確保外層已傳遞 setPastpaperScores。');
