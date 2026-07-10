@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.50 Physics Quiz Analyzer</title>
+    <title> V3.51 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -7872,7 +7872,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                                         
                                                         // 呼叫雲端同步函數
                                                         if (typeof syncToCloud === 'function' && updatedScores) {
-                                                            syncToCloud(updatedScores, 'pastpaperScores');
+                                                            syncToCloud({ pastpaperScores: updatedScores });
                                                         }
                                                         
                                                         alert('✅ 成績已成功更新並同步至資料庫！');
