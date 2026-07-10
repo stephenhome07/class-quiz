@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V3.44 Physics Quiz Analyzer</title>
+    <title> V3.50 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -6756,9 +6756,60 @@ const PastpaperSummaryView = ({ currentCohort, activeStudents, pastpaperScores }
                     </div>
                 );
             };
+// ==================== 新增：每年度專屬小雷達圖組件 ====================
+const YearlyRadarChart = ({ domainData, year }) => {
+    const canvasRef = React.useRef(null);
+    const chartInst = React.useRef(null);
+
+    React.useEffect(() => {
+        if (!canvasRef.current || !domainData) return;
+        const ctx = canvasRef.current.getContext('2d');
+        const labels = [];
+        const dataPoints = [];
+
+        Object.keys(domainData).forEach(key => {
+            if (domainData[key].m > 0) {
+                labels.push(domainData[key].name);
+                dataPoints.push(Math.round((domainData[key].e / domainData[key].m) * 100));
+            }
+        });
+
+        if (labels.length === 0) return;
+
+        if (chartInst.current) chartInst.current.destroy();
+        chartInst.current = new Chart(ctx, {
+            type: 'radar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: `${year}年能力`,
+                    data: dataPoints,
+                    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+                    borderColor: 'rgba(99, 102, 241, 0.8)',
+                    pointBackgroundColor: 'rgba(99, 102, 241, 1)',
+                    pointBorderColor: '#fff',
+                    borderWidth: 1.5,
+                    pointRadius: 2
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: { r: { angleLines: { color: 'rgba(0,0,0,0.05)' }, grid: { color: 'rgba(0,0,0,0.05)' }, pointLabels: { font: { size: 9, weight: 'bold' }, color: '#64748b' }, ticks: { display: false, min: 0, max: 100, stepSize: 25 } } },
+                plugins: { legend: { display: false } }
+            }
+        });
+        return () => { if (chartInst.current) chartInst.current.destroy(); };
+    }, [domainData, year]);
+
+    return (
+        <div className="w-full h-36">
+            <canvas ref={canvasRef}></canvas>
+        </div>
+    );
+};
 
 // ==================== 學生專屬遊戲化儀表板 (StudentPortalView) ====================
-const StudentPortalView = ({ studentId, students, scores, examScores, homeworkScores, pastpaperScores, homeworkMaps, pastpaperMaps, setPastpaperScores }) => {
+const StudentPortalView = ({ studentId, students, scores, examScores, homeworkScores, pastpaperScores, homeworkMaps, pastpaperMaps, setPastpaperScores, syncToCloud }) => {
     
     // ---------------- 1. 基礎分頁與 UI 狀態 ----------------
     const [activeTab, setActiveTab] = React.useState('overview');
@@ -6831,8 +6882,10 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
         return { grade: 'U', color: 'text-red-500', bg: 'bg-red-50' };
     };
 
-    // 計算學生個人歷屆試題統計
+   // ---------------- 5. 計算學生個人歷屆試題統計 (加入雷達圖 7 大課題數據) ----------------
     const ppStats = React.useMemo(() => {
+        const safePPMaps = pastpaperMaps || (typeof window !== 'undefined' ? window.PASTPAPER_MAPS : null) || {};
+        const safePPScores = pastpaperScores || (typeof window !== 'undefined' ? window.PASTPAPER_SCORES : null) || {};
         const studentPastpaper = safePPScores?.[studentId] || {};
         const stats = {};
         let totalCompleted = 0;
@@ -6842,7 +6895,12 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
             if (!yearMatch) return;
             const year = yearMatch[1];
             
-            if (!stats[year]) stats[year] = { papers: {}, totalEarned: 0, totalMax: 0 };
+            if (!stats[year]) {
+                stats[year] = { 
+                    papers: {}, totalEarned: 0, totalMax: 0,
+                    domains: { '1': { name: '熱學', e: 0, m: 0 }, '2': { name: '力學', e: 0, m: 0 }, '3': { name: '波動', e: 0, m: 0 }, '4': { name: '電磁學', e: 0, m: 0 }, '5': { name: '放射學', e: 0, m: 0 }, 'E3': { name: '能量', e: 0, m: 0 }, 'E4': { name: '醫學', e: 0, m: 0 } }
+                };
+            }
             
             const mapInfo = safePPMaps[paperId];
             if (!mapInfo || !mapInfo.questions) return;
@@ -6856,12 +6914,24 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                 const qMax = Number(q.max) || 1;
                 paperMax += qMax;
                 
-                if (studentAns !== undefined && studentAns !== '') {
+                if (studentAns !== undefined && studentAns !== '' && studentAns !== null) {
+                    if(q.id.startsWith('_')) return; // 跳過系統標籤
+                    
                     hasAnswer = true;
+                    let earned = 0;
                     if (q.type === 'MC') {
-                        if (studentAns === q.ans) paperEarned += qMax;
+                        const sAns = studentAns.toString().toUpperCase().trim().replace(/[^A-D]/g, '');
+                        const cAns = q.ans ? q.ans.toString().split(',').map(a => a.trim().toUpperCase()) : [];
+                        if (sAns.length === 1 && cAns.includes(sAns)) earned = qMax;
                     } else {
-                        paperEarned += Number(studentAns) || 0;
+                        earned = Number(studentAns) || 0;
+                    }
+                    paperEarned += earned;
+
+                    let dKey = q.topicId?.startsWith('E3') ? 'E3' : q.topicId?.startsWith('E4') ? 'E4' : q.topicId?.charAt(0);
+                    if (dKey && stats[year].domains[dKey]) {
+                        stats[year].domains[dKey].m += qMax;
+                        stats[year].domains[dKey].e += earned;
                     }
                 }
             });
@@ -7545,15 +7615,13 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                         </p>
                                     </div>
                                 ) : (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="grid grid-cols-1 gap-6">
                                         {Object.keys(ppStats?.byYear || {}).sort().reverse().map(year => {
                                             const stat = ppStats.byYear[year];
-                                            if (!stat) return null; // ★ 終極防護 1：避免 stat 為 undefined
+                                            if (!stat) return null; // 避免 stat 為 undefined
                                             
                                             const percent = stat.totalMax > 0 ? (stat.totalEarned / stat.totalMax) : 0;
                                             const dseGrade = estimateDSEGrade(percent);
-                                            
-                                            // ★ 終極防護 2：確保 safePapers 一定是個 {} 物件，絕不讓 Object.keys 報錯崩潰
                                             const safePapers = stat.papers || {}; 
 
                                             return (
@@ -7570,19 +7638,26 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                                         </div>
                                                     </div>
 
-                                                    <div className="space-y-3">
-                                                        {Object.entries(safePapers).map(([pId, pData]) => {
-                                                            const pPercent = pData.max > 0 ? (pData.earned / pData.max) : 0;
-                                                            return (
-                                                                <div key={pId} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
-                                                                    <span className="text-sm font-bold text-slate-700 truncate">{pData.title || pId}</span>
-                                                                    <div className="flex items-center gap-4">
-                                                                        <span className="text-sm font-black text-slate-700">{pData.earned} <span className="text-xs text-slate-400">/ {pData.max}</span></span>
-                                                                        <span className={`text-sm font-black w-10 text-right ${estimateDSEGrade(pPercent).color}`}>{(pPercent * 100).toFixed(0)}%</span>
+                                                    {/* ★ 升級版：左邊小雷達圖，右邊試卷列表 */}
+                                                    <div className="flex flex-col md:flex-row gap-6">
+                                                        <div className="w-full md:w-1/3 bg-slate-50/70 rounded-xl p-3 border border-slate-100 flex flex-col items-center justify-center">
+                                                            <span className="text-[10px] font-bold text-slate-400 tracking-wider mb-2">該年各課題能力分佈</span>
+                                                            <YearlyRadarChart domainData={stat.domains} year={year} />
+                                                        </div>
+                                                        <div className="w-full md:w-2/3 space-y-3 flex flex-col justify-center">
+                                                            {Object.entries(safePapers).map(([pId, pData]) => {
+                                                                const pPercent = pData.max > 0 ? (pData.earned / pData.max) : 0;
+                                                                return (
+                                                                    <div key={pId} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                                                        <span className="text-sm font-bold text-slate-700 truncate">{pData.title || pId}</span>
+                                                                        <div className="flex items-center gap-4">
+                                                                            <span className="text-sm font-black text-slate-700">{pData.earned} <span className="text-xs text-slate-400">/ {pData.max}</span></span>
+                                                                            <span className={`text-sm font-black w-10 text-right ${estimateDSEGrade(pPercent).color}`}>{(pPercent * 100).toFixed(0)}%</span>
+                                                                        </div>
                                                                     </div>
-                                                                </div>
-                                                            );
-                                                        })}
+                                                                );
+                                                            })}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             );
@@ -7614,7 +7689,11 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                             onChange={(e) => setPpSelectedYear(e.target.value)}
                                         >
                                             <option value="">-- 請選擇 DSE 年份 --</option>
-                                            {(availableYears || []).map(year => <option key={year} value={year}>{year} 年 DSE</option>)}
+                                            {/* 防呆處理，避免 undefined */}
+                                            {((pastpaperMaps ? Object.keys(pastpaperMaps).map(k => k.split('-')[0]) : [])
+                                                .filter((v, i, a) => a.indexOf(v) === i)
+                                                .sort().reverse()
+                                            ).map(year => <option key={year} value={year}>{year} 年 DSE</option>)}
                                         </select>
                                     </div>
                                     <div>
@@ -7630,24 +7709,24 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                             }}
                                         >
                                             <option value="">-- 請選擇卷目 --</option>
-                                            {(availablePapers || []).map(paper => (
-                                                <option key={paper.id} value={paper.id}>{paper.type} - {paper.title}</option>
+                                            {(pastpaperMaps ? Object.keys(pastpaperMaps) : [])
+                                                .filter(key => key.startsWith(ppSelectedYear))
+                                                .map(key => (
+                                                    <option key={key} value={key}>{key.replace(`${ppSelectedYear}-`, "")} - {pastpaperMaps[key].title}</option>
                                             ))}
                                         </select>
                                     </div>
                                 </div>
 
-                                {/* ★ 終極防護 3：即使卷目資料庫還沒載入，也不會崩潰 */}
+                                {/* 安全讀取題庫 */}
                                 {ppSelectedPaper && pastpaperMaps?.[ppSelectedPaper] && (
                                     <div className="animate-fadeIn">
                                         <label className="block text-sm font-bold text-slate-700 mb-3">步驟 3：輸入答案或分數</label>
                                         
-                                        {/* 升級版：分段與 5 格網格輸入系統 */}
+                                        {/* 分段與 5 格網格輸入系統 */}
                                         <div className="space-y-6 mb-8">
-                                            {/* 將題目按照 E3, E4 或預設進行分組 */}
                                             {(() => {
                                                 const paperQuestions = pastpaperMaps[ppSelectedPaper].questions || [];
-                                                // 簡單分類：如果題目 ID 或 topicId 包含 E3, E4，就分入該組
                                                 const groups = { '預設': [], 'E3 (能量)': [], 'E4 (醫學)': [] };
                                                 
                                                 paperQuestions.forEach(q => {
@@ -7662,20 +7741,17 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
 
                                                     return (
                                                         <div key={groupName} className="mb-4">
-                                                            {/* 只有當真的有 E3 / E4 分類時，才顯示小標題 */}
                                                             {groupName !== '預設' && (
                                                                 <h4 className="text-sm font-black text-indigo-500 mb-3 border-b border-indigo-100 pb-1 flex items-center gap-1">
                                                                     <Icon name="Layers" size={14} /> {groupName} 區塊
                                                                 </h4>
                                                             )}
                                                             
-                                                            {/* 強制設定為 5 欄 (grid-cols-5) 方便閱讀 */}
                                                             <div className="grid grid-cols-5 gap-3">
-                                                                {qs.map((q, idx) => {
+                                                                {qs.map((q) => {
                                                                     const studentAns = ppInputValues[q.id];
                                                                     const isMC = q.type === 'MC';
                                                                     
-                                                                    // 動態計算 MC 格子的顏色
                                                                     let bgColor = "bg-slate-50";
                                                                     let borderColor = "border-slate-200";
                                                                     let textColor = "text-slate-700";
@@ -7691,85 +7767,80 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                                                             bgColor = "bg-red-50";
                                                                             borderColor = "border-red-300";
                                                                             textColor = "text-red-600";
-                                                                            showCorrectAns = true; // 答錯時顯示正解
+                                                                            showCorrectAns = true; 
                                                                         }
                                                                     }
 
                                                                     return (
-                                                                    <div key={q.id} className={`${bgColor} p-2 rounded-xl border ${borderColor} flex flex-col justify-center items-center relative transition-colors`}>
-                                                                        
-                                                                        {/* 題目編號 */}
-                                                                        <label className="text-[10px] font-bold text-slate-500 mb-1 w-full text-center truncate" title={q.id.split('-').pop()}>
-                                                                            {q.id.split('-').pop()}
-                                                                        </label>
+                                                                        <div key={q.id} className={`${bgColor} p-2 rounded-xl border ${borderColor} flex flex-col justify-center items-center relative transition-colors`}>
+                                                                            
+                                                                            <label className="text-[10px] font-bold text-slate-500 mb-1 w-full text-center truncate" title={q.id.split('-').pop()}>
+                                                                                {q.id.split('-').pop()}
+                                                                            </label>
 
-                                                                        {/* 答錯時的正確答案小提示 (浮動於右上角) */}
-                                                                        {showCorrectAns && (
-                                                                            <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-sm">
-                                                                                {q.ans}
-                                                                            </span>
-                                                                        )}
+                                                                            {showCorrectAns && (
+                                                                                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-sm">
+                                                                                    {q.ans}
+                                                                                </span>
+                                                                            )}
 
-                                                                        {isMC ? (
-                                                                            <input 
-                                                                                id={`pp-input-${q.id}`} // 使用唯一 ID 方便跳轉
-                                                                                type="text" 
-                                                                                maxLength="1"
-                                                                                className={`w-full text-center font-black text-lg p-1.5 border border-slate-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none uppercase transition-all ${textColor}`}
-                                                                                value={studentAns || ''}
-                                                                                onChange={(e) => {
-                                                                                    const val = e.target.value.toUpperCase();
-                                                                                    if (val === '' || ['A','B','C','D'].includes(val)) {
-                                                                                        setPpInputValues(prev => ({...prev, [q.id]: val}));
-                                                                                        // 極速跳轉：找到下一題的 Input 並 Focus
-                                                                                        if (val !== '') {
-                                                                                            // 尋找當前題目在總陣列中的位置，然後跳下一題
-                                                                                            const allQs = paperQuestions;
-                                                                                            const currentGlobalIdx = allQs.findIndex(item => item.id === q.id);
-                                                                                            if (currentGlobalIdx !== -1 && currentGlobalIdx + 1 < allQs.length) {
-                                                                                                const nextId = allQs[currentGlobalIdx + 1].id;
-                                                                                                const nextInput = document.getElementById(`pp-input-${nextId}`);
-                                                                                                if (nextInput) nextInput.focus();
-                                                                                            }
-                                                                                        }
-                                                                                    }
-                                                                                }}
-                                                                            />
-                                                                        ) : (
-                                                                            <div className="flex items-center gap-1 w-full">
+                                                                            {isMC ? (
                                                                                 <input 
-                                                                                    id={`pp-input-${q.id}`}
-                                                                                    type="number" 
-                                                                                    min="0"
-                                                                                    max={q.max}
-                                                                                    className="w-full text-center font-black text-base p-1.5 border border-slate-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all"
-                                                                                    value={studentAns !== undefined ? studentAns : ''}
+                                                                                    id={`pp-input-${q.id}`} 
+                                                                                    type="text" 
+                                                                                    maxLength="1"
+                                                                                    className={`w-full text-center font-black text-lg p-1.5 border border-slate-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none uppercase transition-all ${textColor}`}
+                                                                                    value={studentAns || ''}
                                                                                     onChange={(e) => {
-                                                                                        let val = e.target.value;
-                                                                                        if (val !== '') {
-                                                                                            val = Number(val);
-                                                                                            if (val < 0) val = 0;
-                                                                                            if (val > q.max) val = q.max;
-                                                                                        }
-                                                                                        setPpInputValues(prev => ({...prev, [q.id]: val}));
-                                                                                    }}
-                                                                                    onKeyDown={(e) => {
-                                                                                        if (e.key === 'Enter') {
-                                                                                            const allQs = paperQuestions;
-                                                                                            const currentGlobalIdx = allQs.findIndex(item => item.id === q.id);
-                                                                                            if (currentGlobalIdx !== -1 && currentGlobalIdx + 1 < allQs.length) {
-                                                                                                const nextId = allQs[currentGlobalIdx + 1].id;
-                                                                                                const nextInput = document.getElementById(`pp-input-${nextId}`);
-                                                                                                if (nextInput) nextInput.focus();
+                                                                                        const val = e.target.value.toUpperCase();
+                                                                                        if (val === '' || ['A','B','C','D'].includes(val)) {
+                                                                                            setPpInputValues(prev => ({...prev, [q.id]: val}));
+                                                                                            if (val !== '') {
+                                                                                                const currentGlobalIdx = paperQuestions.findIndex(item => item.id === q.id);
+                                                                                                if (currentGlobalIdx !== -1 && currentGlobalIdx + 1 < paperQuestions.length) {
+                                                                                                    const nextId = paperQuestions[currentGlobalIdx + 1].id;
+                                                                                                    const nextInput = document.getElementById(`pp-input-${nextId}`);
+                                                                                                    if (nextInput) nextInput.focus();
+                                                                                                }
                                                                                             }
                                                                                         }
                                                                                     }}
                                                                                 />
-                                                                                <span className="text-[10px] text-slate-400 font-bold w-6">/{q.max}</span>
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                )})}
+                                                                            ) : (
+                                                                                <div className="flex items-center gap-1 w-full">
+                                                                                    <input 
+                                                                                        id={`pp-input-${q.id}`}
+                                                                                        type="number" 
+                                                                                        min="0"
+                                                                                        max={q.max}
+                                                                                        className="w-full text-center font-black text-base p-1.5 border border-slate-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all"
+                                                                                        value={studentAns !== undefined ? studentAns : ''}
+                                                                                        onChange={(e) => {
+                                                                                            let val = e.target.value;
+                                                                                            if (val !== '') {
+                                                                                                val = Number(val);
+                                                                                                if (val < 0) val = 0;
+                                                                                                if (val > q.max) val = q.max;
+                                                                                            }
+                                                                                            setPpInputValues(prev => ({...prev, [q.id]: val}));
+                                                                                        }}
+                                                                                        onKeyDown={(e) => {
+                                                                                            if (e.key === 'Enter') {
+                                                                                                const currentGlobalIdx = paperQuestions.findIndex(item => item.id === q.id);
+                                                                                                if (currentGlobalIdx !== -1 && currentGlobalIdx + 1 < paperQuestions.length) {
+                                                                                                    const nextId = paperQuestions[currentGlobalIdx + 1].id;
+                                                                                                    const nextInput = document.getElementById(`pp-input-${nextId}`);
+                                                                                                    if (nextInput) nextInput.focus();
+                                                                                                }
+                                                                                            }
+                                                                                        }}
+                                                                                    />
+                                                                                    <span className="text-[10px] text-slate-400 font-bold w-6">/{q.max}</span>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    );
+                                                                })}
                                                             </div>
                                                         </div>
                                                     );
@@ -7777,18 +7848,34 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                             })()}
                                         </div>
                                         
+                                        {/* ★ 升級版儲存按鈕：加入 _submitMonth 與雲端同步 syncToCloud */}
                                         <div className="flex justify-end border-t border-slate-100 pt-5">
                                             <button 
                                                 onClick={() => {
                                                     if (typeof setPastpaperScores === 'function') {
-                                                        setPastpaperScores(prev => ({
-                                                            ...prev,
-                                                            [studentId]: {
-                                                                ...(prev[studentId] || {}),
-                                                                [ppSelectedPaper]: ppInputValues
-                                                            }
-                                                        }));
-                                                        alert('✅ 成績已成功更新！');
+                                                        // 取得當前月份 YYYY-MM
+                                                        const currentMonth = new Date().toISOString().slice(0, 7);
+                                                        const newRecord = { ...ppInputValues, _submitMonth: currentMonth };
+                                                        
+                                                        let updatedScores = null;
+                                                        
+                                                        setPastpaperScores(prev => {
+                                                            updatedScores = {
+                                                                ...prev,
+                                                                [studentId]: {
+                                                                    ...(prev[studentId] || {}),
+                                                                    [ppSelectedPaper]: newRecord
+                                                                }
+                                                            };
+                                                            return updatedScores;
+                                                        });
+                                                        
+                                                        // 呼叫雲端同步函數
+                                                        if (typeof syncToCloud === 'function' && updatedScores) {
+                                                            syncToCloud(updatedScores, 'pastpaperScores');
+                                                        }
+                                                        
+                                                        alert('✅ 成績已成功更新並同步至資料庫！');
                                                         setPpMode('view');
                                                     } else {
                                                         alert('⚠️ 系統找不到儲存功能，請確保外層已傳遞 setPastpaperScores。');
