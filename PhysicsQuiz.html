@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V4.00 Physics Quiz Analyzer</title>
+    <title> V4.01 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -4030,8 +4030,9 @@ const StudentPromotionView = ({
             
             if (idx !== -1) {
                 const oldId = updatedStudents[idx].id;
-                // 永久 sid：若已有就保留，否則用舊 id 或新提供的 studentId
-                const permanentSid = updatedStudents[idx].sid || item.studentId || oldId;
+                // 永久 sid：有提供真實學號就優先用；否則保留已有 sid；再否則用舊 id
+                // （載入時可能用班別-座號暫代 sid，所以貼上真實學號時要覆寫）
+                const permanentSid = item.studentId || updatedStudents[idx].sid || oldId;
                 
                 updatedStudents[idx] = { 
                     ...updatedStudents[idx], 
