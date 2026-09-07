@@ -65,20 +65,27 @@
                 const [newCohort, setNewCohort] = React.useState('2025-2028'); 
                 const [pasteData, setPasteData] = React.useState('');
 
-                // 2. 處理匯入學生的函數
+                // 2. 處理匯入學生的函數（支援 3 欄或 4 欄：班別 / 座號 / 姓名 / [學號StudentID]）
                 const handleImportStudents = () => {
                     const lines = pasteData.trim().split('\n');
                     const newStudents = [];
                     lines.forEach(line => {
                         const parts = line.split('\t');
                         if (parts.length >= 3) {
-                            const id = `${parts[0].trim()}-${parts[1].trim()}`;
+                            const cls = parts[0].trim();
+                            const num = parts[1].trim();
+                            const name = parts[2].trim();
+                            const studentId = parts.length >= 4 ? parts[3].trim() : '';
+                            const id = `${cls}-${num}`;
+                            // sid 為永久識別碼：優先用提供的學號，否則用班別-座號
+                            const sid = studentId || id;
                             newStudents.push({ 
                                 id: id, 
-                                class: parts[0].trim(), 
-                                num: parts[1].trim(), 
-                                name: parts[2].trim(),
-                                cohort: newCohort 
+                                class: cls, 
+                                num: num, 
+                                name: name,
+                                cohort: newCohort,
+                                sid: sid
                             });
                         }
                     });
@@ -95,9 +102,9 @@
                         }
 
                         setPasteData('');
-                        alert(`✅ 成功匯入 ${newStudents.length} 名學生至群組「${newCohort}」！\n(系統已自動備份至雲端)`);
+                        alert(`✅ 成功匯入 ${newStudents.length} 名學生至群組「${newCohort}」！\n(系統已自動備份至雲端)\n提示：建議提供第 4 欄「學號」作為永久識別碼，升班時分數不會斷開。`);
                     } else {
-                        alert('無法匯入，請檢查 Excel 格式是否為「班別 (Tab) 學號 (Tab) 姓名」');
+                        alert('無法匯入，請檢查 Excel 格式是否為「班別 (Tab) 座號 (Tab) 姓名」或「班別 (Tab) 座號 (Tab) 姓名 (Tab) 學號」');
                     }
                 };
 
@@ -125,7 +132,7 @@
                         
                         {/* --- 匯入學生區塊 --- */}
                         <div className="card p-5 mb-6 bg-blue-50/50 border-blue-100 shadow-sm">
-                            <p className="text-sm text-slate-600 mb-3 font-medium">請先設定群組，再從 Excel 複製資料並貼上至下方文字方塊。格式為 3 欄：<b>班別 (Tab) 學號 (Tab) 姓名</b>。</p>
+                            <p className="text-sm text-slate-600 mb-3 font-medium">請先設定群組，再從 Excel 複製資料並貼上至下方文字方塊。<br/>格式：<b>班別 (Tab) 座號 (Tab) 姓名</b> 或建議 <b>班別 (Tab) 座號 (Tab) 姓名 (Tab) 學號</b>（第 4 欄學號為永久識別碼，升班時分數唔會斷）。</p>
                             
                             <div className="mb-3 flex items-center gap-3 bg-white p-3 rounded-lg shadow-sm border border-blue-100 w-fit">
                                 <label className="font-bold text-blue-800 text-sm">📌 準備匯入至群組：</label>
@@ -142,7 +149,7 @@
                                 className="w-full h-32 p-3 border border-slate-200 rounded text-sm mb-3 outline-none focus:ring-2 focus:ring-blue-400 shadow-inner bg-white" 
                                 value={pasteData} 
                                 onChange={e => setPasteData(e.target.value)} 
-                                placeholder="例如：&#10;5A&#9;01&#9;陳大文&#10;5A&#9;02&#9;李小明"
+                                placeholder="例如：&#10;5A&#9;01&#9;陳大文&#9;20251234&#10;5A&#9;02&#9;李小明&#9;20251235"
                             />
                             <button onClick={handleImportStudents} className="bg-blue-600 text-white px-5 py-2.5 rounded-lg shadow hover:bg-blue-700 font-bold flex items-center gap-2 transition">
                                 <Icon name="PlusCircle" size={18} /> 執行匯入並自動同步
@@ -3900,7 +3907,15 @@ const ExamExportView = ({ currentCohort, activeStudents, examScores }) => {
 };
 
 // ==================== 全新轉型版：學生動態管理與智慧升班組件 (名單識別升級 + 改名/改群組 + 篩選器) ====================
-const StudentPromotionView = ({ students, setStudents, scores, setScores, syncToCloud }) => {
+const StudentPromotionView = ({ 
+        students, setStudents, 
+        scores, setScores, 
+        examScores, setExamScores,
+        homeworkScores, setHomeworkScores,
+        pastpaperScores, setPastpaperScores,
+        remediationProgress, setRemediationProgress,
+        syncToCloud 
+    }) => {
     // 取得所有現有群組，並排序
     const cohorts = Array.from(new Set(students.map(s => s.cohort || '未分組'))).filter(Boolean).sort();
     
@@ -3918,7 +3933,23 @@ const StudentPromotionView = ({ students, setStudents, scores, setScores, syncTo
         setNewCohort(selectedCohort); 
     }, [selectedCohort]);
 
-    // 預覽與校對功能
+    // 輔助：遷移單一成績物件的 key
+    const migrateScoreKey = (scoreObj, oldId, newId) => {
+        if (!scoreObj || !oldId || oldId === newId) return scoreObj || {};
+        const updated = { ...scoreObj };
+        if (updated[oldId]) {
+            // 若新 key 已有資料則 deep merge，否則直接搬移
+            if (updated[newId]) {
+                updated[newId] = { ...updated[oldId], ...updated[newId] };
+            } else {
+                updated[newId] = updated[oldId];
+            }
+            delete updated[oldId];
+        }
+        return updated;
+    };
+
+    // 預覽與校對功能（支援 3 欄或 4 欄：班別 / 座號 / 姓名 / [學號StudentID]）
     const handlePreview = () => {
         if (!pasteData.trim()) {
             alert('⚠️ 請先貼上新學期的 Excel 學生資料！');
@@ -3934,67 +3965,101 @@ const StudentPromotionView = ({ students, setStudents, scores, setScores, syncTo
                 incoming.push({
                     cls: parts[0].trim(),
                     num: parts[1].trim(),
-                    name: parts[2].trim()
+                    name: parts[2].trim(),
+                    studentId: parts.length >= 4 ? parts[3].trim() : ''  // 可選的永久學號
                 });
             }
         });
 
         if (incoming.length === 0) {
-            alert('⚠️ 無法解析資料，請確認格式為：班別 (Tab) 座號 (Tab) 姓名');
+            alert('⚠️ 無法解析資料，請確認格式為：班別 (Tab) 座號 (Tab) 姓名  或  班別 (Tab) 座號 (Tab) 姓名 (Tab) 學號');
             return;
         }
 
         const currentStudents = students.filter(s => s.cohort === selectedCohort);
         
         const preview = incoming.map(inc => {
-            const match = currentStudents.find(s => s.name === inc.name);
+            // 優先用 StudentID (sid) 匹配，其次用姓名
+            let match = null;
+            if (inc.studentId) {
+                match = currentStudents.find(s => (s.sid || s.id) === inc.studentId);
+            }
+            if (!match) {
+                match = currentStudents.find(s => s.name === inc.name);
+            }
             return { 
                 ...inc, 
                 exists: !!match, 
                 oldId: match?.id, 
+                oldSid: match?.sid || match?.id,
                 oldClass: match?.class,
                 oldNum: match?.num
             };
         });
 
-        const notFound = currentStudents.filter(s => !incoming.find(i => i.name === s.name));
+        const notFound = currentStudents.filter(s => {
+            const matchedBySid = incoming.some(i => i.studentId && (s.sid || s.id) === i.studentId);
+            const matchedByName = incoming.some(i => i.name === s.name);
+            return !matchedBySid && !matchedByName;
+        });
         
         setPreviewList({ preview, notFound });
     };
 
-    // 執行正式升班/留班寫入
+    // 執行正式升班/留班寫入（完整遷移所有成績類型）
     const handleCommitPromotion = () => {
         let updatedStudents = [...students];
         let updatedScores = { ...scores };
+        let updatedExamScores = { ...(examScores || {}) };
+        let updatedHomeworkScores = { ...(homeworkScores || {}) };
+        let updatedPastpaperScores = { ...(pastpaperScores || {}) };
+        let updatedRemediation = { ...(remediationProgress || {}) };
         let promoteCount = 0;
         let newCount = 0;
 
         previewList.preview.forEach(item => {
             const newId = `${item.cls}-${item.num}`;
-            const idx = updatedStudents.findIndex(s => s.name === item.name);
+            // 優先用 sid 找，其次用姓名
+            let idx = -1;
+            if (item.studentId) {
+                idx = updatedStudents.findIndex(s => (s.sid || s.id) === item.studentId);
+            }
+            if (idx === -1) {
+                idx = updatedStudents.findIndex(s => s.name === item.name);
+            }
             
             if (idx !== -1) {
                 const oldId = updatedStudents[idx].id;
+                // 永久 sid：若已有就保留，否則用舊 id 或新提供的 studentId
+                const permanentSid = updatedStudents[idx].sid || item.studentId || oldId;
+                
                 updatedStudents[idx] = { 
                     ...updatedStudents[idx], 
                     id: newId, 
                     class: item.cls, 
                     num: item.num, 
-                    cohort: newCohort 
+                    cohort: newCohort,
+                    sid: permanentSid
                 };
                 
-                if (oldId !== newId && updatedScores[oldId]) {
-                    updatedScores[newId] = updatedScores[oldId];
-                    delete updatedScores[oldId];
+                // ★ 完整遷移所有成績類型
+                if (oldId !== newId) {
+                    updatedScores = migrateScoreKey(updatedScores, oldId, newId);
+                    updatedExamScores = migrateScoreKey(updatedExamScores, oldId, newId);
+                    updatedHomeworkScores = migrateScoreKey(updatedHomeworkScores, oldId, newId);
+                    updatedPastpaperScores = migrateScoreKey(updatedPastpaperScores, oldId, newId);
+                    updatedRemediation = migrateScoreKey(updatedRemediation, oldId, newId);
                 }
                 promoteCount++;
             } else {
+                const permanentSid = item.studentId || newId;
                 updatedStudents.push({ 
                     id: newId, 
                     class: item.cls, 
                     num: item.num, 
                     name: item.name, 
-                    cohort: newCohort 
+                    cohort: newCohort,
+                    sid: permanentSid
                 });
                 newCount++;
             }
@@ -4002,17 +4067,89 @@ const StudentPromotionView = ({ students, setStudents, scores, setScores, syncTo
 
         setStudents(updatedStudents);
         setScores(updatedScores);
+        if (typeof setExamScores === 'function') setExamScores(updatedExamScores);
+        if (typeof setHomeworkScores === 'function') setHomeworkScores(updatedHomeworkScores);
+        if (typeof setPastpaperScores === 'function') setPastpaperScores(updatedPastpaperScores);
+        if (typeof setRemediationProgress === 'function') setRemediationProgress(updatedRemediation);
 
         if (typeof syncToCloud === 'function') {
-            syncToCloud({ students: updatedStudents, scores: updatedScores });
+            syncToCloud({ 
+                students: updatedStudents, 
+                scores: updatedScores,
+                examScores: updatedExamScores,
+                homeworkScores: updatedHomeworkScores,
+                pastpaperScores: updatedPastpaperScores,
+                remediationProgress: updatedRemediation
+            });
         }
 
         setPreviewList(null);
         setPasteData('');
-        alert(`🎉 升班/更新程序已完成！\n\n更新舊生資料：${promoteCount} 人\n新增學生：${newCount} 人\n\n(所有變更已安全寫入 PHYSICS DB 雲端)`);
+        alert(`🎉 升班/更新程序已完成！\n\n更新舊生資料：${promoteCount} 人\n新增學生：${newCount} 人\n\n(已完整遷移小測/考試/功課/Pastpaper 所有成績至雲端)`);
     };
 
     const handleCancelPreview = () => setPreviewList(null);
+
+    // ★ 一次性修復：將舊班別-座號（如 S5A-26）的成績合併到目前學生
+    const handleRepairOrphanScores = () => {
+        if (!window.confirm('🔧 執行「舊成績 Key 修復」？\n\n系統會嘗試將 S5 時期殘留的成績合併到目前 S6 學生（例如 S5A-26 → S6A-23 謝宇邦）。\n此操作會寫入雲端，建議先確認。')) return;
+
+        const orphanMap = {
+            'S5A-26': 'S6A-23',
+            'S5B-13': 'S6B-13', 'S5B-14': 'S6B-14', 'S5B-18': 'S6B-18',
+            'S5B-19': 'S6B-19', 'S5B-20': 'S6B-20', 'S5B-22': 'S6B-22',
+            'S5B-24': 'S6B-24', 'S5B-30': 'S6B-30', 'S5B-31': 'S6B-31',
+            'S5B-32': 'S6B-32', 'S5B-33': 'S6B-33',
+            'S5C-28': 'S6C-28',
+            'S5D-3': 'S6D-3', 'S5D-5': 'S6D-5'
+        };
+
+        const migrate = (obj) => {
+            const updated = { ...(obj || {}) };
+            let count = 0;
+            Object.entries(orphanMap).forEach(([oldId, newId]) => {
+                if (updated[oldId]) {
+                    if (updated[newId]) {
+                        updated[newId] = { ...updated[oldId], ...updated[newId] };
+                    } else {
+                        updated[newId] = updated[oldId];
+                    }
+                    delete updated[oldId];
+                    count++;
+                }
+            });
+            return { updated, count };
+        };
+
+        const r1 = migrate(scores);
+        const r2 = migrate(examScores);
+        const r3 = migrate(homeworkScores);
+        const r4 = migrate(pastpaperScores);
+        const r5 = migrate(remediationProgress);
+
+        setScores(r1.updated);
+        if (typeof setExamScores === 'function') setExamScores(r2.updated);
+        if (typeof setHomeworkScores === 'function') setHomeworkScores(r3.updated);
+        if (typeof setPastpaperScores === 'function') setPastpaperScores(r4.updated);
+        if (typeof setRemediationProgress === 'function') setRemediationProgress(r5.updated);
+
+        const studentsWithSid = students.map(s => s.sid ? s : { ...s, sid: s.id });
+        setStudents(studentsWithSid);
+
+        if (typeof syncToCloud === 'function') {
+            syncToCloud({
+                students: studentsWithSid,
+                scores: r1.updated,
+                examScores: r2.updated,
+                homeworkScores: r3.updated,
+                pastpaperScores: r4.updated,
+                remediationProgress: r5.updated
+            });
+        }
+
+        const total = r1.count + r2.count + r3.count + r4.count + r5.count;
+        alert(`✅ 修復完成！\n\n小測: ${r1.count}\n考試: ${r2.count}\n功課: ${r3.count}\nPastpaper: ${r4.count}\n補底: ${r5.count}\n合計遷移 ${total} 組舊 Key\n\n所有現有學生已補上永久 sid。`);
+    };
 
     // 快速修改學生姓名
     const handleEditName = (id, currentName) => {
@@ -4073,7 +4210,7 @@ const StudentPromotionView = ({ students, setStudents, scores, setScores, syncTo
                 <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
                     <Icon name="UserCheck" className="text-purple-600" /> 學生動態管理與智慧升班 (新學年轉換)
                 </h1>
-                <p className="text-sm text-slate-500 mt-1">在新學年貼上新名單進行預覽，系統會自動根據「姓名」對應舊生進行班級座號升級，並完美遷移所有分數紀錄。</p>
+                <p className="text-sm text-slate-500 mt-1">在新學年貼上新名單進行預覽。系統會優先用「學號(StudentID)」對應舊生，否則用「姓名」。升班時會完整遷移小測／考試／功課／Pastpaper 所有成績，並保留永久 sid。</p>
             </div>
 
             {/* Excel 智慧升班輸入區塊 */}
@@ -4102,19 +4239,24 @@ const StudentPromotionView = ({ students, setStudents, scores, setScores, syncTo
                     </div>
                 </div>
 
-                <p className="text-xs text-slate-600 mb-2 font-medium">3. 請從 Excel 複製新學期的名單（3 欄：<b>班別 (Tab) 座號 (Tab) 姓名</b>）並貼在下方：</p>
+                <p className="text-xs text-slate-600 mb-2 font-medium">3. 請從 Excel 複製新學期的名單並貼在下方。<br/>格式：<b>班別 (Tab) 座號 (Tab) 姓名</b> 或建議 <b>班別 (Tab) 座號 (Tab) 姓名 (Tab) 學號</b></p>
                 <textarea 
                     className="w-full h-36 p-3 border border-slate-200 rounded-lg text-sm mb-3 outline-none focus:ring-2 focus:ring-purple-400 shadow-inner bg-white font-mono" 
                     value={pasteData} 
                     onChange={e => setPasteData(e.target.value)} 
-                    placeholder="例如新學期的資料：&#10;6A&#9;27&#9;謝宇邦&#10;6B&#9;05&#9;張小明"
+                    placeholder="例如新學期的資料：&#10;6A&#9;23&#9;謝宇邦&#9;20241234&#10;6B&#9;13&#9;林宥焺&#9;20241235"
                     disabled={previewList !== null} 
                 />
                 
                 {!previewList ? (
-                    <button onClick={handlePreview} className="bg-purple-600 text-white px-6 py-2.5 rounded-lg shadow-md hover:bg-purple-700 font-bold flex items-center gap-2 transition w-full md:w-auto justify-center">
-                        <Icon name="Eye" size={18} /> 預覽升班結果
-                    </button>
+                    <div className="flex flex-wrap gap-3">
+                        <button onClick={handlePreview} className="bg-purple-600 text-white px-6 py-2.5 rounded-lg shadow-md hover:bg-purple-700 font-bold flex items-center gap-2 transition justify-center">
+                            <Icon name="Eye" size={18} /> 預覽升班結果
+                        </button>
+                        <button onClick={handleRepairOrphanScores} className="bg-amber-500 text-white px-5 py-2.5 rounded-lg shadow hover:bg-amber-600 font-bold flex items-center gap-2 transition justify-center">
+                            <Icon name="RefreshCw" size={18} /> 修復舊成績 Key（S5→S6）
+                        </button>
+                    </div>
                 ) : (
                     <div className="flex gap-3">
                         <button onClick={handleCommitPromotion} className="bg-green-600 text-white px-6 py-2.5 rounded-lg shadow-md hover:bg-green-700 font-bold flex items-center gap-2 transition flex-1 justify-center">
@@ -8363,7 +8505,11 @@ const App = () => {
                         if (typeof EXAM_MAPS !== 'undefined') EXAM_MAPS = window.EXAM_MAPS;
                         if (typeof PASTPAPER_MAPS !== 'undefined') PASTPAPER_MAPS = window.PASTPAPER_MAPS;
                         
-                        setStudents(Array.isArray(data.students) ? data.students : []);
+                        // 載入學生時自動補上 sid（永久識別碼），舊資料冇 sid 就用 id
+                        const loadedStudents = Array.isArray(data.students) 
+                            ? data.students.map(s => s.sid ? s : { ...s, sid: s.id }) 
+                            : [];
+                        setStudents(loadedStudents);
                         setScores((typeof data.scores === 'object' && data.scores !== null) ? data.scores : {});
                         setExamScores((typeof data.examScores === 'object' && data.examScores !== null) ? data.examScores : {});
                         setRemediationProgress((typeof data.remediationProgress === 'object' && data.remediationProgress !== null) ? data.remediationProgress : {});
@@ -8372,9 +8518,7 @@ const App = () => {
                         setHomeworkScores((typeof data.homeworkScores === 'object' && data.homeworkScores !== null) ? data.homeworkScores : {});
                         
                         // ★ 載入 Pastpaper 儲存成績
-                        // 👇 ★ 補上這兩行，把雲端抓下來的資料存進剛剛宣告的變數裡 👇
                         setPastpaperMaps(data.pastpaperMaps || {});
-                
                         setPastpaperScores((typeof data.pastpaperScores === 'object' && data.pastpaperScores !== null) ? data.pastpaperScores : {});
                         
                         
@@ -8568,7 +8712,15 @@ const App = () => {
                             students={students} 
                             setStudents={setStudents} 
                             scores={scores} 
-                            setScores={setScores} 
+                            setScores={setScores}
+                            examScores={examScores}
+                            setExamScores={setExamScores}
+                            homeworkScores={homeworkScores}
+                            setHomeworkScores={setHomeworkScores}
+                            pastpaperScores={pastpaperScores}
+                            setPastpaperScores={setPastpaperScores}
+                            remediationProgress={remediationProgress}
+                            setRemediationProgress={setRemediationProgress}
                             syncToCloud={syncToCloud} 
                         />
                     )}
