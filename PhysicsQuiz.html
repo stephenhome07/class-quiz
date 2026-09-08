@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V4.02 Physics Quiz Analyzer</title>
+    <title> V4.03 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -57,6 +57,25 @@
         let QUIZ_MAPS = {};
         let EXAM_MAPS = {};
         let HOMEWORK_MAPS = {};  // ★ 加入這一行！
+
+        // ★ 共用：從課程大綱設定即時產生對照表文字（改大綱後四個 AI Prompt 自動同步）
+        function getSyllabusTableText() {
+            const topics = (typeof SYLLABUS_TOPICS !== 'undefined' && SYLLABUS_TOPICS && Object.keys(SYLLABUS_TOPICS).length > 0)
+                ? SYLLABUS_TOPICS
+                : (window.SYLLABUS_TOPICS || {});
+            const lines = ['課題編號\t範疇\t課題名稱\t學習要求'];
+            Object.entries(topics).forEach(([id, val]) => {
+                if (typeof val === 'object' && val !== null) {
+                    lines.push(`${id}\t${val.section || ''}\t${val.topic || val.name || ''}\t${val.desc || ''}`);
+                } else {
+                    lines.push(`${id}\t\t${val || ''}\t`);
+                }
+            });
+            if (lines.length === 1) {
+                return '（課程大綱尚未載入或為空，請先到「課程大綱設定」匯入資料）';
+            }
+            return lines.join('\n');
+        }
             
             // --- Views Components ---
 // ==================== 升級版：學生管理 (Excel 匯入) 組件 (自動同步雲端) ====================
@@ -1793,13 +1812,16 @@ const QuizSettingsView = ({ syncToCloud }) => {
         } catch (err) { alert('❌ 儲存失敗！' + err); }
     };
 
-    // ---------- AI 快速 Prompt 內容 ----------
-    const quickPromptText = `【身份】你是一位專門為香港高中物理（HKDSE）出題與分析的老師，學生程度為 Band 3。
+    // ---------- AI 快速 Prompt 內容（自動嵌入課程大綱） ----------
+    const buildQuickPromptText = () => `【身份】你是一位專門為香港高中物理（HKDSE）出題與分析的老師，學生程度為 Band 3。
 
-【任務】我會上傳一份小測卷（可能是 MC、LQ 或混合題型的 PDF / Word / 圖片）以及一個「課題 ID 對照表 Word 檔」。請你分析這份小測卷，為「每一小題」產生一筆記錄，輸出成「Tab 分隔」的純文字格式，方便我直接貼到學校系統。
+【任務】我會上傳一份小測卷（可能是 MC、LQ 或混合題型的 PDF / Word / 圖片）。請你分析這份小測卷，為「每一小題」產生一筆記錄，輸出成「Tab 分隔」的純文字格式，方便我直接貼到學校系統。
 
 【輸出欄位（共 9 欄，順序固定）】
 小測編號 [Tab] 小測標題 [Tab] 題目ID [Tab] 題型 [Tab] 滿分 [Tab] 難度 [Tab] 課題編號 [Tab] 題目描述 [Tab] 正確答案
+
+【課程大綱對照表（請嚴格按此表選填課題編號 topicId）】
+${getSyllabusTableText()}
 
 【提取規則】
 
@@ -1837,10 +1859,10 @@ const QuizSettingsView = ({ syncToCloud }) => {
 - 請用中文輸出：「淺」「中」「深」。
 
 六、課題編號（topicId）
-- 請根據題目內容，與我提供的「課題 ID 對照表 Word 檔」進行比對，找出最相關的課題 ID（例如 2.6.1, 2.9.2）。若找不到精確對應，請選擇最接近的一個。若完全無法對應，可留空。
+- 請根據題目內容，與上方【課程大綱對照表】進行比對，找出最相關的課題編號（例如 2.6.1, 2.9.2）。若找不到精確對應，請選擇最接近的一個。若完全無法對應，可留空。
 
 七、題目描述（topicDesc）
-- 不要使用對照表中的文字。請你根據該題目實際問的內容，用中文撰寫一個 20-30 字的簡短描述，說明這題在考什麼。
+- 不要直接抄寫對照表中的學習要求文字。請你根據該題目實際問的內容，用中文撰寫一個 20-30 字的簡短描述，說明這題在考什麼。
 - 範例：
   - 「計算與位移成夾角的施力所作的功」
   - 「利用能量守恆定律計算物體克服水阻力作功後的最大深度」
@@ -1868,8 +1890,8 @@ CH09	09 功、能量和功率	LQ3b	LQ	3	深	2.6.3	根據能量守恆定律，描
 - 除了 MC 題的正確答案欄需填寫 A/B/C/D 外，LQ 題的正確答案欄務必留空。`;
 
     const copyPromptToClipboard = () => {
-        navigator.clipboard.writeText(quickPromptText);
-        alert('Prompt 已複製！');
+        navigator.clipboard.writeText(buildQuickPromptText());
+        alert('Prompt 已複製！（已自動附上最新課程大綱）');
     };
 
     return (
@@ -1885,7 +1907,7 @@ CH09	09 功、能量和功率	LQ3b	LQ	3	深	2.6.3	根據能量守恆定律，描
             {/* ========== 快速 Prompt 複製區 ========== */}
             <div className="mb-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
                 <div className="flex justify-between items-center mb-1">
-                    <span className="text-xs font-bold text-indigo-700">🤖 AI 自動生成小測題目清單用 Prompt</span>
+                    <span className="text-xs font-bold text-indigo-700">🤖 AI 自動生成小測題目清單用 Prompt（已自動附上課程大綱）</span>
                     <button 
                         onClick={copyPromptToClipboard}
                         className="text-xs bg-indigo-500 text-white px-2 py-1 rounded hover:bg-indigo-600"
@@ -1896,11 +1918,11 @@ CH09	09 功、能量和功率	LQ3b	LQ	3	深	2.6.3	根據能量守恆定律，描
                 <textarea 
                     readOnly 
                     className="w-full h-24 text-xs font-mono bg-white border border-indigo-100 rounded p-2 outline-none resize-none"
-                    value={quickPromptText}
+                    value={buildQuickPromptText()}
                 />
                 <div className="text-[10px] text-indigo-600 mt-1 space-y-0.5">
-                    <p>1. 點擊「複製 Prompt」。</p>
-                    <p>2. 到 ChatGPT / Claude 貼上，並 <b>同時上傳小測卷檔案</b> 與 <b>課題 ID 對照表 Word 檔</b>（可額外告知小測編號與標題）。</p>
+                    <p>1. 點擊「複製 Prompt」（已自動嵌入最新「課程大綱設定」內容，無需再上傳對照表）。</p>
+                    <p>2. 到 ChatGPT / Claude 貼上，並 <b>上傳小測卷檔案</b>（可額外告知小測編號與標題）。</p>
                     <p>3. 將 AI 回應的純文字直接貼入下方文字框，即可儲存。</p>
                 </div>
             </div>
@@ -1956,13 +1978,16 @@ const ExamSettingsView = ({ syncToCloud }) => {
         } catch (err) { alert('❌ 儲存失敗！' + err); }
     };
 
-    // ---------- AI 快速 Prompt 內容 ----------
-    const quickPromptText = `【身份】你是一位專門為香港高中物理（HKDSE）出題與分析的老師，學生程度為 Band 3。
+    // ---------- AI 快速 Prompt 內容（自動嵌入課程大綱） ----------
+    const buildQuickPromptText = () => `【身份】你是一位專門為香港高中物理（HKDSE）出題與分析的老師，學生程度為 Band 3。
 
-【任務】我會上傳一份考試卷（可能是 MC、LQ 或混合題型的 PDF / Word / 圖片）以及一個「課題 ID 對照表 Word 檔」。請你分析這份考試卷，為「每一小題」產生一筆記錄，輸出成「Tab 分隔」的純文字格式，方便我直接貼到學校系統。
+【任務】我會上傳一份考試卷（可能是 MC、LQ 或混合題型的 PDF / Word / 圖片）。請你分析這份考試卷，為「每一小題」產生一筆記錄，輸出成「Tab 分隔」的純文字格式，方便我直接貼到學校系統。
 
 【輸出欄位（共 9 欄，順序固定）】
 考試編號 [Tab] 考試標題 [Tab] 題目ID [Tab] 題型 [Tab] 滿分 [Tab] 難度 [Tab] 課題編號 [Tab] 題目描述 [Tab] 正確答案
+
+【課程大綱對照表（請嚴格按此表選填課題編號 topicId）】
+${getSyllabusTableText()}
 
 【提取規則】
 
@@ -2000,10 +2025,10 @@ const ExamSettingsView = ({ syncToCloud }) => {
 - 請用中文輸出：「淺」「中」「深」。
 
 六、課題編號（topicId）
-- 請根據題目內容，與我提供的「課題 ID 對照表 Word 檔」進行比對，找出最相關的課題 ID（例如 2.6.1, 2.9.2）。若找不到精確對應，請選擇最接近的一個。若完全無法對應，可留空。
+- 請根據題目內容，與上方【課程大綱對照表】進行比對，找出最相關的課題編號（例如 2.6.1, 2.9.2）。若找不到精確對應，請選擇最接近的一個。若完全無法對應，可留空。
 
 七、題目描述（topicDesc）
-- 不要使用對照表中的文字。請你根據該題目實際問的內容，用中文撰寫一個 20-30 字的簡短描述，說明這題在考什麼。
+- 不要直接抄寫對照表中的學習要求文字。請你根據該題目實際問的內容，用中文撰寫一個 20-30 字的簡短描述，說明這題在考什麼。
 - 範例：
   - 「計算與位移成夾角的施力所作的功」
   - 「利用能量守恆定律計算物體克服水阻力作功後的最大深度」
@@ -2031,8 +2056,8 @@ EXAM1	2024 模擬試卷	LQ3b	LQ	3	深	2.6.3	根據能量守恆定律，描繪對
 - 除了 MC 題的正確答案欄需填寫 A/B/C/D 外，LQ 題的正確答案欄務必留空。`;
 
     const copyPromptToClipboard = () => {
-        navigator.clipboard.writeText(quickPromptText);
-        alert('Prompt 已複製！');
+        navigator.clipboard.writeText(buildQuickPromptText());
+        alert('Prompt 已複製！（已自動附上最新課程大綱）');
     };
 
     return (
@@ -2048,7 +2073,7 @@ EXAM1	2024 模擬試卷	LQ3b	LQ	3	深	2.6.3	根據能量守恆定律，描繪對
             {/* ========== 快速 Prompt 複製區 ========== */}
             <div className="mb-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
                 <div className="flex justify-between items-center mb-1">
-                    <span className="text-xs font-bold text-indigo-700">🤖 AI 自動生成考試題目清單用 Prompt</span>
+                    <span className="text-xs font-bold text-indigo-700">🤖 AI 自動生成考試題目清單用 Prompt（已自動附上課程大綱）</span>
                     <button 
                         onClick={copyPromptToClipboard}
                         className="text-xs bg-indigo-500 text-white px-2 py-1 rounded hover:bg-indigo-600"
@@ -2059,11 +2084,11 @@ EXAM1	2024 模擬試卷	LQ3b	LQ	3	深	2.6.3	根據能量守恆定律，描繪對
                 <textarea 
                     readOnly 
                     className="w-full h-24 text-xs font-mono bg-white border border-indigo-100 rounded p-2 outline-none resize-none"
-                    value={quickPromptText}
+                    value={buildQuickPromptText()}
                 />
                 <div className="text-[10px] text-indigo-600 mt-1 space-y-0.5">
-                    <p>1. 點擊「複製 Prompt」。</p>
-                    <p>2. 到 ChatGPT / Claude 貼上，並 <b>同時上傳考試卷檔案</b> 與 <b>課題 ID 對照表 Word 檔</b>（可額外告知考試編號與標題）。</p>
+                    <p>1. 點擊「複製 Prompt」（已自動嵌入最新「課程大綱設定」內容，無需再上傳對照表）。</p>
+                    <p>2. 到 ChatGPT / Claude 貼上，並 <b>上傳考試卷檔案</b>（可額外告知考試編號與標題）。</p>
                     <p>3. 將 AI 回應的純文字直接貼入下方文字框，即可儲存。</p>
                 </div>
             </div>
@@ -4516,10 +4541,13 @@ const HomeworkSettingsView = ({ students, currentCohort, homeworkMaps, setHomewo
         !homeworkMaps[id].cohort || homeworkMaps[id].cohort === selectedCohort
     );
 
-    // ---------- 快速 Prompt 內容 ----------
-    const quickPromptText = `【身份】你是一位專門為香港高中物理（HKDSE）出題與分析的老師，學生程度為 Band 3。
+    // ---------- 快速 Prompt 內容（自動嵌入課程大綱） ----------
+    const buildQuickPromptText = () => `【身份】你是一位專門為香港高中物理（HKDSE）出題與分析的老師，學生程度為 Band 3。
 
-【任務】我會上傳一份物理功課（可能是 MC、LQ，或兩者混合的 PDF / Word / 圖片）以及一個「課題 ID 對照表 Word 檔」。請你分析這份功課，為「每一小題」產生一筆記錄，輸出成「Tab 分隔」的純文字格式，方便我直接貼到學校系統。
+【任務】我會上傳一份物理功課（可能是 MC、LQ，或兩者混合的 PDF / Word / 圖片）。請你分析這份功課，為「每一小題」產生一筆記錄，輸出成「Tab 分隔」的純文字格式，方便我直接貼到學校系統。
+
+【課程大綱對照表（請嚴格按此表選填 topicId）】
+${getSyllabusTableText()}
 
 【提取規則】
 
@@ -4552,8 +4580,8 @@ const HomeworkSettingsView = ({ students, currentCohort, homeworkMaps, setHomewo
 - 請用中文輸出：「淺」「中」「深」。
 
 五、topicId 和 topicDesc
-- topicId：請根據題目內容，與我提供的「課題 ID 對照表 Word 檔」進行比對，找出最相關的課題 ID（例如 1.1.1, 4.5.2）。若無法找到精確對應，請選擇最接近的一個。若完全無法對應，topicId 可留空。
-- topicDesc：不要使用對照表中的文字。請你根據該題目實際問的內容，用中文撰寫一個 20-30 字的簡短描述，說明這題在考什麼。
+- topicId：請根據題目內容，與上方【課程大綱對照表】進行比對，找出最相關的課題編號（例如 1.1.1, 4.5.2）。若無法找到精確對應，請選擇最接近的一個。若完全無法對應，topicId 可留空。
+- topicDesc：不要直接抄寫對照表中的學習要求文字。請你根據該題目實際問的內容，用中文撰寫一個 20-30 字的簡短描述，說明這題在考什麼。
   例：「計算長直載流導線在距離其 6 cm 處所產生的磁場量值。」
   維持一句話，簡潔準確。
 
@@ -4575,8 +4603,8 @@ LQ1bi	LQ	2	中	4.5.2	解釋螺線管長度和匝數加倍對磁場的影響。
 - topicDesc 必須是你自己歸納的 20-30 字描述，不可直接抄寫對照表中的長句。`;
 
     const copyPromptToClipboard = () => {
-        navigator.clipboard.writeText(quickPromptText);
-        alert('Prompt 已複製！');
+        navigator.clipboard.writeText(buildQuickPromptText());
+        alert('Prompt 已複製！（已自動附上最新課程大綱）');
     };
 
     return (
@@ -4632,7 +4660,7 @@ LQ1bi	LQ	2	中	4.5.2	解釋螺線管長度和匝數加倍對磁場的影響。
                     {/* ========== 快速 Prompt 複製區 ========== */}
                     <div className="mb-3 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
                         <div className="flex justify-between items-center mb-1">
-                            <span className="text-xs font-bold text-indigo-700">🤖 AI 自動生成題目清單用 Prompt</span>
+                            <span className="text-xs font-bold text-indigo-700">🤖 AI 自動生成題目清單用 Prompt（已自動附上課程大綱）</span>
                             <button 
                                 onClick={copyPromptToClipboard}
                                 className="text-xs bg-indigo-500 text-white px-2 py-1 rounded hover:bg-indigo-600"
@@ -4643,11 +4671,11 @@ LQ1bi	LQ	2	中	4.5.2	解釋螺線管長度和匝數加倍對磁場的影響。
                         <textarea 
                             readOnly 
                             className="w-full h-24 text-xs font-mono bg-white border border-indigo-100 rounded p-2 outline-none resize-none"
-                            value={quickPromptText}
+                            value={buildQuickPromptText()}
                         />
                         <div className="text-[10px] text-indigo-600 mt-1 space-y-0.5">
-                            <p>1. 點擊「複製 Prompt」。</p>
-                            <p>2. 到 ChatGPT / Claude 貼上，並 <b>同時上傳功課檔案</b> 與 <b>課題 ID 對照表 Word 檔</b>。</p>
+                            <p>1. 點擊「複製 Prompt」（已自動嵌入最新「課程大綱設定」內容，無需再上傳對照表）。</p>
+                            <p>2. 到 ChatGPT / Claude 貼上，並 <b>上傳功課檔案</b>。</p>
                             <p>3. 將 AI 回應的純文字直接貼入下方文字框，即可儲存。</p>
                         </div>
                     </div>
@@ -5571,10 +5599,13 @@ const PastpaperSettingsView = ({ syncToCloud }) => {
         }
     };
 
-    // ---------- AI 快速 Prompt 內容 ----------
-    const quickPromptText = `【身份】你是一位專門為香港高中物理（HKDSE）出題與分析的老師，學生程度為 Band 3。
+    // ---------- AI 快速 Prompt 內容（自動嵌入課程大綱） ----------
+    const buildQuickPromptText = () => `【身份】你是一位專門為香港高中物理（HKDSE）出題與分析的老師，學生程度為 Band 3。
 
-【任務】我會上傳一份 HKDSE 物理科歷屆試卷（可能是 Paper 1A、Paper 1B、Paper 2 的 PDF / Word / 圖片），以及一個「課題 ID 對照表 Word 檔」。請你分析整份試卷，生成一個結構化的 JSON 物件，方便我直接貼到學校系統的 Pastpaper 題庫。
+【任務】我會上傳一份 HKDSE 物理科歷屆試卷（可能是 Paper 1A、Paper 1B、Paper 2 的 PDF / Word / 圖片）。請你分析整份試卷，生成一個結構化的 JSON 物件，方便我直接貼到學校系統的 Pastpaper 題庫。
+
+【課程大綱對照表（請嚴格按此表選填 topicId）】
+${getSyllabusTableText()}
 
 【輸出格式】
 請輸出一個 JSON 物件（不要包含任何額外文字、註解或 Markdown 標記），格式如下：
@@ -5599,7 +5630,7 @@ const PastpaperSettingsView = ({ syncToCloud }) => {
 - type: "MC" 或 "LQ"
 - max: 數字，滿分
 - level: 字串，"淺"、"中" 或 "深"
-- topicId: 字串，從課題對照表比對出的編號（如 "1.1.1"、"E3.2.2"）
+- topicId: 字串，從上方課程大綱對照表比對出的編號（如 "1.1.1"、"E3.2.2"）
 - topicDesc: 字串，根據題目內容撰寫的 20-30 字簡短描述
 - ans: 字串，MC 題填正確選項代號 (A/B/C/D)，LQ 題填空字串 ""
 
@@ -5632,8 +5663,8 @@ const PastpaperSettingsView = ({ syncToCloud }) => {
 - 深：多步驟分析、綜合應用、繪圖、或需分辨常見誤解（可標註「殺手題」特徵）。
 
 【課題對照 (topicId 與 topicDesc)】
-- topicId：請根據題目內容，比對我上傳的「課題 ID 對照表 Word 檔」，找出最相關的課題 ID（例如 1.2.2, 2.6.1, E3.4.1）。若找不到精確對應，選擇最接近的。若仍無法判斷，可留空字串 ""。
-- topicDesc：不要使用對照表中的原文，請你自己根據題目實際問的內容，用中文寫一個 20-30 字的描述。範例：
+- topicId：請根據題目內容，比對上方【課程大綱對照表】，找出最相關的課題編號（例如 1.2.2, 2.6.1, E3.4.1）。若找不到精確對應，選擇最接近的。若仍無法判斷，可留空字串 ""。
+- topicDesc：不要直接抄寫對照表中的學習要求文字，請你自己根據題目實際問的內容，用中文寫一個 20-30 字的描述。範例：
   - 「分析真空瓶減少熱增益（輻射與傳導）的物理原理」
   - 「利用 Snell's Law 計算半圓形玻璃塊對紅光的折射率」
   - 「應用風力發電功率方程計算風速變化時的平均輸出功率」
@@ -5647,8 +5678,8 @@ const PastpaperSettingsView = ({ syncToCloud }) => {
 - 題目必須按照試卷順序排列，不能跳題或合併。`;
 
     const copyPromptToClipboard = () => {
-        navigator.clipboard.writeText(quickPromptText);
-        alert('Prompt 已複製！');
+        navigator.clipboard.writeText(buildQuickPromptText());
+        alert('Prompt 已複製！（已自動附上最新課程大綱）');
     };
 
     return (
