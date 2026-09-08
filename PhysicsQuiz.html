@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V4.03 Physics Quiz Analyzer</title>
+    <title>V4.04 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -5702,7 +5702,7 @@ ${getSyllabusTableText()}
             {/* ========== 快速 Prompt 複製區 ========== */}
             <div className="mb-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
                 <div className="flex justify-between items-center mb-1">
-                    <span className="text-xs font-bold text-indigo-700">🤖 AI 自動生成 Pastpaper JSON 用 Prompt</span>
+                    <span className="text-xs font-bold text-indigo-700">🤖 AI 自動生成 Pastpaper JSON 用 Prompt（已自動附上課程大綱）</span>
                     <button 
                         onClick={copyPromptToClipboard}
                         className="text-xs bg-indigo-500 text-white px-2 py-1 rounded hover:bg-indigo-600"
@@ -5713,11 +5713,11 @@ ${getSyllabusTableText()}
                 <textarea 
                     readOnly 
                     className="w-full h-24 text-xs font-mono bg-white border border-indigo-100 rounded p-2 outline-none resize-none"
-                    value={quickPromptText}
+                    value={buildQuickPromptText()}
                 />
                 <div className="text-[10px] text-indigo-600 mt-1 space-y-0.5">
-                    <p>1. 點擊「複製 Prompt」。</p>
-                    <p>2. 到 ChatGPT / Claude 貼上，並 <b>同時上傳歷屆試卷檔案</b> 與 <b>課題 ID 對照表 Word 檔</b>。</p>
+                    <p>1. 點擊「複製 Prompt」（已自動嵌入最新「課程大綱設定」內容，無需再上傳對照表）。</p>
+                    <p>2. 到 ChatGPT / Claude 貼上，並 <b>上傳歷屆試卷檔案</b>。</p>
                     <p>3. 將 AI 回應的純 JSON 直接貼入下方文字框，即可儲存。</p>
                 </div>
             </div>
