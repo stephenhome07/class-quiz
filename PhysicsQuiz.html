@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> V4.01 Physics Quiz Analyzer</title>
+    <title> V4.02 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -1353,10 +1353,12 @@ const TopicAnalysisView = ({ activeStudents, scores }) => {
                     totalScore += s; totalMax += q.max;
                     
                     if (!analysis[q.topicId]) {
+                        const _si = SYLLABUS_TOPICS[q.topicId];
+                        const _topicName = (typeof _si === 'object' && _si !== null) ? (_si.topic || _si.name || '未知課題') : (_si || '未知課題');
                         analysis[q.topicId] = { 
                             max: 0, 
                             score: 0, 
-                            topicName: SYLLABUS_TOPICS[q.topicId] || '未知課題', 
+                            topicName: _topicName, 
                             weakPoints: [] 
                         };
                     }
@@ -1646,14 +1648,32 @@ const ClassSummaryView = ({ activeStudents, scores }) => {
     );
 };
         
-// ==================== 1. 課程大綱設定組件 ====================
+// ==================== 1. 課程大綱設定組件（支援物件格式 {section, topic, desc}） ====================
 const SyllabusSettingsView = ({ syncToCloud }) => {
     const [syllabusText, setSyllabusText] = React.useState('');
 
+    // 從 SYLLABUS_TOPICS 取值時安全取出課題名稱（兼容字串或物件）
+    const getTopicName = (val) => {
+        if (val == null) return '';
+        if (typeof val === 'object') return val.topic || val.name || '';
+        return String(val);
+    };
+    const getSection = (val) => (typeof val === 'object' && val !== null) ? (val.section || '') : '';
+    const getDesc = (val) => (typeof val === 'object' && val !== null) ? (val.desc || '') : '';
+
     React.useEffect(() => {
-        let sText = "課題編號\t課題名稱\n";
-        Object.entries(SYLLABUS_TOPICS).forEach(([id, name]) => {
-            sText += `${id}\t${name}\n`;
+        const topics = (typeof SYLLABUS_TOPICS !== 'undefined' && SYLLABUS_TOPICS) ? SYLLABUS_TOPICS : (window.SYLLABUS_TOPICS || {});
+        // 判斷是否有豐富物件資料 → 顯示 4 欄；否則 2 欄
+        const hasRich = Object.values(topics).some(v => typeof v === 'object' && v !== null && (v.topic || v.section || v.desc));
+        let sText = hasRich
+            ? "課題編號\t範疇\t課題名稱\t學習要求\n"
+            : "課題編號\t課題名稱\n";
+        Object.entries(topics).forEach(([id, val]) => {
+            if (hasRich) {
+                sText += `${id}\t${getSection(val)}\t${getTopicName(val)}\t${getDesc(val)}\n`;
+            } else {
+                sText += `${id}\t${getTopicName(val)}\n`;
+            }
         });
         setSyllabusText(sText);
     }, []);
@@ -1662,14 +1682,42 @@ const SyllabusSettingsView = ({ syncToCloud }) => {
         try {
             const newSyllabus = {};
             const sLines = syllabusText.trim().split('\n');
+            // 跳過表頭
             for (let i = 1; i < sLines.length; i++) {
                 if (!sLines[i].trim()) continue;
-                const cols = sLines[i].split('\t');
-                if (cols.length >= 2) newSyllabus[cols[0].trim()] = cols[1].trim();
+                const cols = sLines[i].split('\t').map(c => c.trim());
+                if (cols.length < 2 || !cols[0]) continue;
+
+                const id = cols[0];
+                // 4 欄：編號 / 範疇 / 課題名稱 / 學習要求
+                if (cols.length >= 4) {
+                    newSyllabus[id] = {
+                        section: cols[1] || '',
+                        topic: cols[2] || '',
+                        desc: cols[3] || ''
+                    };
+                }
+                // 3 欄：編號 / 課題名稱 / 學習要求（無範疇）
+                else if (cols.length === 3) {
+                    newSyllabus[id] = {
+                        section: '',
+                        topic: cols[1] || '',
+                        desc: cols[2] || ''
+                    };
+                }
+                // 2 欄：編號 / 課題名稱
+                else {
+                    newSyllabus[id] = {
+                        section: '',
+                        topic: cols[1] || '',
+                        desc: ''
+                    };
+                }
             }
             
-            SYLLABUS_TOPICS = newSyllabus; // 更新變數
-            syncToCloud();                 // 觸發雲端儲存
+            SYLLABUS_TOPICS = newSyllabus;
+            if (typeof window !== 'undefined') window.SYLLABUS_TOPICS = newSyllabus;
+            syncToCloud({ syllabus: newSyllabus });
             alert('✅ 課程大綱已成功同步到 Google Sheet！\n切換至其他頁面即可生效。');
         } catch (err) {
             alert('❌ 儲存失敗！錯誤: ' + err);
@@ -1683,7 +1731,9 @@ const SyllabusSettingsView = ({ syncToCloud }) => {
                     <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
                         <Icon name="BookOpen" /> 課程大綱 (Syllabus) 設定
                     </h1>
-                    <p className="text-sm text-slate-500 mt-1">請從 Excel 複製包含兩欄 (課題編號, 課題名稱) 的資料並貼上。</p>
+                    <p className="text-sm text-slate-500 mt-1">
+                        支援格式：<b>課題編號 (Tab) 課題名稱</b>，或完整版 <b>課題編號 (Tab) 範疇 (Tab) 課題名稱 (Tab) 學習要求</b>。
+                    </p>
                 </div>
                 <button onClick={handleSave} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2">
                     <Icon name="CloudUpload" size={18} /> 儲存至 Google 雲端
@@ -1694,7 +1744,7 @@ const SyllabusSettingsView = ({ syncToCloud }) => {
                     className="w-full h-[650px] p-4 text-sm font-mono bg-slate-50 border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 whitespace-pre"
                     value={syllabusText}
                     onChange={(e) => setSyllabusText(e.target.value)}
-                    placeholder="請在此貼上您的課程大綱..."
+                    placeholder="課題編號&#9;範疇&#9;課題名稱&#9;學習要求&#10;1.1.1&#9;Heat&#9;量度温度&#9;認識温度為冷熱程度標誌..."
                 />
             </div>
         </div>
