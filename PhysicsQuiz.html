@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>V4.04 Physics Quiz Analyzer</title>
+    <title>V4.05 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -4585,22 +4585,27 @@ ${getSyllabusTableText()}
   例：「計算長直載流導線在距離其 6 cm 處所產生的磁場量值。」
   維持一句話，簡潔準確。
 
-六、答案欄
-- 全部留空，只需輸出一個 Tab 符號作結。
+六、正確答案（ans）★ 必須填寫
+- MC 題：必須填寫正確選項代號（A / B / C / D），統一使用大寫。
+- 若題目有多個正確答案，用逗號分隔（例如 A,C）。
+- LQ 題：本欄留空（僅輸出 Tab 分隔符）。
+- 若上傳檔案中未能直接看到答案，請根據物理知識自行判斷最合理的正確選項並填上。
 
 【輸出格式】
 每一行代表一題，欄位以 Tab 分隔，順序為：
-題目ID [Tab] 題型 [Tab] 滿分 [Tab] 深淺度 [Tab] topicId [Tab] topicDesc [Tab] [空]
+題目ID [Tab] 題型 [Tab] 滿分 [Tab] 深淺度 [Tab] topicId [Tab] topicDesc [Tab] 正確答案
 
 例如：
-MC1	MC	1	淺	1.1.1	指出温度計所使用的物理性質。	
+MC1	MC	1	淺	1.1.1	指出温度計所使用的物理性質。	A
+MC2	MC	1	中	2.3.3	應用牛頓第二定律計算淨力。	C
 LQ1a	LQ	2	中	4.5.2	計算長直載流導線在距離其 6 cm 處所產生的磁場量值。	
 LQ1bi	LQ	2	中	4.5.2	解釋螺線管長度和匝數加倍對磁場的影響。	
 
 【絕對禁止】
 - 不要輸出任何表格、標題、Markdown 語法或說明文字。
-- 只能輸出題目行，欄位數量固定為 7 個 Tab 分隔值（最後一個答案欄空白）。
-- topicDesc 必須是你自己歸納的 20-30 字描述，不可直接抄寫對照表中的長句。`;
+- 只能輸出題目行，欄位數量固定為 7 個 Tab 分隔值。
+- topicDesc 必須是你自己歸納的 20-30 字描述，不可直接抄寫對照表中的長句。
+- MC 題的正確答案欄必須填寫 A/B/C/D，不可留空；LQ 題的正確答案欄務必留空。`;
 
     const copyPromptToClipboard = () => {
         navigator.clipboard.writeText(buildQuickPromptText());
@@ -4738,7 +4743,10 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkMaps, 
             liveMax += q.max;
             const val = currentEdit.scores[q.id];
             if (q.type === 'MC') {
-                if (val && q.ans && val.toString().toUpperCase() === q.ans.toUpperCase()) liveTotal += q.max;
+                if (val && q.ans) {
+                    const correctAnswers = q.ans.toString().split(',').map(a => a.trim().toUpperCase());
+                    if (correctAnswers.includes(val.toString().trim().toUpperCase())) liveTotal += q.max;
+                }
             } else { liveTotal += (val === '' || val === undefined ? 0 : parseFloat(val)); }
         });
     }
@@ -4838,7 +4846,9 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkMaps, 
                                    
                                     {map.questions.map((q, idx) => {
                                         const val = currentEdit.scores[q.id];
-                                        const isCorrect = q.type === 'MC' ? (val && q.ans && val.toString().toUpperCase() === q.ans.toUpperCase()) : (val !== '' && parseFloat(val) === q.max);
+                                        const isCorrect = q.type === 'MC'
+                                            ? (val && q.ans && q.ans.toString().split(',').map(a => a.trim().toUpperCase()).includes(val.toString().trim().toUpperCase()))
+                                            : (val !== '' && parseFloat(val) === q.max);
                                         
                                         return (
                                             <div key={q.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 border border-transparent hover:border-slate-100 rounded-lg group transition">
@@ -4955,7 +4965,11 @@ const HomeworkSummaryView = ({ activeStudents, currentCohort, homeworkMaps, home
                     homeworkMaps[hwId].questions.forEach(q => {
                         const val = scoresObj[q.id];
                         if (q.type === 'MC') {
-                            if (val && q.ans && val.toString().toUpperCase() === q.ans.toUpperCase()) sum += q.max;
+                            if (val && q.ans) {
+                                const correctAnswers = q.ans.toString().split(',').map(a => a.trim().toUpperCase());
+                                if (correctAnswers.includes(val.toString().trim().toUpperCase())) sum += q.max;
+                            }
+                            if (val !== undefined && val !== '') hasScore = true;
                         } else {
                             if (val !== undefined && val !== '') {
                                 sum += parseFloat(val);
@@ -6881,8 +6895,8 @@ const PastpaperSummaryView = ({ currentCohort, activeStudents, pastpaperScores }
                                 <Icon name="GraduationCap" size={24} className="text-white" />
                             </div>
                             <div>
-                                <h2 className="font-bold text-base bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">Physics Analyzer</h2>
-                                <p className="text-xs text-slate-400 font-mono">V2.2 Cloud</p>
+                                <h2 className="font-bold text-base bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">Physics Quiz Analyzer</h2>
+                                <p className="text-xs text-slate-400 font-mono">V4.04 Cloud</p>
                             </div>
                         </div>
 
