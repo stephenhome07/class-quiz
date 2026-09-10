@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>V4.05 Physics Quiz Analyzer</title>
+    <title>V4.06 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -4494,6 +4494,27 @@ const HomeworkSettingsView = ({ students, currentCohort, homeworkMaps, setHomewo
     const [hwId, setHwId] = React.useState('');
     const [hwTitle, setHwTitle] = React.useState('');
     const [pasteData, setPasteData] = React.useState('');
+    const [editingOriginalId, setEditingOriginalId] = React.useState(null); // 正在編輯的原編號（支援改編號）
+    const [expandedId, setExpandedId] = React.useState(null); // 展開顯示題目內容
+
+    const questionsToPasteText = (questions) => {
+        if (!questions || !questions.length) return '';
+        return questions.map(q =>
+            [q.id, q.type, q.max, q.level, q.topicId, q.topicDesc, q.ans || ''].join('\t')
+        ).join('\n');
+    };
+
+    // ★ 從清單載入功課到右側表單進行修改
+    const handleLoadForEdit = (id) => {
+        const hw = homeworkMaps[id];
+        if (!hw) return;
+        setHwId(id);
+        setHwTitle(hw.title || '');
+        setPasteData(questionsToPasteText(hw.questions));
+        setEditingOriginalId(id);
+        setExpandedId(id);
+        setSelectedCohort(hw.cohort || selectedCohort);
+    };
 
     const handleSave = () => {
         if (!hwId || !hwTitle || !pasteData || !selectedCohort) return alert('請填寫完整資訊並選擇群組！');
@@ -4519,13 +4540,18 @@ const HomeworkSettingsView = ({ students, currentCohort, homeworkMaps, setHomewo
 
         if (questions.length === 0) return alert('無法解析題目，請檢查格式是否正確。');
 
-        // ★ 核心修復：強制更新狀態並同步
-        const newMaps = { ...homeworkMaps, [hwId]: { title: hwTitle, cohort: selectedCohort, questions: questions } };
+        const newId = hwId.trim().toUpperCase();
+        const newMaps = { ...homeworkMaps };
+        // 若改了編號：刪除舊 key
+        if (editingOriginalId && editingOriginalId !== newId) {
+            delete newMaps[editingOriginalId];
+        }
+        newMaps[newId] = { title: hwTitle, cohort: selectedCohort, questions: questions };
         setHomeworkMaps(newMaps);
         syncToCloud({ homeworkMaps: newMaps }); 
         
-        alert(`✅ 群組 [${selectedCohort}] 的功課 [${hwId}] 設定已儲存！`);
-        setHwId(''); setHwTitle(''); setPasteData('');
+        alert(`✅ 群組 [${selectedCohort}] 的功課 [${newId}] ${editingOriginalId ? '已更新' : '已儲存'}！`);
+        setHwId(''); setHwTitle(''); setPasteData(''); setEditingOriginalId(null);
     };
 
     const handleDelete = (id) => {
@@ -4534,7 +4560,14 @@ const HomeworkSettingsView = ({ students, currentCohort, homeworkMaps, setHomewo
             delete newMaps[id];
             setHomeworkMaps(newMaps);
             syncToCloud({ homeworkMaps: newMaps });
+            if (editingOriginalId === id) {
+                setHwId(''); setHwTitle(''); setPasteData(''); setEditingOriginalId(null);
+            }
         }
+    };
+
+    const handleCancelEdit = () => {
+        setHwId(''); setHwTitle(''); setPasteData(''); setEditingOriginalId(null);
     };
 
     const filteredHomeworks = Object.keys(homeworkMaps || {}).filter(id => 
@@ -4626,24 +4659,54 @@ LQ1bi	LQ	2	中	4.5.2	解釋螺線管長度和匝數加倍對磁場的影響。
                             <h3 className="font-bold text-slate-700 text-sm">現有功課清單</h3>
                             <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded font-bold">{selectedCohort}</span>
                         </div>
-                        <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+                        <div className="space-y-2 max-h-[560px] overflow-y-auto pr-1">
                             {filteredHomeworks.length === 0 && <p className="text-xs text-slate-400">此群組目前沒有設定任何功課。</p>}
-                            {filteredHomeworks.map(id => (
-                                <div key={id} className="p-3 bg-white border border-slate-200 rounded-lg shadow-sm flex justify-between items-start">
-                                    <div>
-                                        <div className="font-bold text-amber-700 text-sm font-mono">{id}</div>
-                                        <div className="text-xs text-slate-600 font-bold mt-0.5">{homeworkMaps[id].title}</div>
-                                        <div className="text-[10px] text-slate-400 mt-1">共 {homeworkMaps[id].questions.length} 題</div>
+                            {filteredHomeworks.map(id => {
+                                const hw = homeworkMaps[id];
+                                const isExpanded = expandedId === id;
+                                const isEditing = editingOriginalId === id;
+                                return (
+                                    <div key={id} className={`p-3 bg-white border rounded-lg shadow-sm ${isEditing ? 'border-amber-400 ring-2 ring-amber-100' : 'border-slate-200'}`}>
+                                        <div className="flex justify-between items-start gap-2">
+                                            <div className="min-w-0 flex-1 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : id)}>
+                                                <div className="font-bold text-amber-700 text-sm font-mono flex items-center gap-1">
+                                                    {id}
+                                                    {isEditing && <span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold">編輯中</span>}
+                                                </div>
+                                                <div className="text-xs text-slate-600 font-bold mt-0.5 truncate">{hw.title}</div>
+                                                <div className="text-[10px] text-slate-400 mt-1">共 {hw.questions?.length || 0} 題 · 點擊展開</div>
+                                            </div>
+                                            <div className="flex flex-col gap-1 shrink-0">
+                                                <button onClick={() => handleLoadForEdit(id)} className="text-blue-500 hover:text-blue-700 p-1" title="載入修改"><Icon name="Pencil" size={14} /></button>
+                                                <button onClick={() => handleDelete(id)} className="text-red-400 hover:text-red-600 p-1" title="刪除"><Icon name="Trash2" size={14} /></button>
+                                            </div>
+                                        </div>
+                                        {isExpanded && hw.questions && (
+                                            <div className="mt-2 pt-2 border-t border-slate-100 max-h-40 overflow-y-auto space-y-1">
+                                                {hw.questions.map((q, i) => (
+                                                    <div key={q.id + i} className="text-[10px] flex gap-1.5 items-start text-slate-600">
+                                                        <span className="font-mono font-bold text-slate-500 w-12 shrink-0">{q.id}</span>
+                                                        <span className={`px-1 rounded border shrink-0 ${q.type==='MC'?'bg-indigo-50 text-indigo-600 border-indigo-100':'bg-slate-50 text-slate-500 border-slate-200'}`}>{q.type}</span>
+                                                        <span className="text-slate-400 shrink-0">{q.max}分</span>
+                                                        <span className="truncate" title={q.topicDesc}>{q.topicId} {q.topicDesc}</span>
+                                                        {q.ans && <span className="text-emerald-600 font-bold shrink-0">[{q.ans}]</span>}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
-                                    <button onClick={() => handleDelete(id)} className="text-red-400 hover:text-red-600 p-1"><Icon name="Trash2" size={14} /></button>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </div>
                 </div>
                 <div className="lg:col-span-2 card p-5 border border-slate-200 shadow-sm">
                     <h3 className="font-bold text-slate-700 mb-4 text-sm flex items-center gap-2">
-                        <Icon name="PlusCircle" size={16} className="text-amber-500" /> 新增 / 覆寫功課
+                        <Icon name={editingOriginalId ? 'Pencil' : 'PlusCircle'} size={16} className="text-amber-500" />
+                        {editingOriginalId ? `修改功課（原編號：${editingOriginalId}）` : '新增 / 覆寫功課'}
+                        {editingOriginalId && (
+                            <button onClick={handleCancelEdit} className="ml-auto text-xs text-slate-500 hover:text-slate-700 underline font-normal">取消編輯</button>
+                        )}
                     </h3>
                     <div className="grid grid-cols-3 gap-4 mb-4">
                         <div>
@@ -4728,7 +4791,7 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkMaps, 
         setSaveStatus('idle'); 
     };
 
-    const handleScoreChange = (qId, val) => setCurrentEdit(prev => ({ ...prev, scores: { ...prev.scores, [qId]: val } }));
+    const autoSaveTimer = React.useRef(null);
 
     const getLevelBadge = (level) => {
         if (level === '淺') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
@@ -4757,28 +4820,88 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkMaps, 
     else if (pct >= 0.4) { grade = 'C'; gradeColor = 'text-amber-600 bg-amber-50 border-amber-200'; }
     else if (pct >= 0.2) { grade = 'D'; gradeColor = 'text-orange-500 bg-orange-50 border-orange-200'; }
 
-    const handleSaveRecord = () => {
-        if (!selectedStudentId || !currentEdit) return;
+    // 用最新 edit 物件計算總分（供 autosave 使用，避免閉包舊值）
+    const calcTotals = (editObj) => {
+        let total = 0, max = 0;
+        map.questions.forEach(q => {
+            max += q.max;
+            const val = editObj?.scores?.[q.id];
+            if (q.type === 'MC') {
+                if (val && q.ans) {
+                    const correctAnswers = q.ans.toString().split(',').map(a => a.trim().toUpperCase());
+                    if (correctAnswers.includes(val.toString().trim().toUpperCase())) total += q.max;
+                }
+            } else {
+                total += (val === '' || val === undefined || isNaN(parseFloat(val)) ? 0 : parseFloat(val));
+            }
+        });
+        return { total, max };
+    };
+
+    const isAllQuestionsFilled = (editObj) => {
+        if (!editObj || !map?.questions?.length) return false;
+        return map.questions.every(q => {
+            const val = editObj.scores?.[q.id];
+            return val !== undefined && val !== null && String(val).trim() !== '';
+        });
+    };
+
+    const handleSaveRecord = (editOverride = null) => {
+        const editObj = editOverride || currentEdit;
+        if (!selectedStudentId || !editObj) return;
         setSaveStatus('saving');
         const today = new Date().toISOString().slice(0, 10);
-        let newStatus = currentEdit.remakeStatus;
-        if (liveTotal === liveMax) newStatus = 'PERFECT';
+        const { total, max } = calcTotals(editObj);
+        let newStatus = editObj.remakeStatus;
+        if (max > 0 && total === max) newStatus = 'PERFECT';
         else if (newStatus === 'MISSING' || !newStatus) newStatus = 'PENDING';
+        // 若已是 DONE / PERFECT，保留原狀態（除非完美才強制 PERFECT）
 
-        const finalRecord = { ...currentEdit, remakeStatus: newStatus, gradingDate: currentEdit.gradingDate || today };
-        
-        // ★ 核心修復：強制更新狀態並同步
+        const finalRecord = { ...editObj, remakeStatus: newStatus, gradingDate: editObj.gradingDate || today };
+        if (editOverride) setCurrentEdit(finalRecord);
+
         const newScores = { ...homeworkScores, [selectedStudentId]: { ...(homeworkScores[selectedStudentId] || {}), [selectedHw]: finalRecord } };
         setHomeworkScores(newScores);
 
         setTimeout(() => {
-            syncToCloud({ homeworkScores: newScores });
+            if (typeof syncToCloud === 'function') syncToCloud({ homeworkScores: newScores });
             setSaveStatus('saved');
-            setTimeout(() => setSaveStatus('idle'), 1500);
-        }, 300);
+            setTimeout(() => setSaveStatus('idle'), 2500);
+        }, 200);
     };
 
-    const handleMarkAsRemade = () => setCurrentEdit(prev => ({ ...prev, remakeStatus: 'DONE', remakeDate: new Date().toISOString().slice(0, 10) }));
+    const handleScoreChange = (qId, val, opts = {}) => {
+        setCurrentEdit(prev => {
+            const next = { ...prev, scores: { ...prev.scores, [qId]: val } };
+            // ★ 輸入最後一題（或全部已填）時自動儲存
+            const isLast = map.questions.length > 0 && map.questions[map.questions.length - 1].id === qId;
+            const shouldAuto = opts.forceAuto || (isLast && val !== '' && val !== undefined) || isAllQuestionsFilled(next);
+            if (shouldAuto && val !== '' && val !== undefined) {
+                if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+                autoSaveTimer.current = setTimeout(() => handleSaveRecord(next), 400);
+            } else {
+                // 中途修改：標記為未儲存
+                setSaveStatus(s => s === 'saved' ? 'idle' : s);
+            }
+            return next;
+        });
+    };
+
+    const handleMarkAsRemade = () => {
+        setCurrentEdit(prev => {
+            const next = { ...prev, remakeStatus: 'DONE', remakeDate: new Date().toISOString().slice(0, 10) };
+            setTimeout(() => handleSaveRecord(next), 100);
+            return next;
+        });
+    };
+    // ★ 可還原為「未改正 / 欠改正」
+    const handleUnmarkRemade = () => {
+        setCurrentEdit(prev => {
+            const next = { ...prev, remakeStatus: 'PENDING', remakeDate: '' };
+            setTimeout(() => handleSaveRecord(next), 100);
+            return next;
+        });
+    };
 
     const filteredStudents = activeStudents.filter(s => {
         const status = homeworkScores[s.id]?.[selectedHw]?.remakeStatus || 'MISSING';
@@ -4831,9 +4954,17 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkMaps, 
                                 <div>
                                     <h3 className="font-bold text-lg text-slate-800">{activeStudents.find(s=>s.id===selectedStudentId)?.name} <span className="text-sm text-slate-500 font-normal ml-2">的功課批改區</span></h3>
                                     {currentEdit.gradingDate && <p className="text-[10px] font-mono text-slate-400 mt-1">批改日: {currentEdit.gradingDate} {currentEdit.remakeDate ? ` | 改正日: ${currentEdit.remakeDate}` : ''}</p>}
-                                    <div className="mt-2">
+                                    <div className="mt-2 flex flex-wrap items-center gap-2">
                                         {currentEdit.remakeStatus === 'PENDING' && <button onClick={handleMarkAsRemade} className="text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 px-3 py-1.5 rounded-full font-bold transition flex items-center gap-1 shadow-sm"><Icon name="CheckCircle" size={14} /> 標記為「已完成改正」</button>}
-                                        {currentEdit.remakeStatus === 'DONE' && <span className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-full font-bold flex items-center gap-1 border border-blue-100"><Icon name="CheckCircle" size={14} /> 已於 {currentEdit.remakeDate} 完成改正</span>}
+                                        {currentEdit.remakeStatus === 'DONE' && (
+                                            <>
+                                                <span className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-full font-bold flex items-center gap-1 border border-blue-100"><Icon name="CheckCircle" size={14} /> 已於 {currentEdit.remakeDate || '—'} 完成改正</span>
+                                                <button onClick={handleUnmarkRemade} className="text-xs bg-slate-100 text-slate-600 hover:bg-rose-100 hover:text-rose-700 px-3 py-1.5 rounded-full font-bold transition flex items-center gap-1 border border-slate-200" title="改回欠改正狀態">
+                                                    <Icon name="RotateCcw" size={14} /> 改回「未改正」
+                                                </button>
+                                            </>
+                                        )}
+                                        {currentEdit.remakeStatus === 'PERFECT' && <span className="text-xs bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-full font-bold flex items-center gap-1 border border-emerald-100"><Icon name="CheckCircle" size={14} /> 完美（無需改正）</span>}
                                     </div>
                                 </div>
                                 <div className="text-right flex items-end gap-3">
@@ -4860,7 +4991,7 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkMaps, 
                                                 <div className="flex items-center gap-2">
                                                     {q.type === 'MC' ? (
                                                         <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-lg border border-slate-200">
-                                                            {['A','B','C','D'].map(opt => <button key={opt} onClick={() => handleScoreChange(q.id, val === opt ? '' : opt)} className={`w-7 h-7 rounded text-xs font-bold transition shadow-sm border ${val === opt ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-slate-600 hover:bg-slate-100 border-slate-200'}`}>{opt}</button>)}
+                                                            {['A','B','C','D'].map(opt => <button key={opt} onClick={() => handleScoreChange(q.id, val === opt ? '' : opt, { forceAuto: idx === map.questions.length - 1 })} className={`w-7 h-7 rounded text-xs font-bold transition shadow-sm border ${val === opt ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-slate-600 hover:bg-slate-100 border-slate-200'}`}>{opt}</button>)}
                                                         </div>
                                                     ) : (
                                                         <div className="flex items-center gap-2">
@@ -4875,17 +5006,21 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkMaps, 
                                                                 onChange={(e) => {
                                                                     const newVal = e.target.value;
                                                                     handleScoreChange(q.id, newVal);
-                                                                    
-                                                                    // 自動跳轉邏輯：
-                                                                    // 如果輸入了內容，且該題滿分小於 10 (單位數)，且當前輸入長度達到限制
+                                                                    // 自動跳轉到下一題（單位數滿分時）
                                                                     if (newVal.length >= 1 && q.max < 10 && map.questions[idx + 1]) {
                                                                         const nextQ = map.questions[idx + 1];
                                                                         if (inputRefs.current[nextQ.id]) {
                                                                             inputRefs.current[nextQ.id].focus();
-                                                                            inputRefs.current[nextQ.id].select(); // 自動全選方便修改
+                                                                            inputRefs.current[nextQ.id].select();
                                                                         }
                                                                     }
-                                                                }} 
+                                                                }}
+                                                                onBlur={(e) => {
+                                                                    // 最後一題失焦時若有值 → 自動儲存
+                                                                    if (idx === map.questions.length - 1 && e.target.value !== '') {
+                                                                        handleScoreChange(q.id, e.target.value, { forceAuto: true });
+                                                                    }
+                                                                }}
                                                                 placeholder="-" 
                                                             />
                                                             <span className="text-xs text-slate-400 font-bold font-mono">/ {q.max}</span>
@@ -4901,9 +5036,19 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkMaps, 
                                 <label className="text-xs font-bold text-slate-600 mb-1.5 flex items-center gap-1"><Icon name="MessageSquare" size={14} /> 老師批改備忘 (Remarks)</label>
                                 <textarea className="w-full h-20 p-2.5 text-xs text-slate-700 bg-amber-50/30 border border-amber-200 rounded-lg outline-none focus:ring-2 focus:ring-amber-400 resize-none shadow-inner" placeholder="例如：計算題漏寫公式..." value={currentEdit.remarks || ''} onChange={(e) => setCurrentEdit(prev => ({ ...prev, remarks: e.target.value }))} />
                             </div>
-                            <button onClick={handleSaveRecord} disabled={saveStatus !== 'idle'} className={`w-full mt-4 text-white font-bold py-3 rounded-xl shadow-md transition flex justify-center items-center gap-2 ${saveStatus === 'saved' ? 'bg-emerald-500 hover:bg-emerald-600' : saveStatus === 'saving' ? 'bg-amber-400 cursor-wait' : 'bg-amber-500 hover:bg-amber-600'}`}>
-                                {saveStatus === 'saved' ? <><Icon name="CheckCircle" size={18} /> 已儲存！</> : saveStatus === 'saving' ? <><Icon name="Loader2" className="animate-spin" size={18} /> 儲存中...</> : <><Icon name="Save" size={18} /> 儲存批改與狀態</>}
+                            <button onClick={() => handleSaveRecord()} disabled={saveStatus === 'saving'} className={`w-full mt-4 text-white font-bold py-3 rounded-xl shadow-md transition flex justify-center items-center gap-2 ${saveStatus === 'saved' ? 'bg-emerald-500 hover:bg-emerald-600' : saveStatus === 'saving' ? 'bg-amber-400 cursor-wait' : 'bg-amber-500 hover:bg-amber-600'}`}>
+                                {saveStatus === 'saved' ? <><Icon name="CheckCircle" size={18} /> 已自動儲存至雲端</> : saveStatus === 'saving' ? <><Icon name="Loader2" className="animate-spin" size={18} /> 儲存中...</> : <><Icon name="Save" size={18} /> 儲存批改與狀態</>}
                             </button>
+                            {/* ★ 儲存狀態列 */}
+                            <div className={`mt-2 text-center text-xs font-bold py-1.5 rounded-lg transition ${
+                                saveStatus === 'saved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                                saveStatus === 'saving' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                                'bg-slate-50 text-slate-500 border border-slate-100'
+                            }`}>
+                                {saveStatus === 'saved' && '✅ 已儲存 — 資料已同步至 Google 雲端'}
+                                {saveStatus === 'saving' && '⏳ 正在儲存至雲端...'}
+                                {saveStatus === 'idle' && '提示：輸入最後一題分數後會自動儲存；亦可手動按上方按鈕'}
+                            </div>
                         </div>
                     )}
                 </div>
@@ -4937,14 +5082,95 @@ const HomeworkSummaryView = ({ activeStudents, currentCohort, homeworkMaps, home
     const [isEditMode, setIsEditMode] = React.useState(false);
     const [saveStatus, setSaveStatus] = React.useState('idle'); // idle, saving, saved
     const syncTimeout = React.useRef(null);
+    // ★ 題目表現分析 + AI Prompt
+    const [analysisHw, setAnalysisHw] = React.useState('');
+    const [aiMcCount, setAiMcCount] = React.useState(5);
+    const [aiLqCount, setAiLqCount] = React.useState(2);
+    const [aiLevel, setAiLevel] = React.useState('中');
+    const [aiSelectedWeak, setAiSelectedWeak] = React.useState([]);
 
     React.useEffect(() => {
         const initial = {};
         availableHws.forEach(hw => initial[hw] = true);
         setIncludedHws(initial);
+        if (availableHws.length > 0 && !availableHws.includes(analysisHw)) setAnalysisHw(availableHws[0]);
+        else if (availableHws.length === 0) setAnalysisHw('');
     }, [availableHws]);
 
     const toggleHw = (hwId) => setIncludedHws(prev => ({ ...prev, [hwId]: !prev[hwId] }));
+
+    // ★ 計算已選功課各題表現
+    const questionStats = React.useMemo(() => {
+        if (!analysisHw || !homeworkMaps[analysisHw]?.questions) return [];
+        const qs = homeworkMaps[analysisHw].questions;
+        return qs.map(q => {
+            let attempts = 0, correctOrFull = 0, earned = 0, maxPossible = 0;
+            activeStudents.forEach(s => {
+                const rec = homeworkScores[s.id]?.[analysisHw];
+                if (!rec?.scores) return;
+                const val = rec.scores[q.id];
+                if (val === undefined || val === null || String(val).trim() === '') return;
+                attempts++;
+                maxPossible += q.max;
+                if (q.type === 'MC') {
+                    if (q.ans) {
+                        const corrects = q.ans.toString().split(',').map(a => a.trim().toUpperCase());
+                        if (corrects.includes(String(val).trim().toUpperCase())) {
+                            correctOrFull++;
+                            earned += q.max;
+                        }
+                    }
+                } else {
+                    const n = parseFloat(val) || 0;
+                    earned += n;
+                    if (n >= q.max) correctOrFull++;
+                }
+            });
+            const rate = attempts > 0 ? (q.type === 'MC' ? correctOrFull / attempts : (maxPossible > 0 ? earned / maxPossible : 0)) : null;
+            return { ...q, attempts, correctOrFull, earned, maxPossible, rate };
+        });
+    }, [analysisHw, homeworkMaps, homeworkScores, activeStudents]);
+
+    const weakQuestions = React.useMemo(() =>
+        questionStats.filter(q => q.rate !== null && q.rate < 0.6).sort((a, b) => (a.rate || 0) - (b.rate || 0)),
+    [questionStats]);
+
+    React.useEffect(() => {
+        // 預設勾選弱項
+        setAiSelectedWeak(weakQuestions.slice(0, 8).map(q => q.id));
+    }, [analysisHw, weakQuestions.length]);
+
+    const buildHwPracticePrompt = () => {
+        const selected = questionStats.filter(q => aiSelectedWeak.includes(q.id));
+        const weakList = (selected.length ? selected : weakQuestions).map(q => {
+            const pct = q.rate !== null ? Math.round(q.rate * 100) + '%' : '無資料';
+            return `- [${q.id}] ${q.topicId || ''} ${q.topicDesc || ''}（全班得分率 ${pct}，難度：${q.level || '中'}）`;
+        }).join('\n') || '- （請老師自行補充常見難點）';
+
+        const syllabus = typeof getSyllabusTableText === 'function' ? getSyllabusTableText() : '';
+        return `【身份】你是一位香港 DSE 物理科老師，學生程度約 Band 3。
+
+【任務】根據以下「功課弱項診斷」，為學生度身訂造一份針對性練習卷。
+
+【基本設定】
+- 語言：繁體中文
+- 難度目標：${aiLevel}
+- 多項選擇題 (MC)：${aiMcCount} 題
+- 長題目 (LQ)：${aiLqCount} 題
+
+【同學常見難點（來自功課 ${analysisHw}）】
+${weakList}
+
+【課程大綱參考】
+${syllabus}
+
+【生成要求】
+1. 針對上述難點出題，由淺入深，釐清核心觀念。
+2. MC 附 4 個選項，並簡述錯誤選項的常見陷阱。
+3. LQ 附分步評分標準 (Marking Scheme)。
+4. 題目風格貼近 HKDSE。
+5. 只輸出練習題與答案／評分，不要多餘說明。`;
+    };
 
     // 4. 計算學生成績與平均分
     const computedData = React.useMemo(() => {
@@ -5229,6 +5455,125 @@ const HomeworkSummaryView = ({ activeStudents, currentCohort, homeworkMaps, home
                             ))}
                         </tbody>
                     </table>
+                </div>
+            )}
+
+            {/* ★ 已選功課 · 各題表現分析 */}
+            {availableHws.length > 0 && (
+                <div className="mt-8 card p-5 bg-white rounded-xl border border-slate-200 shadow-sm">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+                        <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                            <Icon name="BarChart2" size={18} className="text-amber-600" /> 各題表現分析
+                        </h3>
+                        <select
+                            className="p-2 border border-slate-300 rounded-lg text-sm font-bold bg-white outline-none focus:ring-2 focus:ring-amber-400"
+                            value={analysisHw}
+                            onChange={e => setAnalysisHw(e.target.value)}
+                        >
+                            {availableHws.map(hw => (
+                                <option key={hw} value={hw}>{hw}{homeworkMaps[hw]?.title ? ` — ${homeworkMaps[hw].title}` : ''}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="flex flex-wrap gap-2 text-[10px] text-slate-500 mb-3">
+                        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-emerald-400 inline-block"></span>≥80% 佳</span>
+                        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-400 inline-block"></span>50–79% 中</span>
+                        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-rose-400 inline-block"></span>&lt;50% 弱</span>
+                        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-slate-200 inline-block"></span>無資料</span>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 max-h-[320px] overflow-y-auto">
+                        {questionStats.map(q => {
+                            const rate = q.rate;
+                            let bg = 'bg-slate-100 border-slate-200 text-slate-500';
+                            let bar = 'bg-slate-300';
+                            if (rate !== null) {
+                                if (rate >= 0.8) { bg = 'bg-emerald-50 border-emerald-200 text-emerald-800'; bar = 'bg-emerald-500'; }
+                                else if (rate >= 0.5) { bg = 'bg-amber-50 border-amber-200 text-amber-800'; bar = 'bg-amber-500'; }
+                                else { bg = 'bg-rose-50 border-rose-200 text-rose-800'; bar = 'bg-rose-500'; }
+                            }
+                            const pctLabel = rate !== null ? Math.round(rate * 100) + '%' : '—';
+                            return (
+                                <div key={q.id} className={`rounded-lg border p-2.5 ${bg}`} title={q.topicDesc || ''}>
+                                    <div className="flex justify-between items-center mb-1">
+                                        <span className="font-mono font-bold text-xs">{q.id}</span>
+                                        <span className="text-[10px] font-bold">{pctLabel}</span>
+                                    </div>
+                                    <div className="h-1.5 bg-white/60 rounded-full overflow-hidden mb-1.5">
+                                        <div className={`h-full ${bar} rounded-full`} style={{ width: rate !== null ? `${Math.round(rate * 100)}%` : '0%' }} />
+                                    </div>
+                                    <div className="text-[10px] truncate opacity-80">{q.topicId} {q.topicDesc}</div>
+                                    <div className="text-[9px] opacity-60 mt-0.5">{q.attempts} 人作答 · {q.level || '中'}</div>
+                                </div>
+                            );
+                        })}
+                        {questionStats.length === 0 && <p className="text-sm text-slate-400 col-span-full">請選擇有題目的功課。</p>}
+                    </div>
+                </div>
+            )}
+
+            {/* ★ AI 練習生成 Prompt */}
+            {availableHws.length > 0 && (
+                <div className="mt-6 card p-5 bg-indigo-50/40 rounded-xl border border-indigo-100 shadow-sm">
+                    <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-3">
+                        <Icon name="Sparkles" size={18} className="text-indigo-600" /> AI 弱項練習 Prompt
+                    </h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                        <div>
+                            <label className="text-[10px] font-bold text-slate-500 block mb-1">難度</label>
+                            <select value={aiLevel} onChange={e => setAiLevel(e.target.value)} className="w-full p-2 border rounded-lg text-sm font-bold bg-white outline-none">
+                                <option value="淺">淺</option>
+                                <option value="中">中</option>
+                                <option value="深">深</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-bold text-slate-500 block mb-1">MC 題數</label>
+                            <input type="number" min="0" max="20" value={aiMcCount} onChange={e => setAiMcCount(Number(e.target.value) || 0)} className="w-full p-2 border rounded-lg text-sm font-bold bg-white outline-none" />
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-bold text-slate-500 block mb-1">LQ 題數</label>
+                            <input type="number" min="0" max="10" value={aiLqCount} onChange={e => setAiLqCount(Number(e.target.value) || 0)} className="w-full p-2 border rounded-lg text-sm font-bold bg-white outline-none" />
+                        </div>
+                        <div className="flex items-end">
+                            <button
+                                onClick={() => {
+                                    navigator.clipboard.writeText(buildHwPracticePrompt());
+                                    alert('📋 Prompt 已複製！可貼到 Gemini / Grok / ChatGPT 生成練習。');
+                                }}
+                                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-3 rounded-lg text-sm flex items-center justify-center gap-1.5 shadow"
+                            >
+                                <Icon name="Copy" size={16} /> 複製 Prompt
+                            </button>
+                        </div>
+                    </div>
+                    <div className="mb-3">
+                        <label className="text-[10px] font-bold text-slate-500 block mb-1.5">勾選要納入 Prompt 的難點題（預設為得分率 &lt; 60%）</label>
+                        <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
+                            {questionStats.map(q => {
+                                const checked = aiSelectedWeak.includes(q.id);
+                                const weak = q.rate !== null && q.rate < 0.6;
+                                return (
+                                    <label key={q.id} className={`text-[10px] px-2 py-1 rounded border cursor-pointer font-mono font-bold transition ${
+                                        checked ? 'bg-indigo-100 border-indigo-300 text-indigo-800' :
+                                        weak ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-white border-slate-200 text-slate-500'
+                                    }`}>
+                                        <input type="checkbox" className="mr-1 align-middle" checked={checked}
+                                            onChange={() => setAiSelectedWeak(prev =>
+                                                checked ? prev.filter(x => x !== q.id) : [...prev, q.id]
+                                            )}
+                                        />
+                                        {q.id}{q.rate !== null ? ` ${Math.round(q.rate * 100)}%` : ''}
+                                    </label>
+                                );
+                            })}
+                        </div>
+                    </div>
+                    <textarea
+                        readOnly
+                        className="w-full h-36 p-3 text-xs font-mono bg-white border border-indigo-100 rounded-lg outline-none resize-none"
+                        value={buildHwPracticePrompt()}
+                    />
+                    <p className="text-[10px] text-indigo-600 mt-1.5">複製後可貼到 Gemini、Grok、ChatGPT 等生成針對性練習題。</p>
                 </div>
             )}
         </div>
