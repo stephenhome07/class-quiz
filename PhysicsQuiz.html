@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>V4.06 Physics Quiz Analyzer</title>
+    <title>V4.07 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -446,6 +446,13 @@ const ScoreInputView = ({ activeStudents, scores, setScores, syncToCloud }) => {
                     prompt += isEng 
                         ? `${qIdx++}. Difficulty: ${levelDesc[aiLevel]} standard of HKDSE Physics.\n${qIdx}. Provide detailed explanations, highlight common traps, and show step-by-step calculations in English.`
                         : `${qIdx++}. 難度必須符合 HKDSE 物理科 ${levelDesc[aiLevel]} 程度。\n${qIdx}. 提供詳細的繁體中文解釋、點出學生常犯的思考陷阱 (Common traps) 及計算步驟。`;
+
+                    const syllabus = typeof getSyllabusTableText === 'function' ? getSyllabusTableText() : '';
+                    if (syllabus) {
+                        prompt += isEng
+                            ? `\n\n【Syllabus Reference】\n${syllabus}`
+                            : `\n\n【課程大綱參考】\n${syllabus}`;
+                    }
             
                     return prompt;
                 };
@@ -2575,7 +2582,8 @@ const ExamAnalysisView = ({ activeStudents, examScores, currentCohort, getReleva
             `- 課題 [${t.topicId} ${t.topicName}]: 全班得分率僅 ${(t.actualEarned/t.maxPossible*100).toFixed(1)}%\n  官方學習要求: ${t.syllabusDesc || '無'}`
         ).join('\n\n');
 
-        const newPrompt = `你是一位香港 DSE 物理科中學名師。請根據以下這份大考的【全班真實應考數據】，為我編寫一份高質素的【試後檢討與重難點澄清教案】。\n\n[基本設定]\n- 語言: ${aiLang}\n- 預期針對我指定的題型與題數，各編寫全新的衍生鞏固練習題：\n  * 衍生多項選擇題 (MC)：${aiMcCount} 題\n  * 衍生長題目 (LQ)：${aiLqCount} 題\n\n[數據診斷：全班答錯率極高的 MC 難點題目]\n${hardMC || '- 無明顯 MC 難點'}\n\n[數據診斷：全班失分嚴重的 LQ 難點題目]\n${hardLQ || '- 無明顯 LQ 難點'}\n\n[數據診斷：全班掌握度最差的知識點課題]\n${weakTopics || '- 全班各課題發揮均衡'}\n\n[教案與題目編寫要求]:\n1. 錯因深度剖析：針對上述答對率低的 MC 及 LQ 題目，從物理概念角度切入，指出學生最容易混淆的觀念陷阱。\n2. 變式題目擴充：根據我設定的 MC 題數 (${aiMcCount} 題) 和 LQ 題數 (${aiLqCount} 題)，分別編寫全新的【同類概念變式衍生題】。題目必須嚴格符合 DSE 考核風格，並為 MC 提供 4 個具備強干擾項的選項，為 LQ 提供詳細的【分步評分標準 (Marking Scheme)】。\n3. 提供下階段課堂複習的補救教學具體策略。`;
+        const syllabus = typeof getSyllabusTableText === 'function' ? getSyllabusTableText() : '';
+        const newPrompt = `你是一位香港 DSE 物理科中學名師。請根據以下這份大考的【全班真實應考數據】，為我編寫一份高質素的【試後檢討與重難點澄清教案】。\n\n[基本設定]\n- 語言: ${aiLang}\n- 預期針對我指定的題型與題數，各編寫全新的衍生鞏固練習題：\n  * 衍生多項選擇題 (MC)：${aiMcCount} 題\n  * 衍生長題目 (LQ)：${aiLqCount} 題\n\n[數據診斷：全班答錯率極高的 MC 難點題目]\n${hardMC || '- 無明顯 MC 難點'}\n\n[數據診斷：全班失分嚴重的 LQ 難點題目]\n${hardLQ || '- 無明顯 LQ 難點'}\n\n[數據診斷：全班掌握度最差的知識點課題]\n${weakTopics || '- 全班各課題發揮均衡'}\n\n【課程大綱參考】\n${syllabus}\n\n[教案與題目編寫要求]:\n1. 錯因深度剖析：針對上述答對率低的 MC 及 LQ 題目，從物理概念角度切入，指出學生最容易混淆的觀念陷阱。\n2. 變式題目擴充：根據我設定的 MC 題數 (${aiMcCount} 題) 和 LQ 題數 (${aiLqCount} 題)，分別編寫全新的【同類概念變式衍生題】。題目必須嚴格符合 DSE 考核風格，並為 MC 提供 4 個具備強干擾項的選項，為 LQ 提供詳細的【分步評分標準 (Marking Scheme)】。\n3. 提供下階段課堂複習的補救教學具體策略。`;
         
         setGeneratedPrompt(newPrompt);
     }, [aiLang, aiType, aiMcCount, aiLqCount, selectedExam, map, activeStudents, qStats, sortedTopics]); 
@@ -2984,7 +2992,8 @@ const StudentExamAnalysisView = ({ activeStudents = [], examScores = {} }) => {
             return `- 課題 [${t.topicId} ${topicName}]: 曾做錯的題型盲點: ${t.descArray.join('; ')}`;
         }).join('\n');
 
-        const newPrompt = `你是一位香港 DSE 物理科專屬導師。我的學生【${studentName}】在近期的物理考試中表現需要提升。以下是他在所選考試範圍內【掌握度低於 50%】的物理課題及對應的題型盲點，請為他度身訂造一份專屬補底練習。\n\n[基本設定]\n- 語言: ${aiLang}\n- 預期題型與數量:\n  * 多項選擇題 (MC)：${aiMcCount} 題\n  * 長題目 (LQ)：${aiLqCount} 題\n\n[學生薄弱課題與盲點描述]\n${weakTopicsText || '- 該學生目前無明顯弱項課題，請生成進階挑戰題。'}\n\n[生成要求]\n1. 針對上述薄弱課題，設計難度由淺入深、著重釐清核心觀念的練習題。\n2. MC 必須包含 4 個選項，並為錯誤選項附帶【陷阱分析】（指出為何學生容易選錯）；LQ 必須附帶詳細的【分步評分標準 (Marking Scheme)】。\n3. 請在開頭給予【${studentName}】一段鼓勵性的評語，並指出他在這些課題中最需要優先克服的思維盲區。`;
+        const syllabus = typeof getSyllabusTableText === 'function' ? getSyllabusTableText() : '';
+        const newPrompt = `你是一位香港 DSE 物理科專屬導師。我的學生【${studentName}】在近期的物理考試中表現需要提升。以下是他在所選考試範圍內【掌握度低於 50%】的物理課題及對應的題型盲點，請為他度身訂造一份專屬補底練習。\n\n[基本設定]\n- 語言: ${aiLang}\n- 預期題型與數量:\n  * 多項選擇題 (MC)：${aiMcCount} 題\n  * 長題目 (LQ)：${aiLqCount} 題\n\n[學生薄弱課題與盲點描述]\n${weakTopicsText || '- 該學生目前無明顯弱項課題，請生成進階挑戰題。'}\n\n【課程大綱參考】\n${syllabus}\n\n[生成要求]\n1. 針對上述薄弱課題，設計難度由淺入深、著重釐清核心觀念的練習題。\n2. MC 必須包含 4 個選項，並為錯誤選項附帶【陷阱分析】（指出為何學生容易選錯）；LQ 必須附帶詳細的【分步評分標準 (Marking Scheme)】。\n3. 請在開頭給予【${studentName}】一段鼓勵性的評語，並指出他在這些課題中最需要優先克服的思維盲區。`;
         
         setGeneratedPrompt(newPrompt);
     }, [aiLang, aiMcCount, aiLqCount, selectedStudentId, selectedExams, activeStudents, examScores, processedTopics]); 
@@ -3444,7 +3453,8 @@ const RemedialPracticeView = ({ currentCohort, activeStudents, examScores, remed
             return `- 課題 [${t.topicId} ${safeTopicName}]:\n  官方學習要求: ${safeSyllabusDesc}\n  曾做錯的題型盲點: ${t.descArray.join('; ')}`;
         }).join('\n\n');
 
-        const newPrompt = `你是一位極具耐心的香港 DSE 物理科導師。我的學生【${targetData.name}】正在進行大考後的補救教學。以下是他【本次需要進行補底】的物理課題及歷史錯誤盲點，請為他度身訂造一份分段式專屬補底練習。\n\n[基本設定]\n- 語言: ${aiLang}\n- 預期題型與數量:\n  * 多項選擇題 (MC)：${aiMcCount} 題\n  * 長題目 (LQ)：${aiLqCount} 題\n\n[本次目標補底課題與盲點描述]\n${weakTopicsText}\n\n[生成要求]\n1. 針對上述列出的目標課題，設計難度由淺入深、著重釐清核心物理觀念的練習題。\n2. MC 必須包含 4 個選項，並為錯誤選項附帶【陷阱分析】；LQ (如有) 必須附帶詳細的【分步思維導引 (Scaffolding Tips)】與【評分標準】。\n3. 請在開頭給予【${targetData.name}】一段鼓勵，讓他有信心克服這些難關。`;
+        const syllabus = typeof getSyllabusTableText === 'function' ? getSyllabusTableText() : '';
+        const newPrompt = `你是一位極具耐心的香港 DSE 物理科導師。我的學生【${targetData.name}】正在進行大考後的補救教學。以下是他【本次需要進行補底】的物理課題及歷史錯誤盲點，請為他度身訂造一份分段式專屬補底練習。\n\n[基本設定]\n- 語言: ${aiLang}\n- 預期題型與數量:\n  * 多項選擇題 (MC)：${aiMcCount} 題\n  * 長題目 (LQ)：${aiLqCount} 題\n\n[本次目標補底課題與盲點描述]\n${weakTopicsText}\n\n【課程大綱參考】\n${syllabus}\n\n[生成要求]\n1. 針對上述列出的目標課題，設計難度由淺入深、著重釐清核心物理觀念的練習題。\n2. MC 必須包含 4 個選項，並為錯誤選項附帶【陷阱分析】；LQ (如有) 必須附帶詳細的【分步思維導引 (Scaffolding Tips)】與【評分標準】。\n3. 請在開頭給予【${targetData.name}】一段鼓勵，讓他有信心克服這些難關。`;
         
         setGeneratedPrompt(newPrompt);
     }, [aiLang, aiMcCount, aiLqCount, activePromptStudent, selectedTopicsForPrompt, studentRemedialData]);
@@ -4964,7 +4974,14 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkMaps, 
                                                 </button>
                                             </>
                                         )}
-                                        {currentEdit.remakeStatus === 'PERFECT' && <span className="text-xs bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-full font-bold flex items-center gap-1 border border-emerald-100"><Icon name="CheckCircle" size={14} /> 完美（無需改正）</span>}
+                                        {currentEdit.remakeStatus === 'PERFECT' && (
+                                            <>
+                                                <span className="text-xs bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-full font-bold flex items-center gap-1 border border-emerald-100"><Icon name="CheckCircle" size={14} /> 完美（無需改正）</span>
+                                                <button onClick={handleUnmarkRemade} className="text-xs bg-slate-100 text-slate-600 hover:bg-rose-100 hover:text-rose-700 px-3 py-1.5 rounded-full font-bold transition flex items-center gap-1 border border-slate-200" title="改回欠改正狀態">
+                                                    <Icon name="RotateCcw" size={14} /> 改回「未改正」
+                                                </button>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="text-right flex items-end gap-3">
@@ -5475,7 +5492,7 @@ ${syllabus}
                             ))}
                         </select>
                     </div>
-                    <div className="flex flex-wrap gap-2 text-[10px] text-slate-500 mb-3">
+                    <div className="flex flex-wrap gap-2 text-xs text-slate-500 mb-3">
                         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-emerald-400 inline-block"></span>≥80% 佳</span>
                         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-400 inline-block"></span>50–79% 中</span>
                         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-rose-400 inline-block"></span>&lt;50% 弱</span>
@@ -5495,14 +5512,14 @@ ${syllabus}
                             return (
                                 <div key={q.id} className={`rounded-lg border p-2.5 ${bg}`} title={q.topicDesc || ''}>
                                     <div className="flex justify-between items-center mb-1">
-                                        <span className="font-mono font-bold text-xs">{q.id}</span>
-                                        <span className="text-[10px] font-bold">{pctLabel}</span>
+                                        <span className="font-mono font-bold text-sm">{q.id}</span>
+                                        <span className="text-xs font-bold">{pctLabel}</span>
                                     </div>
                                     <div className="h-1.5 bg-white/60 rounded-full overflow-hidden mb-1.5">
                                         <div className={`h-full ${bar} rounded-full`} style={{ width: rate !== null ? `${Math.round(rate * 100)}%` : '0%' }} />
                                     </div>
-                                    <div className="text-[10px] truncate opacity-80">{q.topicId} {q.topicDesc}</div>
-                                    <div className="text-[9px] opacity-60 mt-0.5">{q.attempts} 人作答 · {q.level || '中'}</div>
+                                    <div className="text-xs truncate opacity-80">{q.topicId} {q.topicDesc}</div>
+                                    <div className="text-[10px] opacity-60 mt-0.5">{q.attempts} 人作答 · {q.level || '中'}</div>
                                 </div>
                             );
                         })}
@@ -5519,7 +5536,7 @@ ${syllabus}
                     </h3>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
                         <div>
-                            <label className="text-[10px] font-bold text-slate-500 block mb-1">難度</label>
+                            <label className="text-xs font-bold text-slate-500 block mb-1">難度</label>
                             <select value={aiLevel} onChange={e => setAiLevel(e.target.value)} className="w-full p-2 border rounded-lg text-sm font-bold bg-white outline-none">
                                 <option value="淺">淺</option>
                                 <option value="中">中</option>
@@ -5527,11 +5544,11 @@ ${syllabus}
                             </select>
                         </div>
                         <div>
-                            <label className="text-[10px] font-bold text-slate-500 block mb-1">MC 題數</label>
+                            <label className="text-xs font-bold text-slate-500 block mb-1">MC 題數</label>
                             <input type="number" min="0" max="20" value={aiMcCount} onChange={e => setAiMcCount(Number(e.target.value) || 0)} className="w-full p-2 border rounded-lg text-sm font-bold bg-white outline-none" />
                         </div>
                         <div>
-                            <label className="text-[10px] font-bold text-slate-500 block mb-1">LQ 題數</label>
+                            <label className="text-xs font-bold text-slate-500 block mb-1">LQ 題數</label>
                             <input type="number" min="0" max="10" value={aiLqCount} onChange={e => setAiLqCount(Number(e.target.value) || 0)} className="w-full p-2 border rounded-lg text-sm font-bold bg-white outline-none" />
                         </div>
                         <div className="flex items-end">
@@ -5547,13 +5564,13 @@ ${syllabus}
                         </div>
                     </div>
                     <div className="mb-3">
-                        <label className="text-[10px] font-bold text-slate-500 block mb-1.5">勾選要納入 Prompt 的難點題（預設為得分率 &lt; 60%）</label>
+                        <label className="text-xs font-bold text-slate-500 block mb-1.5">勾選要納入 Prompt 的難點題（預設為得分率 &lt; 60%）</label>
                         <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
                             {questionStats.map(q => {
                                 const checked = aiSelectedWeak.includes(q.id);
                                 const weak = q.rate !== null && q.rate < 0.6;
                                 return (
-                                    <label key={q.id} className={`text-[10px] px-2 py-1 rounded border cursor-pointer font-mono font-bold transition ${
+                                    <label key={q.id} className={`text-xs px-2 py-1 rounded border cursor-pointer font-mono font-bold transition ${
                                         checked ? 'bg-indigo-100 border-indigo-300 text-indigo-800' :
                                         weak ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-white border-slate-200 text-slate-500'
                                     }`}>
@@ -5570,10 +5587,10 @@ ${syllabus}
                     </div>
                     <textarea
                         readOnly
-                        className="w-full h-36 p-3 text-xs font-mono bg-white border border-indigo-100 rounded-lg outline-none resize-none"
+                        className="w-full h-40 p-3 text-sm font-mono bg-white border border-indigo-100 rounded-lg outline-none resize-none"
                         value={buildHwPracticePrompt()}
                     />
-                    <p className="text-[10px] text-indigo-600 mt-1.5">複製後可貼到 Gemini、Grok、ChatGPT 等生成針對性練習題。</p>
+                    <p className="text-xs text-indigo-600 mt-1.5">複製後可貼到 Gemini、Grok、ChatGPT 等生成針對性練習題。</p>
                 </div>
             )}
         </div>
@@ -6560,6 +6577,10 @@ const PastpaperSummaryView = ({ currentCohort, activeStudents, pastpaperScores }
 
     // 熱力圖多選題目狀態
     const [selectedHeatmapQs, setSelectedHeatmapQs] = React.useState([]);
+    // ★ 盲點 Prompt 設定
+    const [heatmapAiMc, setHeatmapAiMc] = React.useState(1);
+    const [heatmapAiLq, setHeatmapAiLq] = React.useState(0);
+    const [heatmapAiLevel, setHeatmapAiLevel] = React.useState('中');
 
     // 排行榜真實時間篩選狀態
     const [leaderboardMonth, setLeaderboardMonth] = React.useState('all');
@@ -6934,7 +6955,8 @@ const PastpaperSummaryView = ({ currentCohort, activeStudents, pastpaperScores }
             return `- 題號: ${q.shortId}\n  課題: ${q.topicId}\n  官方考點: ${q.topicDesc || '無'}\n  全班答對率: ${(q.passRate*100).toFixed(0)}%`;
         }).join('\n\n');
 
-        const prompt = `你是一位香港 DSE 物理科導師。在最近一次測驗（試卷：${selectedPaper}）中，全班在以下幾道題目的表現極度不理想，成為「全班共同盲點」。\n\n[全班共同盲點清單]\n${promptList}\n\n[生成要求]\n1. 請為上述每一道盲點題目，提供【深度觀念釐清】與【常見陷阱分析】。\n2. 針對每一個考點，額外生成一條難度相若的【DSE 變式多項選擇題 (MC)】，並附上 4 個選項及詳細解釋，以供我在課堂上派發給全班進行即時鞏固練習。`;
+        const syllabus = typeof getSyllabusTableText === 'function' ? getSyllabusTableText() : '';
+        const prompt = `你是一位香港 DSE 物理科導師。在最近一次測驗（試卷：${selectedPaper}）中，全班在以下幾道題目的表現極度不理想，成為「全班共同盲點」。\n\n[全班共同盲點清單]\n${promptList}\n\n【課程大綱參考】\n${syllabus}\n\n[基本設定]\n- 難度：${heatmapAiLevel}\n- 每考點衍生 MC：${heatmapAiMc} 題\n- 每考點衍生 LQ：${heatmapAiLq} 題\n\n[生成要求]\n1. 請為上述每一道盲點題目，提供【深度觀念釐清】與【常見陷阱分析】。\n2. 針對每一個考點，額外生成 ${heatmapAiMc} 條難度相若的【DSE 變式多項選擇題 (MC)】（附 4 個選項及詳細解釋），以及 ${heatmapAiLq} 條【結構式長題目 (LQ)】（附分步評分標準），以供我在課堂上派發給全班進行即時鞏固練習。\n3. 題目風格須貼近 HKDSE，並嚴格對應上方課程大綱。`;
 
         navigator.clipboard.writeText(prompt);
         alert('📋 全班盲點 AI 提示詞已複製！');
@@ -7061,15 +7083,32 @@ const PastpaperSummaryView = ({ currentCohort, activeStudents, pastpaperScores }
                                         )}
                                     </div>
 
-                                    {/* 底部操作區 */}
-                                    <div className="bg-pink-50 p-3 rounded-lg border border-pink-100 flex justify-between items-center">
-                                        <div className="text-sm font-bold text-pink-800">
-                                            已選取 <span className="bg-pink-600 text-white px-2 py-0.5 rounded-full">{selectedHeatmapQs.length}</span> 題盲點
+                                    {/* 底部操作區 + 設定 */}
+                                    <div className="bg-pink-50 p-3 rounded-lg border border-pink-100 space-y-3">
+                                        <div className="flex flex-wrap items-center gap-3">
+                                            <div className="text-sm font-bold text-pink-800">
+                                                已選取 <span className="bg-pink-600 text-white px-2 py-0.5 rounded-full">{selectedHeatmapQs.length}</span> 題盲點
+                                            </div>
+                                            <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
+                                                <label className="flex items-center gap-1">難度
+                                                    <select value={heatmapAiLevel} onChange={e => setHeatmapAiLevel(e.target.value)} className="p-1 border rounded bg-white font-bold">
+                                                        <option value="淺">淺</option>
+                                                        <option value="中">中</option>
+                                                        <option value="深">深</option>
+                                                    </select>
+                                                </label>
+                                                <label className="flex items-center gap-1">MC
+                                                    <input type="number" min="0" max="5" value={heatmapAiMc} onChange={e => setHeatmapAiMc(Number(e.target.value)||0)} className="w-12 p-1 border rounded bg-white text-center font-bold" />
+                                                </label>
+                                                <label className="flex items-center gap-1">LQ
+                                                    <input type="number" min="0" max="3" value={heatmapAiLq} onChange={e => setHeatmapAiLq(Number(e.target.value)||0)} className="w-12 p-1 border rounded bg-white text-center font-bold" />
+                                                </label>
+                                            </div>
                                         </div>
                                         <button 
                                             onClick={handleCopyHeatmapPrompt}
                                             disabled={selectedHeatmapQs.length === 0}
-                                            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition ${selectedHeatmapQs.length > 0 ? 'bg-pink-600 hover:bg-pink-700 text-white shadow-md' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
+                                            className={`w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition ${selectedHeatmapQs.length > 0 ? 'bg-pink-600 hover:bg-pink-700 text-white shadow-md' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
                                         >
                                             <Icon name="Wand2" size={16} /> 生成盲點解說與變式題
                                         </button>
@@ -7241,7 +7280,7 @@ const PastpaperSummaryView = ({ currentCohort, activeStudents, pastpaperScores }
                             </div>
                             <div>
                                 <h2 className="font-bold text-base bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">Physics Quiz Analyzer</h2>
-                                <p className="text-xs text-slate-400 font-mono">V4.04 Cloud</p>
+                                <p className="text-xs text-slate-400 font-mono">V4.05 Cloud</p>
                             </div>
                         </div>
 
@@ -7494,16 +7533,21 @@ const AITrainingCenterPanel = ({ studentId, scores, examScores, homeworkScores, 
             ? `特別是以下幾個我得分不到一半的核心概念（弱點）：\n${weaknesses.map(w => `- ${w}`).join('\n')}\n\n請務必針對這些錯因設計陷阱題。`
             : `我希望全面複習該範圍的核心概念。`;
 
+        const syllabus = typeof getSyllabusTableText === 'function' ? getSyllabusTableText() : '';
         const prompt = `我是一名準備應考「${config.syllabus}」的學生。
 請使用「${config.language}」與我進行一對一的針對性特訓。
 
 我最近在學校的測考中表現不理想，${weaknessText}
 
+【課程大綱參考】
+${syllabus}
+
 🎯 任務要求：
 1. 請先用一句話鼓勵我。
 2. 請根據我的現有程度（目標難度：${diffText}），為我出 ${config.mcCount} 條多項選擇題 (MC) 以及 ${config.lqCount} 條長題目 (LQ)。
 3. ⚠️ 嚴格注意：請先「只給我題目」，絕對不要直接提供答案！
-4. 等我回答後，你再給出詳細的評分標準 (Marking Scheme) 與解題思路。`;
+4. 等我回答後，你再給出詳細的評分標準 (Marking Scheme) 與解題思路。
+5. 題目必須嚴格對應上方課程大綱的學習要求。`;
         
         navigator.clipboard.writeText(prompt).then(() => {
             alert('✅ 專屬 AI 特訓指令已成功複製！\n\n即將為您開啟 AI 平台，請直接「貼上 (Ctrl+V)」發送給 AI 導師！');
@@ -7868,7 +7912,8 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
             ? `特別是以下幾個我得分不到一半的弱點概念：\n${weaknesses.map(w => `- ${w}`).join('\n')}\n\n`
             : `有部分概念不太清晰。\n\n`;
 
-        const prompt = `我是一名修讀高中物理科的學生，我在最近的「${category}：${title}」中表現不太理想。\n\n${weaknessText}請用繁體中文、深入淺出地為我重新講解這些核心概念。講解完畢後，請以「互動小測驗」的形式，給我5-8條簡單的 MC（選擇題），讓我測試一下自己是否真的明白了。\n\n⚠️ 注意：請先只給我題目，絕對不要直接提供答案！等我回答後，你再給出正確答案與詳細解釋。`;
+        const syllabus = typeof getSyllabusTableText === 'function' ? getSyllabusTableText() : '';
+        const prompt = `我是一名修讀高中物理科的學生，我在最近的「${category}：${title}」中表現不太理想。\n\n${weaknessText}請用繁體中文、深入淺出地為我重新講解這些核心概念。\n\n【課程大綱參考】\n${syllabus}\n\n講解完畢後，請以「互動式小測驗」的形式，給我 5-8 條簡單的 MC（選擇題），讓我測試一下自己是否真的明白了。\n\n⚠️ 重要：這必須是「互動式」小測驗——請先只給我題目，絕對不要直接提供答案！等我回答後，你再逐題給出正確答案與詳細解釋，並根據我的回答即時調整後續提示。`;
         
         navigator.clipboard.writeText(prompt).then(() => {
             alert('✅ 已複製專屬 AI 提問詞！\n\n即將為您開啟 Gemini。\n請直接貼上 (Ctrl+V) 發問，AI 將會為您針對弱點進行互動測驗！');
@@ -8095,7 +8140,8 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
 
         const weakText = targetWeaknesses.map(t => `- 課題 [${t.id}]: 得分率 ${(t.pct*100).toFixed(0)}%。經常錯在：${t.descList.join('; ') || '基礎觀念'}`).join('\n');
 
-        return `我是一名香港 DSE 物理科學生，目前就讀中五/中六。在最近的操練中，我發現自己在以下課題特別弱（得分率低於 60%）：\n\n${weakText}\n\n請你扮演一位幽默且有耐心的名師，幫我度身訂造一份「針對性補底特訓卷」。\n要求：\n1. 先用一句話鼓勵我。\n2. 出 3 題 DSE 程度的多項選擇題 (MC) 和 1 題長題目 (LQ)，全都是針對我上面的錯因設計的陷阱題。\n3. 先不要給我答案。等我回答後，你再給我詳細的 Marking Scheme 和解題思路！`;
+        const syllabus = typeof getSyllabusTableText === 'function' ? getSyllabusTableText() : '';
+        return `我是一名香港 DSE 物理科學生，目前就讀中五/中六。在最近的操練中，我發現自己在以下課題特別弱（得分率低於 60%）：\n\n${weakText}\n\n【課程大綱參考】\n${syllabus}\n\n請你扮演一位幽默且有耐心的名師，幫我度身訂造一份「針對性補底特訓卷」。\n要求：\n1. 先用一句話鼓勵我。\n2. 出 3 題 DSE 程度的多項選擇題 (MC) 和 1 題長題目 (LQ)，全都是針對我上面的錯因設計的陷阱題。\n3. 先不要給我答案。等我回答後，你再給我詳細的 Marking Scheme 和解題思路！`;
     };
 
     const handleCopyAndGo = (platformUrl) => {
