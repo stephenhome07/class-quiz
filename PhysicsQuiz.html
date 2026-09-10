@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>V4.07 Physics Quiz Analyzer</title>
+    <title>V4.08 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -1059,7 +1059,8 @@ const TopicAnalysisView = ({ activeStudents, scores }) => {
             `- 題號 ${q.id} (${q.type}): ${q.desc} (全班平均: ${Math.round(q.pct)}%)`
         ).join('\n');
 
-        return `你是一位經驗豐富的香港 DSE 物理科老師。我的全班學生剛完成了「${map.title}」的小測。以下是系統綜合出來的全班共同盲點與難點：\n\n【全班最弱的基礎概念】\n${weakestConcepts}\n\n【全班失分最多的具體題目】\n${weakestQuestions}\n\n我準備為他們進行「試後檢討 (Post-exam Review)」。請為我設計一份大約 15 分鐘的教學重溫大綱，要求：\n1. 針對上述的「最弱概念」，提供易於理解的日常例子或比喻來重新解說。\n2. 針對「失分最多的題目」，點出學生常犯的迷思概念 (Misconceptions) 及思考陷阱。\n3. 提供 3 條簡單直接的「黑板提問 (Concept Checking Questions)」，讓我能在堂上即時考問全班，以確保他們已經明白。`;
+        const syllabus = typeof getSyllabusTableText === 'function' ? getSyllabusTableText() : '';
+        return `你是一位經驗豐富的香港 DSE 物理科老師。我的全班學生剛完成了「${map.title}」的小測。以下是系統綜合出來的全班共同盲點與難點：\n\n【全班最弱的基礎概念】\n${weakestConcepts}\n\n【全班失分最多的具體題目】\n${weakestQuestions}\n\n【課程大綱參考】\n${syllabus}\n\n我準備為他們進行「試後檢討 (Post-exam Review)」。請為我設計一份大約 15 分鐘的教學重溫大綱，要求：\n1. 針對上述的「最弱概念」，提供易於理解的日常例子或比喻來重新解說。\n2. 針對「失分最多的題目」，點出學生常犯的迷思概念 (Misconceptions) 及思考陷阱。\n3. 提供 3 條簡單直接的「黑板提問 (Concept Checking Questions)」，讓我能在堂上即時考問全班，以確保他們已經明白。\n4. 題目與解說須嚴格對應上方課程大綱的學習要求。`;
     };
 
     return (
@@ -4773,7 +4774,9 @@ LQ1bi	LQ	2	中	4.5.2	解釋螺線管長度和匝數加倍對磁場的影響。
 
 // ==================== 升級版：功課批改與狀態追蹤組件 ====================
 const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkMaps, homeworkScores, setHomeworkScores, syncToCloud }) => {
+    // ★ 所有 Hooks 必須在任何 early return 之前宣告（避免 React #310）
     const inputRefs = React.useRef({});
+    const autoSaveTimer = React.useRef(null);
     const availableHws = Object.keys(homeworkMaps || {}).filter(id => !homeworkMaps[id].cohort || homeworkMaps[id].cohort === currentCohort);
     const [selectedHw, setSelectedHw] = React.useState(availableHws[0] || '');
     const [selectedStudentId, setSelectedStudentId] = React.useState('');
@@ -4785,6 +4788,14 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkMaps, 
         if (availableHws.length > 0 && !availableHws.includes(selectedHw)) setSelectedHw(availableHws[0]);
         else if (availableHws.length === 0) setSelectedHw('');
     }, [currentCohort, homeworkMaps]);
+
+    // 切換群組時清空選中學生，避免殘留狀態
+    React.useEffect(() => {
+        setSelectedStudentId('');
+        setCurrentEdit(null);
+        setSaveStatus('idle');
+        setFilterStatus('ALL');
+    }, [currentCohort]);
 
     const map = homeworkMaps[selectedHw];
     if (!map) return (
@@ -4800,8 +4811,6 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkMaps, 
         setCurrentEdit(JSON.parse(JSON.stringify(record)));
         setSaveStatus('idle'); 
     };
-
-    const autoSaveTimer = React.useRef(null);
 
     const getLevelBadge = (level) => {
         if (level === '淺') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
@@ -5606,6 +5615,8 @@ const PastpaperScoresInputView = ({ currentCohort, activeStudents, pastpaperScor
     
     // 用來記錄所有輸入框的實體 DOM 位置，實現極速跳轉
     const inputRefs = React.useRef({});
+    // 防抖雲端同步 timer（必須在 top-level，不可放在 handleScoreChange 內）
+    const ppTeacherSyncTimer = React.useRef(null);
 
     const map = window.PASTPAPER_MAPS?.[selectedPaper];
 
@@ -5640,7 +5651,7 @@ const PastpaperScoresInputView = ({ currentCohort, activeStudents, pastpaperScor
         return { mcScore, lqScore, totalScore: mcScore + lqScore, totalMax, hasRecord };
     };
 
-   // ★ 神級輸入處理：支援 ABCD 也能支援 1/0，並自動記錄「完成月份」
+   // ★ 神級輸入處理：支援 ABCD 也能支援 1/0，並自動記錄「完成月份」+ 防抖雲端同步
     const handleScoreChange = (studentId, paperId, q, val) => {
         let processedVal = val.toString().toUpperCase().trim();
         
@@ -5660,17 +5671,25 @@ const PastpaperScoresInputView = ({ currentCohort, activeStudents, pastpaperScor
         // 取得當前的真實月份 (例如 "2024-10")
         const currentMonth = new Date().toISOString().substring(0, 7);
 
-        setPastpaperScores(prev => ({
-            ...prev,
-            [studentId]: {
-                ...(prev[studentId] || {}),
-                [paperId]: {
-                    ...((prev[studentId] && prev[studentId][paperId]) || {}),
-                    [q.id]: processedVal,
-                    '_submitMonth': currentMonth // ★ 秘密加入時間戳！
+        setPastpaperScores(prev => {
+            const next = {
+                ...prev,
+                [studentId]: {
+                    ...(prev[studentId] || {}),
+                    [paperId]: {
+                        ...((prev[studentId] && prev[studentId][paperId]) || {}),
+                        [q.id]: processedVal,
+                        '_submitMonth': currentMonth
+                    }
                 }
-            }
-        }));
+            };
+            // 防抖自動同步雲端，避免學生/老師輸入後漏存
+            if (ppTeacherSyncTimer.current) clearTimeout(ppTeacherSyncTimer.current);
+            ppTeacherSyncTimer.current = setTimeout(() => {
+                if (typeof syncToCloud === 'function') syncToCloud({ pastpaperScores: next });
+            }, 600);
+            return next;
+        });
     };
 
     // 極速自動跳轉邏輯
@@ -7727,6 +7746,55 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
     const [ppSelectedPaper, setPpSelectedPaper] = React.useState('');
     const [ppInputValues, setPpInputValues] = React.useState({});
     const [selectedPPPapers, setSelectedPPPapers] = React.useState([]); // AI 勾選分析用
+    const [ppSaveStatus, setPpSaveStatus] = React.useState('idle'); // idle | saving | saved | error
+    const ppAutoSaveTimer = React.useRef(null);
+    const ppInputValuesRef = React.useRef(ppInputValues);
+    const ppSelectedPaperRef = React.useRef(ppSelectedPaper);
+    React.useEffect(() => { ppInputValuesRef.current = ppInputValues; }, [ppInputValues]);
+    React.useEffect(() => { ppSelectedPaperRef.current = ppSelectedPaper; }, [ppSelectedPaper]);
+
+    // ★ 學生歷屆試題自動儲存（防漏存）
+    const saveStudentPastpaper = React.useCallback((valuesOverride = null, paperOverride = null, silent = false) => {
+        const values = valuesOverride || ppInputValuesRef.current;
+        const paperId = paperOverride || ppSelectedPaperRef.current;
+        if (!paperId || typeof setPastpaperScores !== 'function') return false;
+        const hasAny = Object.keys(values || {}).some(k => k !== '_submitMonth' && values[k] !== '' && values[k] !== undefined && values[k] !== null);
+        if (!hasAny) return false;
+
+        setPpSaveStatus('saving');
+        const currentMonth = new Date().toISOString().slice(0, 7);
+        const newRecord = { ...values, _submitMonth: currentMonth };
+        const base = pastpaperScores || {};
+        const finalUpdatedScores = {
+            ...base,
+            [studentId]: {
+                ...(base[studentId] || {}),
+                [paperId]: newRecord
+            }
+        };
+        setPastpaperScores(finalUpdatedScores);
+        if (typeof syncToCloud === 'function') {
+            try {
+                syncToCloud({ pastpaperScores: finalUpdatedScores });
+            } catch (e) {
+                console.error('pastpaper sync failed', e);
+                setPpSaveStatus('error');
+                return false;
+            }
+        }
+        setPpSaveStatus('saved');
+        if (!silent) {
+            setTimeout(() => setPpSaveStatus(s => s === 'saved' ? 'idle' : s), 2500);
+        }
+        return true;
+    }, [studentId, pastpaperScores, setPastpaperScores, syncToCloud]);
+
+    const schedulePpAutoSave = React.useCallback((nextValues) => {
+        if (ppAutoSaveTimer.current) clearTimeout(ppAutoSaveTimer.current);
+        ppAutoSaveTimer.current = setTimeout(() => {
+            saveStudentPastpaper(nextValues, null, true);
+        }, 800);
+    }, [saveStudentPastpaper]);
 
     // 動態解析可用年份 (例如 2014, 2015)
     const availableYears = React.useMemo(() => {
@@ -7746,10 +7814,14 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
             }));
     }, [safePPMaps, ppSelectedYear]);
 
-    // 年份改變時，自動清空選中的卷目
+    // 年份改變時：先自動儲存當前卷，再清空
     React.useEffect(() => {
+        if (ppSelectedPaperRef.current && Object.keys(ppInputValuesRef.current || {}).length > 0) {
+            saveStudentPastpaper(ppInputValuesRef.current, ppSelectedPaperRef.current, true);
+        }
         setPpSelectedPaper('');
         setPpInputValues({});
+        setPpSaveStatus('idle');
     }, [ppSelectedYear]);
 
     // DSE 等級估算工具
@@ -8543,14 +8615,14 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                 </div>
 
                                 {/* 安全讀取題庫 */}
-                                {ppSelectedPaper && pastpaperMaps?.[ppSelectedPaper] && (
+                                {ppSelectedPaper && safePPMaps?.[ppSelectedPaper] && (
                                     <div className="animate-fadeIn">
                                         <label className="block text-sm font-bold text-slate-700 mb-3">步驟 3：輸入答案或分數</label>
                                         
                                         {/* 分段與 5 格網格輸入系統 */}
                                         <div className="space-y-6 mb-8">
                                             {(() => {
-                                                const paperQuestions = pastpaperMaps[ppSelectedPaper].questions || [];
+                                                const paperQuestions = safePPMaps[ppSelectedPaper].questions || [];
                                                 const groups = { '預設': [], 'E3 (能量)': [], 'E4 (醫學)': [] };
                                                 
                                                 paperQuestions.forEach(q => {
@@ -8618,7 +8690,11 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                                                                     onChange={(e) => {
                                                                                         const val = e.target.value.toUpperCase();
                                                                                         if (val === '' || ['A','B','C','D'].includes(val)) {
-                                                                                            setPpInputValues(prev => ({...prev, [q.id]: val}));
+                                                                                            setPpInputValues(prev => {
+                                                                                                const next = {...prev, [q.id]: val};
+                                                                                                schedulePpAutoSave(next);
+                                                                                                return next;
+                                                                                            });
                                                                                             if (val !== '') {
                                                                                                 const currentGlobalIdx = paperQuestions.findIndex(item => item.id === q.id);
                                                                                                 if (currentGlobalIdx !== -1 && currentGlobalIdx + 1 < paperQuestions.length) {
@@ -8646,7 +8722,11 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                                                                                 if (val < 0) val = 0;
                                                                                                 if (val > q.max) val = q.max;
                                                                                             }
-                                                                                            setPpInputValues(prev => ({...prev, [q.id]: val}));
+                                                                                            setPpInputValues(prev => {
+                                                                                                const next = {...prev, [q.id]: val};
+                                                                                                schedulePpAutoSave(next);
+                                                                                                return next;
+                                                                                            });
                                                                                         }}
                                                                                         onKeyDown={(e) => {
                                                                                             if (e.key === 'Enter') {
@@ -8672,48 +8752,27 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                             })()}
                                         </div>
                                         
-                                        {/* ★ 升級版儲存按鈕：加入 _submitMonth 與雲端同步 syncToCloud */}
-                                        {/* ★ 升級版儲存按鈕：修復 React 非同步更新導致的雲端漏傳問題 */}
-                                        <div className="flex justify-end border-t border-slate-100 pt-5">
+                                        {/* ★ 儲存按鈕 + 自動儲存狀態 */}
+                                        <div className="flex flex-col sm:flex-row justify-between items-center gap-3 border-t border-slate-100 pt-5">
+                                            <div className="text-xs font-bold text-slate-500">
+                                                {ppSaveStatus === 'saving' && <span className="text-amber-600">⏳ 正在自動儲存…</span>}
+                                                {ppSaveStatus === 'saved' && <span className="text-emerald-600">✅ 已自動儲存至資料庫</span>}
+                                                {ppSaveStatus === 'error' && <span className="text-rose-600">⚠️ 自動儲存失敗，請按右側按鈕重試</span>}
+                                                {ppSaveStatus === 'idle' && <span className="text-slate-400">輸入答案後會自動儲存（約 0.8 秒）</span>}
+                                            </div>
                                             <button 
                                                 onClick={() => {
-                                                    if (typeof setPastpaperScores === 'function') {
-                                                        // 1. 取得當前月份 YYYY-MM，並與新輸入的成績合併
-                                                        const currentMonth = new Date().toISOString().slice(0, 7);
-                                                        const newRecord = { ...ppInputValues, _submitMonth: currentMonth };
-                                                        
-                                                        // 2. 先抓取目前最新的歷屆試題總表
-                                                        const safePPScores = pastpaperScores || (typeof window !== 'undefined' ? window.PASTPAPER_SCORES : null) || {};
-                                                        
-                                                        // 3. 【關鍵修復】先手動計算出完整的最新成績單！
-                                                        const finalUpdatedScores = {
-                                                            ...safePPScores,
-                                                            [studentId]: {
-                                                                ...(safePPScores[studentId] || {}),
-                                                                [ppSelectedPaper]: newRecord
-                                                            }
-                                                        };
-                                                        
-                                                        // 4. 更新畫面 (Local State)
-                                                        setPastpaperScores(finalUpdatedScores);
-                                                        
-                                                        // 5. 立即呼叫雲端同步，並傳入剛剛算好的最新成績單！
-                                                        if (typeof syncToCloud === 'function') {
-                                                            syncToCloud({ pastpaperScores: finalUpdatedScores });
-                                                            console.log("✅ 已觸發雲端同步！", finalUpdatedScores);
-                                                        } else {
-                                                            console.warn("找不到 syncToCloud 函數，成績僅在本地更新。");
-                                                        }
-                                                        
-                                                        alert('✅ 成績已成功更新並開始同步至資料庫！');
+                                                    const ok = saveStudentPastpaper(ppInputValues, ppSelectedPaper, false);
+                                                    if (ok) {
+                                                        alert('✅ 成績已成功更新並同步至資料庫！');
                                                         setPpMode('view');
                                                     } else {
-                                                        alert('⚠️ 系統找不到儲存功能，請確保外層已傳遞 setPastpaperScores。');
+                                                        alert('⚠️ 尚無有效答案可儲存，或儲存功能異常。');
                                                     }
                                                 }}
                                                 className="bg-emerald-500 text-white px-8 py-3 rounded-xl font-black hover:bg-emerald-600 transition-colors flex items-center gap-2 shadow-md hover:shadow-lg"
                                             >
-                                                <Icon name="Save" size={20} /> 儲存至資料庫
+                                                <Icon name="Save" size={20} /> 立即儲存至資料庫
                                             </button>
                                         </div>
                                     </div>
@@ -9004,8 +9063,10 @@ const App = () => {
                         setHomeworkMaps((typeof data.homeworkMaps === 'object' && data.homeworkMaps !== null) ? data.homeworkMaps : {}); 
                         setHomeworkScores((typeof data.homeworkScores === 'object' && data.homeworkScores !== null) ? data.homeworkScores : {});
                         
-                        // ★ 載入 Pastpaper 儲存成績
-                        setPastpaperMaps(data.pastpaperMaps || {});
+                        // ★ 載入 Pastpaper 題庫與成績（同步到 window 供各視圖使用）
+                        const loadedPPMaps = data.pastpaperMaps || {};
+                        setPastpaperMaps(loadedPPMaps);
+                        if (typeof window !== 'undefined') window.PASTPAPER_MAPS = loadedPPMaps;
                         setPastpaperScores((typeof data.pastpaperScores === 'object' && data.pastpaperScores !== null) ? data.pastpaperScores : {});
                         
                         
