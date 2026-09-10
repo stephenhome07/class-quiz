@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>V4.08 Physics Quiz Analyzer</title>
+    <title>V4.09 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -4498,7 +4498,7 @@ const StudentPromotionView = ({
 // ==================== 新增：學生專屬入口 (Student Portal) ====================
 
 // ==================== 升級版：功課內容與藍圖設定組件 ====================
-const HomeworkSettingsView = ({ students, currentCohort, homeworkMaps, setHomeworkMaps, syncToCloud }) => {
+const HomeworkSettingsView = ({ students, currentCohort, homeworkMaps, setHomeworkMaps, homeworkScores, setHomeworkScores, syncToCloud }) => {
     const cohorts = Array.from(new Set(students.map(s => s.cohort))).filter(Boolean).sort();
     const [selectedCohort, setSelectedCohort] = React.useState(currentCohort !== '所有學生' ? currentCohort : (cohorts[0] || ''));
     
@@ -4552,25 +4552,60 @@ const HomeworkSettingsView = ({ students, currentCohort, homeworkMaps, setHomewo
         if (questions.length === 0) return alert('無法解析題目，請檢查格式是否正確。');
 
         const newId = hwId.trim().toUpperCase();
+        const oldId = editingOriginalId;
         const newMaps = { ...homeworkMaps };
-        // 若改了編號：刪除舊 key
-        if (editingOriginalId && editingOriginalId !== newId) {
-            delete newMaps[editingOriginalId];
+        // 若改了編號：刪除舊 key，並遷移所有學生的成績記錄
+        let migratedScores = homeworkScores || {};
+        if (oldId && oldId !== newId) {
+            delete newMaps[oldId];
+            // ★ 遷移 homeworkScores：每個學生的 oldId → newId
+            const nextScores = { ...(homeworkScores || {}) };
+            Object.keys(nextScores).forEach(sid => {
+                const studentHw = nextScores[sid];
+                if (!studentHw || typeof studentHw !== 'object') return;
+                if (studentHw[oldId] !== undefined) {
+                    const merged = studentHw[newId]
+                        ? { ...studentHw[oldId], ...studentHw[newId] }
+                        : studentHw[oldId];
+                    const updated = { ...studentHw, [newId]: merged };
+                    delete updated[oldId];
+                    nextScores[sid] = updated;
+                }
+            });
+            migratedScores = nextScores;
+            if (typeof setHomeworkScores === 'function') setHomeworkScores(migratedScores);
         }
         newMaps[newId] = { title: hwTitle, cohort: selectedCohort, questions: questions };
         setHomeworkMaps(newMaps);
-        syncToCloud({ homeworkMaps: newMaps }); 
+        // 一併同步題庫 +（若有改編號）遷移後的成績
+        if (typeof syncToCloud === 'function') {
+            syncToCloud(oldId && oldId !== newId
+                ? { homeworkMaps: newMaps, homeworkScores: migratedScores }
+                : { homeworkMaps: newMaps });
+        }
         
-        alert(`✅ 群組 [${selectedCohort}] 的功課 [${newId}] ${editingOriginalId ? '已更新' : '已儲存'}！`);
+        alert(`✅ 群組 [${selectedCohort}] 的功課 [${newId}] ${oldId && oldId !== newId ? `已由「${oldId}」改編號並遷移成績` : (oldId ? '已更新' : '已儲存')}！`);
         setHwId(''); setHwTitle(''); setPasteData(''); setEditingOriginalId(null);
     };
 
     const handleDelete = (id) => {
-        if (confirm(`確定要刪除功課 [${id}] 的設定嗎？`)) {
+        if (confirm(`確定要刪除功課 [${id}] 的設定嗎？\n（成績記錄會一併清除，請小心）`)) {
             const newMaps = { ...homeworkMaps };
             delete newMaps[id];
             setHomeworkMaps(newMaps);
-            syncToCloud({ homeworkMaps: newMaps });
+            // 同步清除各學生該功課成績，避免孤兒資料
+            const nextScores = { ...(homeworkScores || {}) };
+            Object.keys(nextScores).forEach(sid => {
+                if (nextScores[sid] && nextScores[sid][id] !== undefined) {
+                    const copy = { ...nextScores[sid] };
+                    delete copy[id];
+                    nextScores[sid] = copy;
+                }
+            });
+            if (typeof setHomeworkScores === 'function') setHomeworkScores(nextScores);
+            if (typeof syncToCloud === 'function') {
+                syncToCloud({ homeworkMaps: newMaps, homeworkScores: nextScores });
+            }
             if (editingOriginalId === id) {
                 setHwId(''); setHwTitle(''); setPasteData(''); setEditingOriginalId(null);
             }
@@ -8143,8 +8178,9 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
             .sort((a, b) => a.pct - b.pct);
     }, [selectedPPPapers, pastpaperScores, studentId, pastpaperMaps, getPastpaperQScore]);
 
-    // ================== 英雄榜運算區 ==================
+    // ================== 英雄榜運算區（多榜：功課 / 小測 / 統考 / 綜合 / Pastpaper） ==================
     const TITLE_POOL = { '1': ["熱力學宗師", "絕對零度行者"], '2': ["力學戰神", "牛頓傳人"], '3': ["波動幻影", "光學大師"], '4': ["電磁霸主", "雷電行者"], '5': ["輻射剋星", "量子漫步者"], 'E3': ["能量守恆者", "綠能先鋒"], 'E4': ["醫學神醫", "透視眼行者"] };
+    const [rankBoardTab, setRankBoardTab] = React.useState('composite'); // composite | homework | quiz | exam | pastpaper
 
     const availableMonths = React.useMemo(() => {
         const months = new Set();
@@ -8155,7 +8191,97 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
         return Array.from(months).sort().reverse();
     }, [peerStudents, pastpaperScores]);
 
-    const leaderboardData = React.useMemo(() => {
+    // 計算單一學生在某類成績的平均得分率 (0~1)，無資料回傳 null
+    const calcCategoryPct = React.useCallback((sId, category) => {
+        const cohort = (students || []).find(x => x.id === sId)?.cohort;
+        let totalPct = 0, count = 0;
+
+        if (category === 'homework') {
+            const maps = homeworkMaps || {};
+            const sHw = homeworkScores?.[sId] || {};
+            Object.keys(maps).forEach(hwId => {
+                const map = maps[hwId];
+                if (!map?.questions?.length) return;
+                if (map.cohort && cohort && map.cohort !== cohort) return;
+                const rec = sHw[hwId];
+                if (!rec?.scores) return;
+                let earned = 0, max = 0, has = false;
+                map.questions.forEach(q => {
+                    max += q.max || 0;
+                    const val = rec.scores[q.id];
+                    if (val === undefined || val === null || String(val).trim() === '') return;
+                    has = true;
+                    if (q.type === 'MC') {
+                        if (q.ans) {
+                            const corrects = q.ans.toString().split(',').map(a => a.trim().toUpperCase());
+                            if (corrects.includes(String(val).trim().toUpperCase())) earned += q.max || 0;
+                        }
+                    } else {
+                        earned += parseFloat(val) || 0;
+                    }
+                });
+                if (has && max > 0) { totalPct += earned / max; count++; }
+            });
+        } else if (category === 'quiz') {
+            const maps = (typeof window !== 'undefined' && window.QUIZ_MAPS) ? window.QUIZ_MAPS : {};
+            const sQz = scores?.[sId] || {};
+            Object.keys(maps).forEach(qid => {
+                const map = maps[qid];
+                if (!map?.questions?.length) return;
+                const rec = sQz[qid];
+                if (!rec || typeof rec !== 'object') return;
+                let earned = 0, max = 0, has = false;
+                map.questions.forEach(q => {
+                    max += q.max || 0;
+                    const val = rec[q.id];
+                    if (val === undefined || val === null || String(val).trim() === '') return;
+                    has = true;
+                    if (q.type === 'MC') {
+                        if (q.ans) {
+                            const corrects = q.ans.toString().split(',').map(a => a.trim().toUpperCase());
+                            if (corrects.includes(String(val).trim().toUpperCase())) earned += q.max || 0;
+                        } else {
+                            earned += (parseFloat(val) || 0);
+                        }
+                    } else {
+                        earned += parseFloat(val) || 0;
+                    }
+                });
+                if (has && max > 0) { totalPct += earned / max; count++; }
+            });
+        } else if (category === 'exam') {
+            const maps = (typeof window !== 'undefined' && window.EXAM_MAPS) ? window.EXAM_MAPS : {};
+            const sEx = examScores?.[sId] || {};
+            Object.keys(maps).forEach(eid => {
+                const map = maps[eid];
+                if (!map?.questions?.length) return;
+                const rec = sEx[eid];
+                if (!rec || typeof rec !== 'object') return;
+                let earned = 0, max = 0, has = false;
+                map.questions.forEach(q => {
+                    max += q.max || 0;
+                    const val = rec[q.id];
+                    if (val === undefined || val === null || String(val).trim() === '') return;
+                    has = true;
+                    if (q.type === 'MC') {
+                        if (q.ans) {
+                            const corrects = q.ans.toString().split(',').map(a => a.trim().toUpperCase());
+                            if (corrects.includes(String(val).trim().toUpperCase())) earned += q.max || 0;
+                        } else {
+                            earned += parseFloat(val) || 0;
+                        }
+                    } else {
+                        earned += parseFloat(val) || 0;
+                    }
+                });
+                if (has && max > 0) { totalPct += earned / max; count++; }
+            });
+        }
+        return count > 0 ? totalPct / count : null;
+    }, [students, homeworkMaps, homeworkScores, scores, examScores]);
+
+    // Pastpaper 榜（仍以作答題數為戰鬥力）
+    const pastpaperLeaderboard = React.useMemo(() => {
         const lb = peerStudents.map(s => {
             const sScores = pastpaperScores[s.id] || {};
             let mcAttempted = 0, lqAttempted = 0, totalEarned = 0, totalMax = 0;
@@ -8166,14 +8292,13 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                 if (leaderboardMonth !== 'all' && record['_submitMonth'] !== leaderboardMonth) return;
                 const map = window.PASTPAPER_MAPS ? window.PASTPAPER_MAPS[paperId] : pastpaperMaps[paperId];
                 if (!map) return;
-                
                 map.questions.forEach(q => {
                     const val = record[q.id];
                     if (val !== undefined && val !== '') {
                         if (q.type === 'MC') mcAttempted++; else lqAttempted++;
                         const score = getPastpaperQScore(s.id, paperId, q);
                         totalMax += q.max; totalEarned += score;
-                        let dKey = q.topicId.startsWith('E3') ? 'E3' : q.topicId.startsWith('E4') ? 'E4' : q.topicId.charAt(0);
+                        let dKey = (q.topicId || '').startsWith('E3') ? 'E3' : (q.topicId || '').startsWith('E4') ? 'E4' : (q.topicId || ' ').charAt(0);
                         if (dStats[dKey]) { dStats[dKey].e += score; dStats[dKey].m += q.max; }
                     }
                 });
@@ -8189,21 +8314,63 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
 
             const totalQuestions = mcAttempted + lqAttempted;
             const accuracy = totalMax > 0 ? (totalEarned / totalMax) : 0;
-            
             let title = "潛水觀望者";
             if (totalQuestions > 0) {
                 const charSum = s.id.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
                 const pool = TITLE_POOL[bestDomain] || ["努力操卷者"];
                 title = pool[charSum % pool.length];
             }
-
-            return { student: s, totalQuestions, accuracy, title, bestDomain };
+            return { student: s, totalQuestions, accuracy, title, bestDomain, score: totalQuestions };
         });
         return lb.sort((a, b) => b.totalQuestions - a.totalQuestions || b.accuracy - a.accuracy);
     }, [peerStudents, pastpaperScores, pastpaperMaps, getPastpaperQScore, leaderboardMonth]);
 
-    const myRankData = leaderboardData.find(d => d.student.id === studentId) || { totalQuestions: 0, title: '尚未起步', accuracy: 0 };
-    const myRankIndex = leaderboardData.findIndex(d => d.student.id === studentId);
+    // 校內三榜 + 綜合榜
+    const schoolRankings = React.useMemo(() => {
+        const buildPctBoard = (category) => {
+            const rows = peerStudents.map(s => {
+                const pct = calcCategoryPct(s.id, category);
+                return { student: s, pct, score: pct === null ? -1 : pct };
+            }).filter(r => r.pct !== null);
+            rows.sort((a, b) => b.pct - a.pct);
+            return rows;
+        };
+        const homework = buildPctBoard('homework');
+        const quiz = buildPctBoard('quiz');
+        const exam = buildPctBoard('exam');
+
+        // 綜合：功課 20% / 小測 30% / 統考 50%，缺項則只在現有類別間重新正規化權重
+        const BASE_W = { homework: 0.2, quiz: 0.3, exam: 0.5 };
+        const composite = peerStudents.map(s => {
+            const hw = calcCategoryPct(s.id, 'homework');
+            const qz = calcCategoryPct(s.id, 'quiz');
+            const ex = calcCategoryPct(s.id, 'exam');
+            const parts = [];
+            if (hw !== null) parts.push({ w: BASE_W.homework, v: hw });
+            if (qz !== null) parts.push({ w: BASE_W.quiz, v: qz });
+            if (ex !== null) parts.push({ w: BASE_W.exam, v: ex });
+            if (parts.length === 0) return { student: s, pct: null, score: -1, detail: { hw, qz, ex } };
+            const wSum = parts.reduce((a, p) => a + p.w, 0);
+            const pct = parts.reduce((a, p) => a + (p.w / wSum) * p.v, 0);
+            return { student: s, pct, score: pct, detail: { hw, qz, ex } };
+        }).filter(r => r.pct !== null);
+        composite.sort((a, b) => b.pct - a.pct);
+
+        return { homework, quiz, exam, composite };
+    }, [peerStudents, calcCategoryPct]);
+
+    // 依目前分頁選出顯示清單
+    const activeLeaderboard = rankBoardTab === 'pastpaper' ? pastpaperLeaderboard
+        : rankBoardTab === 'homework' ? schoolRankings.homework
+        : rankBoardTab === 'quiz' ? schoolRankings.quiz
+        : rankBoardTab === 'exam' ? schoolRankings.exam
+        : schoolRankings.composite;
+
+    const myComposite = schoolRankings.composite.find(d => d.student.id === studentId);
+    const myCompositeIndex = schoolRankings.composite.findIndex(d => d.student.id === studentId);
+    const myPp = pastpaperLeaderboard.find(d => d.student.id === studentId) || { totalQuestions: 0, title: '尚未起步', accuracy: 0 };
+    const myRankData = myPp; // 相容舊 UI（稱號 / Pastpaper 題數）
+    const myRankIndex = myCompositeIndex >= 0 ? myCompositeIndex : pastpaperLeaderboard.findIndex(d => d.student.id === studentId);
 
     // ================== 生成 AI Prompt ==================
     const generatePrompt = () => {
@@ -8276,18 +8443,25 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                             <h2 className="text-2xl font-black mb-1">準備好超越自己了嗎，{currentStudent.name}？</h2>
                             <p className="text-sky-100 text-sm mb-6">保持紀律，今天的練習就是明天的 5**。你目前的稱號是 <strong className="text-yellow-300">「{myRankData.title}」</strong>。</p>
                             
-                            <div className="grid grid-cols-3 gap-4">
-                                <div className="bg-black/20 rounded-xl p-3 text-center border border-white/10 backdrop-blur-sm">
-                                    <div className="text-[10px] text-sky-200 uppercase font-bold tracking-wider mb-1">班級戰力排名</div>
-                                    <div className="text-2xl font-black text-white">#{myRankIndex >= 0 ? myRankIndex + 1 : '-'}</div>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                <div className="bg-gradient-to-br from-amber-400/30 to-yellow-500/20 rounded-xl p-3 text-center border-2 border-amber-300/50 backdrop-blur-sm col-span-2 sm:col-span-1 shadow-lg">
+                                    <div className="text-[10px] text-amber-100 uppercase font-black tracking-wider mb-1">⭐ 綜合排名</div>
+                                    <div className="text-3xl font-black text-yellow-200">#{myCompositeIndex >= 0 ? myCompositeIndex + 1 : '-'}</div>
+                                    <div className="text-[10px] text-amber-100/80 mt-0.5">
+                                        {myComposite ? `${(myComposite.pct * 100).toFixed(0)}%` : '尚無校內成績'}
+                                    </div>
                                 </div>
                                 <div className="bg-black/20 rounded-xl p-3 text-center border border-white/10 backdrop-blur-sm">
-                                    <div className="text-[10px] text-sky-200 uppercase font-bold tracking-wider mb-1">已擊敗題數</div>
-                                    <div className="text-2xl font-black text-white">{myRankData.totalQuestions}</div>
+                                    <div className="text-[10px] text-sky-200 uppercase font-bold tracking-wider mb-1">Pastpaper 題數</div>
+                                    <div className="text-2xl font-black text-white">{myRankData.totalQuestions || 0}</div>
                                 </div>
                                 <div className="bg-black/20 rounded-xl p-3 text-center border border-white/10 backdrop-blur-sm">
-                                    <div className="text-[10px] text-sky-200 uppercase font-bold tracking-wider mb-1">綜合命中率</div>
-                                    <div className="text-2xl font-black text-white">{(myRankData.accuracy * 100).toFixed(0)}%</div>
+                                    <div className="text-[10px] text-sky-200 uppercase font-bold tracking-wider mb-1">PP 命中率</div>
+                                    <div className="text-2xl font-black text-white">{((myRankData.accuracy || 0) * 100).toFixed(0)}%</div>
+                                </div>
+                                <div className="bg-black/20 rounded-xl p-3 text-center border border-white/10 backdrop-blur-sm">
+                                    <div className="text-[10px] text-sky-200 uppercase font-bold tracking-wider mb-1">稱號</div>
+                                    <div className="text-sm font-black text-yellow-300 leading-tight mt-1">{myRankData.title || '尚未起步'}</div>
                                 </div>
                             </div>
                         </div>
@@ -8429,49 +8603,88 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
 
                 {/* ==================== 分頁：英雄榜 (Leaderboard) ==================== */}
                 {activeTab === 'leaderboard' && (
-                    <div className="animate-fadeIn">
+                    <div className="animate-fadeIn space-y-4">
                         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                            <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                                <div>
-                                    <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
-                                        <Icon name="Trophy" className="text-amber-500" /> 群組操卷狂人榜
-                                    </h2>
-                                    <p className="text-xs text-slate-500 mt-1">看看同儕的努力，你也能成為榜首！(以答題數作為戰鬥力)</p>
+                            <div className="p-5 border-b border-slate-100">
+                                <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                                    <Icon name="Trophy" className="text-amber-500" /> 班級戰力排名
+                                </h2>
+                                <p className="text-xs text-slate-500 mt-1">
+                                    綜合排名 = 功課 20% + 小測 30% + 統考 50%（缺項會自動只在現有類別間重算權重）。Pastpaper 獨立成榜。
+                                </p>
+                                <div className="flex flex-wrap gap-2 mt-4">
+                                    {[
+                                        { id: 'composite', label: '⭐ 綜合排名', tip: '最重要' },
+                                        { id: 'homework', label: '📖 功課' },
+                                        { id: 'quiz', label: '📝 小測' },
+                                        { id: 'exam', label: '🏫 統考' },
+                                        { id: 'pastpaper', label: '📚 Pastpaper' },
+                                    ].map(t => (
+                                        <button key={t.id} onClick={() => setRankBoardTab(t.id)}
+                                            className={`px-3 py-1.5 rounded-full text-xs font-black transition border ${
+                                                rankBoardTab === t.id
+                                                    ? (t.id === 'composite' ? 'bg-amber-500 text-white border-amber-600 shadow-md scale-105' : 'bg-indigo-600 text-white border-indigo-700 shadow')
+                                                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                                            }`}>
+                                            {t.label}
+                                        </button>
+                                    ))}
                                 </div>
-                                <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-lg border border-slate-200">
-                                    <Icon name="Calendar" size={14} className="text-slate-400" />
-                                    <select 
-                                        className="bg-transparent text-sm font-bold text-slate-700 outline-none"
-                                        value={leaderboardMonth}
-                                        onChange={e => setLeaderboardMonth(e.target.value)}
-                                    >
-                                        <option value="all">全部時間 (總榜)</option>
-                                        {availableMonths.map(m => <option key={m} value={m}>{m}</option>)}
-                                    </select>
-                                </div>
+                                {rankBoardTab === 'pastpaper' && (
+                                    <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-lg border border-slate-200 mt-3 w-fit">
+                                        <Icon name="Calendar" size={14} className="text-slate-400" />
+                                        <select 
+                                            className="bg-transparent text-sm font-bold text-slate-700 outline-none"
+                                            value={leaderboardMonth}
+                                            onChange={e => setLeaderboardMonth(e.target.value)}
+                                        >
+                                            <option value="all">全部時間 (總榜)</option>
+                                            {availableMonths.map(m => <option key={m} value={m}>{m}</option>)}
+                                        </select>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="divide-y divide-slate-100">
-                                {leaderboardData.length === 0 ? (
-                                    <div className="p-10 text-center text-slate-400">這個月大家都還在潛水... 趕快去做一份 Pastpaper 拿下冠軍吧！</div>
+                                {activeLeaderboard.length === 0 ? (
+                                    <div className="p-10 text-center text-slate-400">此榜暫無成績資料，完成相關練習後就會出現排名！</div>
                                 ) : (
-                                    leaderboardData.map((data, idx) => {
+                                    activeLeaderboard.map((data, idx) => {
                                         const isMe = data.student.id === studentId;
+                                        const isComposite = rankBoardTab === 'composite';
+                                        const isPP = rankBoardTab === 'pastpaper';
                                         return (
-                                            <div key={data.student.id} className={`p-4 flex items-center gap-4 transition ${isMe ? 'bg-amber-50 border-l-4 border-amber-500' : 'hover:bg-slate-50'}`}>
-                                                <div className="w-8 text-center text-lg font-black text-slate-400">
+                                            <div key={data.student.id} className={`p-4 flex items-center gap-4 transition ${
+                                                isMe ? (isComposite ? 'bg-amber-50 border-l-4 border-amber-500' : 'bg-indigo-50 border-l-4 border-indigo-500') : 'hover:bg-slate-50'
+                                            }`}>
+                                                <div className={`w-8 text-center text-lg font-black ${isComposite && idx < 3 ? 'text-amber-500' : 'text-slate-400'}`}>
                                                     {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}
                                                 </div>
-                                                <div className="flex-1">
+                                                <div className="flex-1 min-w-0">
                                                     <div className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                                                        {isMe ? <span className="bg-amber-500 text-white px-1.5 py-0.5 rounded text-[10px] uppercase">You</span> : null}
+                                                        {isMe ? <span className={`px-1.5 py-0.5 rounded text-[10px] uppercase text-white ${isComposite ? 'bg-amber-500' : 'bg-indigo-500'}`}>You</span> : null}
                                                         {data.student.name}
                                                     </div>
-                                                    <div className="text-xs text-indigo-600 font-bold mt-0.5">{data.title}</div>
+                                                    {isPP && <div className="text-xs text-indigo-600 font-bold mt-0.5">{data.title}</div>}
+                                                    {isComposite && data.detail && (
+                                                        <div className="text-[10px] text-slate-500 mt-0.5 flex flex-wrap gap-2">
+                                                            <span>功課 {data.detail.hw !== null ? Math.round(data.detail.hw * 100) + '%' : '—'}</span>
+                                                            <span>小測 {data.detail.qz !== null ? Math.round(data.detail.qz * 100) + '%' : '—'}</span>
+                                                            <span>統考 {data.detail.ex !== null ? Math.round(data.detail.ex * 100) + '%' : '—'}</span>
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                <div className="text-right">
-                                                    <div className="text-lg font-black text-amber-600">{data.totalQuestions} <span className="text-[10px] text-slate-400 uppercase font-normal">題</span></div>
-                                                    <div className="text-[10px] text-slate-500 font-bold">準確率: {(data.accuracy * 100).toFixed(0)}%</div>
+                                                <div className="text-right shrink-0">
+                                                    {isPP ? (
+                                                        <>
+                                                            <div className="text-lg font-black text-amber-600">{data.totalQuestions} <span className="text-[10px] text-slate-400 uppercase font-normal">題</span></div>
+                                                            <div className="text-[10px] text-slate-500 font-bold">準確率: {(data.accuracy * 100).toFixed(0)}%</div>
+                                                        </>
+                                                    ) : (
+                                                        <div className={`text-lg font-black ${isComposite ? 'text-amber-600' : 'text-indigo-600'}`}>
+                                                            {(data.pct * 100).toFixed(1)}%
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         );
@@ -9280,7 +9493,7 @@ const App = () => {
     
                     
                     {/* 更新：功課管理頁面傳入完整的狀態與更新函數 */}
-                    {view === 'homeworkSettings' && <HomeworkSettingsView students={students} currentCohort={currentCohort} homeworkMaps={homeworkMaps} setHomeworkMaps={setHomeworkMaps} syncToCloud={syncToCloud} />}
+                    {view === 'homeworkSettings' && <HomeworkSettingsView students={students} currentCohort={currentCohort} homeworkMaps={homeworkMaps} setHomeworkMaps={setHomeworkMaps} homeworkScores={homeworkScores} setHomeworkScores={setHomeworkScores} syncToCloud={syncToCloud} />}
                     {view === 'homeworkScoresInput' && <HomeworkScoresInputView activeStudents={activeStudents} currentCohort={currentCohort} homeworkMaps={homeworkMaps} homeworkScores={homeworkScores} setHomeworkScores={setHomeworkScores} syncToCloud={syncToCloud} />}
                     {view === 'homeworkSummary' && <HomeworkSummaryView activeStudents={activeStudents} currentCohort={currentCohort} homeworkMaps={homeworkMaps} homeworkScores={homeworkScores} setHomeworkScores={setHomeworkScores} syncToCloud={syncToCloud} />}                
                             </div>
