@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>V4.13 Physics Quiz Analyzer</title>
+    <title>V4.14 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -7594,6 +7594,218 @@ const PastpaperSummaryView = ({ currentCohort, activeStudents, pastpaperScores }
     );
 };
         
+// ==================== 老師端：群組戰力排行榜 ====================
+const TeacherClassRankingView = ({ activeStudents, currentCohort, scores, examScores, homeworkScores, pastpaperScores, homeworkMaps }) => {
+    const [rankTab, setRankTab] = React.useState('composite'); // composite | homework | quiz | exam | pastpaper
+    const [leaderboardMonth, setLeaderboardMonth] = React.useState('all');
+
+    const scoreOf = (val, q) => {
+        if (val === undefined || val === null || String(val).trim() === '') return null;
+        if (q.type === 'MC') {
+            if (!q.ans) return null;
+            const corrects = q.ans.toString().split(',').map(a => a.trim().toUpperCase());
+            return corrects.includes(String(val).trim().toUpperCase()) ? (q.max || 1) : 0;
+        }
+        const n = parseFloat(val);
+        return isNaN(n) ? 0 : n;
+    };
+
+    const calcCategoryPct = React.useCallback((sId, category) => {
+        const cohort = (activeStudents || []).find(x => x.id === sId)?.cohort;
+        let totalPct = 0, count = 0;
+        if (category === 'homework') {
+            Object.keys(homeworkMaps || {}).forEach(hwId => {
+                const map = homeworkMaps[hwId];
+                if (!map?.questions?.length) return;
+                if (map.cohort && cohort && map.cohort !== cohort) return;
+                const rec = homeworkScores?.[sId]?.[hwId];
+                if (!rec?.scores) return;
+                let earned = 0, max = 0, has = false;
+                map.questions.forEach(q => {
+                    max += q.max || 0;
+                    const sc = scoreOf(rec.scores[q.id], q);
+                    if (sc === null) return;
+                    has = true; earned += sc;
+                });
+                if (has && max > 0) { totalPct += earned / max; count++; }
+            });
+        } else if (category === 'quiz') {
+            const maps = (typeof window !== 'undefined' && window.QUIZ_MAPS) ? window.QUIZ_MAPS : {};
+            Object.keys(maps).forEach(qid => {
+                const map = maps[qid];
+                if (!map?.questions?.length) return;
+                const rec = scores?.[sId]?.[qid];
+                if (!rec) return;
+                let earned = 0, max = 0, has = false;
+                map.questions.forEach(q => {
+                    max += q.max || 0;
+                    const sc = scoreOf(rec[q.id], q);
+                    if (sc === null) return;
+                    has = true; earned += sc;
+                });
+                if (has && max > 0) { totalPct += earned / max; count++; }
+            });
+        } else if (category === 'exam') {
+            const maps = (typeof window !== 'undefined' && window.EXAM_MAPS) ? window.EXAM_MAPS : {};
+            Object.keys(maps).forEach(eid => {
+                const map = maps[eid];
+                if (!map?.questions?.length) return;
+                const rec = examScores?.[sId]?.[eid];
+                if (!rec) return;
+                let earned = 0, max = 0, has = false;
+                map.questions.forEach(q => {
+                    max += q.max || 0;
+                    const sc = scoreOf(rec[q.id], q);
+                    if (sc === null) return;
+                    has = true; earned += sc;
+                });
+                if (has && max > 0) { totalPct += earned / max; count++; }
+            });
+        }
+        return count > 0 ? totalPct / count : null;
+    }, [activeStudents, homeworkMaps, homeworkScores, scores, examScores]);
+
+    const schoolRankings = React.useMemo(() => {
+        const peers = activeStudents || [];
+        const build = (cat) => peers.map(s => {
+            const pct = calcCategoryPct(s.id, cat);
+            return { student: s, pct, score: pct === null ? -1 : pct };
+        }).filter(r => r.pct !== null).sort((a, b) => b.pct - a.pct);
+
+        const BASE_W = { homework: 0.2, quiz: 0.3, exam: 0.5 };
+        const composite = peers.map(s => {
+            const hw = calcCategoryPct(s.id, 'homework');
+            const qz = calcCategoryPct(s.id, 'quiz');
+            const ex = calcCategoryPct(s.id, 'exam');
+            const parts = [];
+            if (hw !== null) parts.push({ w: BASE_W.homework, v: hw });
+            if (qz !== null) parts.push({ w: BASE_W.quiz, v: qz });
+            if (ex !== null) parts.push({ w: BASE_W.exam, v: ex });
+            if (!parts.length) return { student: s, pct: null, detail: { hw, qz, ex } };
+            const wSum = parts.reduce((a, p) => a + p.w, 0);
+            const pct = parts.reduce((a, p) => a + (p.w / wSum) * p.v, 0);
+            return { student: s, pct, detail: { hw, qz, ex } };
+        }).filter(r => r.pct !== null).sort((a, b) => b.pct - a.pct);
+
+        return { homework: build('homework'), quiz: build('quiz'), exam: build('exam'), composite };
+    }, [activeStudents, calcCategoryPct]);
+
+    const availableMonths = React.useMemo(() => {
+        const months = new Set();
+        (activeStudents || []).forEach(s => {
+            Object.values(pastpaperScores?.[s.id] || {}).forEach(r => { if (r?.['_submitMonth']) months.add(r['_submitMonth']); });
+        });
+        return Array.from(months).sort().reverse();
+    }, [activeStudents, pastpaperScores]);
+
+    const pastpaperBoard = React.useMemo(() => {
+        const maps = (typeof window !== 'undefined' && window.PASTPAPER_MAPS) ? window.PASTPAPER_MAPS : {};
+        return (activeStudents || []).map(s => {
+            const sScores = pastpaperScores?.[s.id] || {};
+            let totalQ = 0, earned = 0, max = 0;
+            Object.keys(sScores).forEach(pid => {
+                const rec = sScores[pid];
+                if (leaderboardMonth !== 'all' && rec?.['_submitMonth'] !== leaderboardMonth) return;
+                const map = maps[pid];
+                if (!map?.questions) return;
+                map.questions.forEach(q => {
+                    const val = rec[q.id];
+                    if (val === undefined || val === null || String(val).trim() === '') return;
+                    totalQ++;
+                    max += q.max || 0;
+                    const sc = scoreOf(val, q);
+                    if (sc !== null) earned += sc;
+                });
+            });
+            const accuracy = max > 0 ? earned / max : 0;
+            return { student: s, totalQuestions: totalQ, accuracy, pct: accuracy };
+        }).filter(r => r.totalQuestions > 0).sort((a, b) => b.totalQuestions - a.totalQuestions || b.accuracy - a.accuracy);
+    }, [activeStudents, pastpaperScores, leaderboardMonth]);
+
+    const board = rankTab === 'pastpaper' ? pastpaperBoard
+        : rankTab === 'homework' ? schoolRankings.homework
+        : rankTab === 'quiz' ? schoolRankings.quiz
+        : rankTab === 'exam' ? schoolRankings.exam
+        : schoolRankings.composite;
+
+    return (
+        <div className="p-6 max-w-5xl mx-auto animate-fadeIn space-y-4">
+            <div className="border-b pb-4">
+                <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                    <Icon name="Trophy" className="text-amber-500" /> 群組戰力排行榜
+                </h1>
+                <p className="text-sm text-slate-500 mt-1">
+                    目前群組：<b className="text-indigo-700">{currentCohort}</b>（共 {(activeStudents || []).length} 人）
+                    · 綜合 = 功課 20% + 小測 30% + 統考 50%（缺項自動重算權重）
+                </p>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="p-5 border-b border-slate-100 flex flex-wrap gap-2 items-center">
+                    {[
+                        { id: 'composite', label: '⭐ 綜合排名' },
+                        { id: 'homework', label: '📖 功課' },
+                        { id: 'quiz', label: '📝 小測' },
+                        { id: 'exam', label: '🏫 統考' },
+                        { id: 'pastpaper', label: '📚 Pastpaper' },
+                    ].map(t => (
+                        <button key={t.id} onClick={() => setRankTab(t.id)}
+                            className={`px-4 py-2 rounded-full text-sm font-black border transition ${
+                                rankTab === t.id
+                                    ? (t.id === 'composite' ? 'bg-amber-500 text-white border-amber-600 shadow' : 'bg-indigo-600 text-white border-indigo-700 shadow')
+                                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                            }`}>{t.label}</button>
+                    ))}
+                    {rankTab === 'pastpaper' && (
+                        <select className="ml-auto border rounded-lg px-3 py-1.5 text-sm font-bold" value={leaderboardMonth} onChange={e => setLeaderboardMonth(e.target.value)}>
+                            <option value="all">全部時間</option>
+                            {availableMonths.map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                    )}
+                </div>
+                <div className="divide-y divide-slate-100">
+                    {board.length === 0 ? (
+                        <div className="p-12 text-center text-slate-400 text-base">此榜暫無成績，請先輸入相關分數。</div>
+                    ) : board.map((row, idx) => {
+                        const isPP = rankTab === 'pastpaper';
+                        const isComp = rankTab === 'composite';
+                        return (
+                            <div key={row.student.id} className={`p-4 flex items-center gap-4 ${idx < 3 ? 'bg-amber-50/40' : 'hover:bg-slate-50'}`}>
+                                <div className={`w-10 text-center text-2xl font-black ${idx < 3 ? 'text-amber-500' : 'text-slate-400'}`}>
+                                    {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="font-bold text-slate-800 text-base">
+                                        {row.student.name}
+                                        <span className="ml-2 text-xs font-mono text-slate-400">{row.student.class}-{row.student.num}</span>
+                                    </div>
+                                    {isComp && row.detail && (
+                                        <div className="text-xs text-slate-500 mt-1 flex flex-wrap gap-3">
+                                            <span>功課 {row.detail.hw !== null ? Math.round(row.detail.hw * 100) + '%' : '—'}</span>
+                                            <span>小測 {row.detail.qz !== null ? Math.round(row.detail.qz * 100) + '%' : '—'}</span>
+                                            <span>統考 {row.detail.ex !== null ? Math.round(row.detail.ex * 100) + '%' : '—'}</span>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="text-right shrink-0">
+                                    {isPP ? (
+                                        <>
+                                            <div className="text-2xl font-black text-amber-600">{row.totalQuestions}<span className="text-xs text-slate-400 font-normal ml-1">題</span></div>
+                                            <div className="text-sm text-slate-500 font-bold">準確率 {(row.accuracy * 100).toFixed(0)}%</div>
+                                        </>
+                                    ) : (
+                                        <div className={`text-2xl font-black ${isComp ? 'text-amber-600' : 'text-indigo-600'}`}>{(row.pct * 100).toFixed(1)}%</div>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 // ==================== 升級版：分區模塊化 Sidebar (區分小測與考試版) ====================
             // ==================== 教材生成（AI Prompt：模擬器 / 筆記 / Mindmap / PPT） ====================
 const MaterialGeneratorView = ({ activeStudents, scores, examScores, homeworkScores, pastpaperScores, homeworkMaps }) => {
@@ -8090,6 +8302,14 @@ ${meta.req}
 
                         {/* 導覽選單列表 */}
                         <nav className="flex-1 flex flex-col gap-4 overflow-y-auto pr-1 pb-6">
+
+                            {/* ================= 群組排行榜（在功課區上方） ================= */}
+                            <div className="flex flex-col gap-1">
+                                <p className="px-3 text-[11px] font-bold text-yellow-400 tracking-wider uppercase mb-1">🏆 戰力與排名</p>
+                                {navButton('classRanking', 'Trophy', '群組戰力排行榜', 'bg-amber-500')}
+                            </div>
+
+                            <div className="border-t border-slate-700/50 my-1 mx-2"></div>
 
                             {/* ================= 新增：功課管理區 ================= */}
                             <div className="flex flex-col gap-1">
@@ -10249,6 +10469,17 @@ const App = () => {
                     {view === 'materialGenerator' && (
                         <MaterialGeneratorView
                             activeStudents={activeStudents}
+                            scores={scores}
+                            examScores={examScores}
+                            homeworkScores={homeworkScores}
+                            pastpaperScores={pastpaperScores}
+                            homeworkMaps={homeworkMaps}
+                        />
+                    )}
+                    {view === 'classRanking' && (
+                        <TeacherClassRankingView
+                            activeStudents={activeStudents}
+                            currentCohort={currentCohort}
                             scores={scores}
                             examScores={examScores}
                             homeworkScores={homeworkScores}
