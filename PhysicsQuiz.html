@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>V4.15 Physics Quiz Analyzer</title>
+    <title>V4.16 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -55,6 +55,29 @@
         // 直接宣告為全域變數，等待從 Google 雲端載入資料
         let SYLLABUS_TOPICS = {};
         let QUIZ_MAPS = {};
+
+        // ★ 小測計分：MC 支援 A/B/C/D（對照 q.ans），亦兼容舊版數字分數
+        const quizQuestionScore = (q, val) => {
+            if (val === undefined || val === null || String(val).trim() === '') return 0;
+            const raw = String(val).trim();
+            const up = raw.toUpperCase();
+            if (q && q.type === 'MC') {
+                if (q.ans) {
+                    const corrects = q.ans.toString().split(',').map(a => a.trim().toUpperCase());
+                    // 字母答案
+                    if (/^[A-D](,[A-D])*$/.test(up.replace(/\s+/g, ''))) {
+                        const clean = up.replace(/\s+/g, '');
+                        return corrects.includes(clean) || corrects.some(c => c === up) ? (q.max || 1) : 0;
+                    }
+                }
+                // 舊資料：數字分數
+                const n = parseFloat(raw);
+                return isNaN(n) ? 0 : n;
+            }
+            const n = parseFloat(raw);
+            return isNaN(n) ? 0 : n;
+        };
+
         let EXAM_MAPS = {};
         let HOMEWORK_MAPS = {};  // ★ 加入這一行！
 
@@ -324,10 +347,17 @@ const ScoreInputView = ({ activeStudents, scores, setScores, syncToCloud }) => {
     // ★ 關鍵：用來記錄所有輸入框的實體位置
     const inputRefs = React.useRef({});
 
-    const handleScoreChange = (studentId, quizId, qId, val) => {
-        const numVal = val === '' ? '' : parseFloat(val);
+    const handleScoreChange = (studentId, quizId, qId, val, qType) => {
+        let stored = val;
+        if (val === '' || val === null || val === undefined) {
+            stored = '';
+        } else if (qType === 'MC') {
+            stored = String(val).toUpperCase().replace(/[^A-D]/g, '').slice(0, 1);
+        } else {
+            stored = (val === '' || isNaN(parseFloat(val))) ? val : parseFloat(val);
+        }
         setScores(prev => ({
-            ...prev, [studentId]: { ...(prev[studentId] || {}), [quizId]: { ...((prev[studentId] && prev[studentId][quizId]) || {}), [qId]: numVal } }
+            ...prev, [studentId]: { ...(prev[studentId] || {}), [quizId]: { ...((prev[studentId] && prev[studentId][quizId]) || {}), [qId]: stored } }
         }));
     };
 
@@ -428,17 +458,19 @@ const ScoreInputView = ({ activeStudents, scores, setScores, syncToCloud }) => {
                                 <div key={q.id} className="flex flex-col items-center p-2 bg-gray-50 border rounded">
                                     <label className="text-xs font-bold mb-1">{q.id}</label>
                                     <input 
-                                        ref={el => inputRefs.current[q.id] = el} // ★ 綁定 DOM 位置
-                                        type="number" 
-                                        min="0" 
-                                        max={q.max} 
-                                        className="score-input"
+                                        ref={el => inputRefs.current[q.id] = el}
+                                        type="text"
+                                        maxLength={1}
+                                        className="score-input uppercase text-center font-bold"
                                         value={((scores[selectedStudentId] || {})[selectedQuiz] || {})[q.id] ?? ''}
                                         onChange={(e) => {
-                                            const val = e.target.value;
-                                            handleScoreChange(selectedStudentId, selectedQuiz, q.id, val);
-                                            handleAutoAdvance(q.id, val, q.max); // ★ 呼叫跳轉邏輯
-                                        }} 
+                                            let val = e.target.value.toUpperCase().replace(/[^A-D]/g, '');
+                                            if (val.length > 1) val = val.slice(-1);
+                                            handleScoreChange(selectedStudentId, selectedQuiz, q.id, val, 'MC');
+                                            if (val.length === 1) handleAutoAdvance(q.id, val, 1);
+                                        }}
+                                        onFocus={(e) => e.target.select()}
+                                        placeholder="-"
                                     />
                                 </div>
                             ))}
@@ -457,7 +489,7 @@ const ScoreInputView = ({ activeStudents, scores, setScores, syncToCloud }) => {
                                         value={((scores[selectedStudentId] || {})[selectedQuiz] || {})[q.id] ?? ''}
                                         onChange={(e) => {
                                             const val = e.target.value;
-                                            handleScoreChange(selectedStudentId, selectedQuiz, q.id, val);
+                                            handleScoreChange(selectedStudentId, selectedQuiz, q.id, val, 'LQ');
                                             handleAutoAdvance(q.id, val, q.max); // ★ 呼叫跳轉邏輯
                                         }} 
                                     />
@@ -878,7 +910,9 @@ const StudentChartView = ({ activeStudents, scores }) => {
             activeStudents.forEach(st => {
                 const stScores = (scores[st.id] || {})[quizId] || {};
                 map.questions.forEach(q => {
-                    const val = parseFloat(stScores[q.id]);
+                    const raw = stScores[q.id];
+                    if (raw === undefined || raw === null || String(raw).trim() === '') return;
+                    const val = (typeof quizQuestionScore === 'function') ? quizQuestionScore(q, raw) : parseFloat(raw);
                     if (!isNaN(val)) {
                         const syllabusInfo = window.SYLLABUS_TOPICS?.[q.topicId];
                         const topicName = typeof syllabusInfo === 'object' ? syllabusInfo.topic : (syllabusInfo || '未知課題');
@@ -1086,7 +1120,9 @@ const TopicAnalysisView = ({ activeStudents, scores }) => {
             if (stScores && Object.keys(stScores).length > 0) {
                 studentsAttempted++;
                 map.questions.forEach(q => {
-                    const val = parseFloat(stScores[q.id]);
+                    const raw = stScores[q.id];
+                    if (raw === undefined || raw === null || String(raw).trim() === '') return;
+                    const val = (typeof quizQuestionScore === 'function') ? quizQuestionScore(q, raw) : parseFloat(raw);
                     if (!isNaN(val)) {
                         classTotalScore += val;
                         classTotalMax += q.max;
@@ -1474,7 +1510,7 @@ const TopicAnalysisView = ({ activeStudents, scores }) => {
                 let totalScore = 0; let totalMax = 0;
 
                 map.questions.forEach(q => {
-                    const s = studentScores[q.id] || 0;
+                    const s = (typeof quizQuestionScore === 'function') ? quizQuestionScore(q, studentScores[q.id]) : (parseFloat(studentScores[q.id]) || 0);
                     totalScore += s; totalMax += q.max;
                     
                     if (!analysis[q.topicId]) {
@@ -1565,7 +1601,7 @@ const ClassSummaryView = ({ activeStudents, scores }) => {
                     if (map) {
                         let sum = 0;
                         map.questions.forEach(q => {
-                            sum += (studentScores[q.id] || 0);
+                            sum += (typeof quizQuestionScore === 'function') ? quizQuestionScore(q, studentScores[q.id]) : (parseFloat(studentScores[q.id]) || 0);
                         });
                         
                         const maxScore = quizMaxScores[quiz];
@@ -9018,8 +9054,16 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
         const weaknesses = [];
         
         mapInfo.questions.forEach(q => {
-            const qScore = Number(record[q.id]) || 0;
             const qMax = Number(q.max) || 1;
+            let qScore = 0;
+            if (typeof quizQuestionScore === 'function') {
+                qScore = quizQuestionScore(q, record[q.id]);
+            } else if (q.type === 'MC' && q.ans && record[q.id] !== undefined && record[q.id] !== '') {
+                const corrects = q.ans.toString().split(',').map(a => a.trim().toUpperCase());
+                qScore = corrects.includes(String(record[q.id]).trim().toUpperCase()) ? qMax : 0;
+            } else {
+                qScore = Number(record[q.id]) || 0;
+            }
             totalEarned += qScore;
             totalMax += qMax;
             
