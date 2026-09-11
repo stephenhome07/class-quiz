@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>V4.14 Physics Quiz Analyzer</title>
+    <title>V4.15 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -4727,22 +4727,67 @@ const HomeworkSettingsView = ({ students, currentCohort, homeworkMaps, setHomewo
     const handleSave = () => {
         if (!hwId || !hwTitle || !pasteData || !selectedCohort) return alert('請填寫完整資訊並選擇群組！');
 
+        const parseHwLine = (cleanLine) => {
+            // 1) 優先用 Tab 分隔（標準格式）
+            let cols = cleanLine.split('\t').map(c => c.trim());
+            // 2) 若欄位不足，嘗試兩個以上空白
+            if (cols.length < 6) {
+                const multi = cleanLine.split(/\s{2,}/).map(c => c.trim()).filter(Boolean);
+                if (multi.length >= 6) cols = multi;
+            }
+            // 3) 單空白分隔（AI 輸出常見）：MC1 MC 1 淺 7.1.2 描述文字... C
+            if (cols.length < 6) {
+                const parts = cleanLine.split(/\s+/).filter(Boolean);
+                if (parts.length >= 6) {
+                    const id = parts[0];
+                    const type = parts[1];
+                    const max = parts[2];
+                    const level = parts[3];
+                    const topicId = parts[4];
+                    // 最後一格若是 A/B/C/D 或 A,C 形式，視為答案
+                    const last = parts[parts.length - 1];
+                    const isAns = /^[A-Da-d]([,]\s*[A-Da-d])*$/.test(last);
+                    let ans = '';
+                    let descParts = parts.slice(5);
+                    if (isAns) {
+                        ans = last.toUpperCase().replace(/\s+/g, '');
+                        descParts = parts.slice(5, -1);
+                    }
+                    cols = [id, type, max, level, topicId, descParts.join(' '), ans];
+                }
+            }
+            // 4) Tab 格式但答案黏在描述末尾：補救抽出
+            if (cols.length >= 6) {
+                let ans = (cols[6] || '').trim();
+                let desc = (cols[5] || '').trim();
+                if (!ans && desc) {
+                    const m = desc.match(/\s+([A-Da-d]([,]\s*[A-Da-d])*)\s*$/);
+                    if (m) {
+                        ans = m[1].toUpperCase().replace(/\s+/g, '');
+                        desc = desc.slice(0, m.index).trim();
+                    }
+                }
+                cols[5] = desc;
+                cols[6] = ans;
+            }
+            return cols;
+        };
+
         const lines = pasteData.trim().split('\n');
         const questions = lines.map(line => {
             const cleanLine = line.trim();
             if (!cleanLine) return null;
-            let cols = cleanLine.split('\t');
-            if (cols.length < 3 && cleanLine.includes(',')) cols = cleanLine.split(',');
-            if (cols.length < 3) cols = cleanLine.split(/\s{2,}/);
-            if (cols.length < 3) {
-                const parts = cleanLine.split(/\s+/);
-                if (parts.length >= 6) cols = [ parts[0], parts[1], parts[2], parts[3], parts[4], parts.slice(5).join(' ') ];
-            }
+            const cols = parseHwLine(cleanLine);
             let maxScore = parseFloat(cols[2]);
             if (isNaN(maxScore) || maxScore <= 0) maxScore = 1;
             return {
-                id: cols[0]?.trim() || '', type: cols[1]?.trim().toUpperCase() || 'LQ', max: maxScore, 
-                level: cols[3]?.trim() || '中', topicId: cols[4]?.trim() || '', topicDesc: cols[5]?.trim() || '', ans: cols[6]?.trim() || ''
+                id: cols[0]?.trim() || '',
+                type: (cols[1]?.trim() || 'LQ').toUpperCase(),
+                max: maxScore,
+                level: cols[3]?.trim() || '中',
+                topicId: cols[4]?.trim() || '',
+                topicDesc: cols[5]?.trim() || '',
+                ans: (cols[6]?.trim() || '').toUpperCase()
             };
         }).filter(q => q && q.id && !q.id.includes('題目ID')); 
 
@@ -5338,8 +5383,30 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkMaps, 
                                                 </div>
                                                 <div className="flex items-center gap-2">
                                                     {q.type === 'MC' ? (
-                                                        <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-lg border border-slate-200">
-                                                            {['A','B','C','D'].map(opt => <button key={opt} onClick={() => handleScoreChange(q.id, val === opt ? '' : opt, { forceAuto: idx === map.questions.length - 1 })} className={`w-7 h-7 rounded text-xs font-bold transition shadow-sm border ${val === opt ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-slate-600 hover:bg-slate-100 border-slate-200'}`}>{opt}</button>)}
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                ref={el => inputRefs.current[q.id] = el}
+                                                                type="text"
+                                                                maxLength={1}
+                                                                className="w-10 h-8 text-center border border-slate-300 rounded font-bold font-mono text-sm bg-white focus:ring-2 focus:ring-amber-400 outline-none shadow-sm uppercase"
+                                                                value={val !== undefined && val !== null ? val : ''}
+                                                                onChange={(e) => {
+                                                                    let newVal = e.target.value.toUpperCase().replace(/[^A-D]/g, '');
+                                                                    if (newVal.length > 1) newVal = newVal.slice(-1);
+                                                                    handleScoreChange(q.id, newVal, { forceAuto: idx === map.questions.length - 1 && newVal !== '' });
+                                                                    if (newVal.length === 1 && map.questions[idx + 1]) {
+                                                                        const nextQ = map.questions[idx + 1];
+                                                                        setTimeout(() => {
+                                                                            if (inputRefs.current[nextQ.id]) {
+                                                                                inputRefs.current[nextQ.id].focus();
+                                                                                inputRefs.current[nextQ.id].select();
+                                                                            }
+                                                                        }, 0);
+                                                                    }
+                                                                }}
+                                                                onFocus={(e) => e.target.select()}
+                                                                placeholder="-"
+                                                            />
                                                         </div>
                                                     ) : (
                                                         <div className="flex items-center gap-2">
