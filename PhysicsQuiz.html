@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>V4.12 Physics Quiz Analyzer</title>
+    <title>V4.13 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -79,10 +79,25 @@
             
             // --- Views Components ---
 // ==================== 升級版：學生管理 (Excel 匯入) 組件 (自動同步雲端) ====================
-            const StudentView = ({ students, setStudents, scores, setScores, syncToCloud }) => {
+            const StudentView = ({
+                students, setStudents,
+                scores, setScores,
+                examScores, setExamScores,
+                homeworkScores, setHomeworkScores,
+                pastpaperScores, setPastpaperScores,
+                remediationProgress, setRemediationProgress,
+                syncToCloud
+            }) => {
                 // 1. 群組狀態與貼上資料狀態
                 const [newCohort, setNewCohort] = React.useState('2025-2028'); 
                 const [pasteData, setPasteData] = React.useState('');
+
+                // 從各成績物件移除指定學生 key
+                const stripStudentFromScores = (scoreObj, id) => {
+                    const next = { ...(scoreObj || {}) };
+                    delete next[id];
+                    return next;
+                };
 
                 // 2. 處理匯入學生的函數（支援 3 欄或 4 欄：班別 / 座號 / 姓名 / [學號StudentID]）
                 const handleImportStudents = () => {
@@ -110,37 +125,109 @@
                     });
                     
                     if (newStudents.length > 0) {
+                        const existingIds = new Set((students || []).map(s => s.id));
+                        // ★ 全新 ID（名單上原本沒有）若雲端仍殘留舊成績，自動清掉，避免新生繼承舊人分數
+                        const brandNewIds = newStudents.map(s => s.id).filter(id => !existingIds.has(id));
+                        let nextScores = scores || {};
+                        let nextExam = examScores || {};
+                        let nextHw = homeworkScores || {};
+                        let nextPp = pastpaperScores || {};
+                        let nextRem = remediationProgress || {};
+                        let stripped = 0;
+                        brandNewIds.forEach(id => {
+                            const had = (nextScores[id] || nextExam[id] || nextHw[id] || nextPp[id] || nextRem[id]);
+                            if (had) stripped++;
+                            nextScores = stripStudentFromScores(nextScores, id);
+                            nextExam = stripStudentFromScores(nextExam, id);
+                            nextHw = stripStudentFromScores(nextHw, id);
+                            nextPp = stripStudentFromScores(nextPp, id);
+                            nextRem = stripStudentFromScores(nextRem, id);
+                        });
+
                         const updatedStudents = [...students, ...newStudents];
-                        
-                        // 更新畫面狀態
                         setStudents(updatedStudents);
-                        
-                        // ★ 立刻同步寫入 PHYSICS DB 雲端資料庫
+                        if (stripped > 0) {
+                            if (typeof setScores === 'function') setScores(nextScores);
+                            if (typeof setExamScores === 'function') setExamScores(nextExam);
+                            if (typeof setHomeworkScores === 'function') setHomeworkScores(nextHw);
+                            if (typeof setPastpaperScores === 'function') setPastpaperScores(nextPp);
+                            if (typeof setRemediationProgress === 'function') setRemediationProgress(nextRem);
+                        }
+
                         if (typeof syncToCloud === 'function') {
-                            syncToCloud({ students: updatedStudents }); 
+                            const payload = { students: updatedStudents };
+                            if (stripped > 0) {
+                                Object.assign(payload, {
+                                    scores: nextScores,
+                                    examScores: nextExam,
+                                    homeworkScores: nextHw,
+                                    pastpaperScores: nextPp,
+                                    remediationProgress: nextRem
+                                });
+                            }
+                            syncToCloud(payload);
                         }
 
                         setPasteData('');
-                        alert(`✅ 成功匯入 ${newStudents.length} 名學生至群組「${newCohort}」！\n(系統已自動備份至雲端)\n提示：建議提供第 4 欄「學號」作為永久識別碼，升班時分數不會斷開。`);
+                        alert(`✅ 成功匯入 ${newStudents.length} 名學生至群組「${newCohort}」！\n` +
+                            (stripped > 0 ? `⚠ 已自動清除 ${stripped} 個「新 ID 上殘留的舊成績」。\n` : '') +
+                            `(系統已自動備份至雲端)\n提示：建議提供第 4 欄「學號」作為永久識別碼，升班時分數不會斷開。`);
                     } else {
                         alert('無法匯入，請檢查 Excel 格式是否為「班別 (Tab) 座號 (Tab) 姓名」或「班別 (Tab) 座號 (Tab) 姓名 (Tab) 學號」');
                     }
                 };
 
-                // 3. 刪除學生的函數
+                // 清除單一學生「全部成績」（保留名單）
+                const handleClearAllScores = (id, name) => {
+                    if (!window.confirm(`確定清除「${name}」(${id}) 的全部成績？\n包括：小測、考試、功課、Pastpaper、補底進度。\n學生仍會留在名單中。`)) return;
+                    const nextScores = stripStudentFromScores(scores, id);
+                    const nextExam = stripStudentFromScores(examScores, id);
+                    const nextHw = stripStudentFromScores(homeworkScores, id);
+                    const nextPp = stripStudentFromScores(pastpaperScores, id);
+                    const nextRem = stripStudentFromScores(remediationProgress, id);
+                    if (typeof setScores === 'function') setScores(nextScores);
+                    if (typeof setExamScores === 'function') setExamScores(nextExam);
+                    if (typeof setHomeworkScores === 'function') setHomeworkScores(nextHw);
+                    if (typeof setPastpaperScores === 'function') setPastpaperScores(nextPp);
+                    if (typeof setRemediationProgress === 'function') setRemediationProgress(nextRem);
+                    if (typeof syncToCloud === 'function') {
+                        syncToCloud({
+                            scores: nextScores,
+                            examScores: nextExam,
+                            homeworkScores: nextHw,
+                            pastpaperScores: nextPp,
+                            remediationProgress: nextRem
+                        });
+                    }
+                    alert(`✅ 已清除 ${name} 的全部成績並同步雲端。`);
+                };
+
+                // 3. 刪除學生的函數（同步清光所有成績類型）
                 const handleDeleteStudent = (id, name) => {
-                    if (window.confirm(`確定要移除學生「${name}」嗎？\n注意：這將會同時刪除該學生的所有小測成績紀錄，且無法復原。`)) {
+                    if (window.confirm(`確定要移除學生「${name}」嗎？\n注意：會同時刪除該生小測／考試／功課／Pastpaper／補底全部紀錄，且無法復原。`)) {
                         const updatedStudents = students.filter(s => s.id !== id);
-                        const updatedScores = { ...scores };
-                        delete updatedScores[id];
+                        const nextScores = stripStudentFromScores(scores, id);
+                        const nextExam = stripStudentFromScores(examScores, id);
+                        const nextHw = stripStudentFromScores(homeworkScores, id);
+                        const nextPp = stripStudentFromScores(pastpaperScores, id);
+                        const nextRem = stripStudentFromScores(remediationProgress, id);
 
-                        // 更新畫面狀態
                         setStudents(updatedStudents);
-                        setScores(updatedScores);
+                        if (typeof setScores === 'function') setScores(nextScores);
+                        if (typeof setExamScores === 'function') setExamScores(nextExam);
+                        if (typeof setHomeworkScores === 'function') setHomeworkScores(nextHw);
+                        if (typeof setPastpaperScores === 'function') setPastpaperScores(nextPp);
+                        if (typeof setRemediationProgress === 'function') setRemediationProgress(nextRem);
 
-                        // ★ 立刻同步寫入 PHYSICS DB 雲端資料庫
                         if (typeof syncToCloud === 'function') {
-                            syncToCloud({ students: updatedStudents, scores: updatedScores }); 
+                            syncToCloud({
+                                students: updatedStudents,
+                                scores: nextScores,
+                                examScores: nextExam,
+                                homeworkScores: nextHw,
+                                pastpaperScores: nextPp,
+                                remediationProgress: nextRem
+                            });
                         }
                     }
                 };
@@ -193,19 +280,30 @@
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
-                                        {students.length > 0 ? students.map(s => (
+                                        {students.length > 0 ? students.map(s => {
+                                            const hasScores = !!(scores?.[s.id] || examScores?.[s.id] || homeworkScores?.[s.id] || pastpaperScores?.[s.id] || remediationProgress?.[s.id]);
+                                            return (
                                             <tr key={s.id} className="hover:bg-slate-50 transition-colors">
                                                 <td className="p-3 text-blue-600 font-bold font-mono text-xs">{s.cohort || '2024-2027'}</td>
                                                 <td className="p-3 font-medium text-slate-700">{s.class}</td>
                                                 <td className="p-3 font-medium text-slate-700">{s.num}</td>
-                                                <td className="p-3 font-bold text-slate-800">{s.name}</td>
+                                                <td className="p-3 font-bold text-slate-800">
+                                                    {s.name}
+                                                    {hasScores && <span className="ml-2 text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold">有成績</span>}
+                                                </td>
                                                 <td className="p-3 text-center">
-                                                    <button onClick={() => handleDeleteStudent(s.id, s.name)} className="text-slate-400 hover:text-red-500 hover:bg-red-50 p-1.5 rounded transition-colors">
-                                                        <Icon name="Trash2" size={16} />
-                                                    </button>
+                                                    <div className="flex items-center justify-center gap-1">
+                                                        <button title="清除此生全部成績（保留名單）" onClick={() => handleClearAllScores(s.id, s.name)} className="text-slate-400 hover:text-amber-600 hover:bg-amber-50 p-1.5 rounded transition-colors text-xs font-bold px-2">
+                                                            清成績
+                                                        </button>
+                                                        <button title="移除學生" onClick={() => handleDeleteStudent(s.id, s.name)} className="text-slate-400 hover:text-red-500 hover:bg-red-50 p-1.5 rounded transition-colors">
+                                                            <Icon name="Trash2" size={16} />
+                                                        </button>
+                                                    </div>
                                                 </td>
                                             </tr>
-                                        )) : (
+                                            );
+                                        }) : (
                                             <tr><td colSpan="5" className="text-center p-8 text-slate-400 font-medium">尚未匯入任何學生</td></tr>
                                         )}
                                     </tbody>
@@ -4271,18 +4369,105 @@ const StudentPromotionView = ({
         }
     };
 
-    // 刪除學生
+    // 從各成績物件移除指定學生 key
+    const stripStudentFromScores = (scoreObj, id) => {
+        const next = { ...(scoreObj || {}) };
+        delete next[id];
+        return next;
+    };
+
+    // 清除單一學生全部成績（保留名單）—— 適用新生誤繼承舊 ID 分數
+    const handleClearAllScores = (id, name) => {
+        if (!window.confirm(`確定清除「${name}」(${id}) 的全部成績？\n包括：小測、考試、功課、Pastpaper、補底進度。\n學生仍會留在名單中。`)) return;
+        const nextScores = stripStudentFromScores(scores, id);
+        const nextExam = stripStudentFromScores(examScores, id);
+        const nextHw = stripStudentFromScores(homeworkScores, id);
+        const nextPp = stripStudentFromScores(pastpaperScores, id);
+        const nextRem = stripStudentFromScores(remediationProgress, id);
+        setScores(nextScores);
+        if (typeof setExamScores === 'function') setExamScores(nextExam);
+        if (typeof setHomeworkScores === 'function') setHomeworkScores(nextHw);
+        if (typeof setPastpaperScores === 'function') setPastpaperScores(nextPp);
+        if (typeof setRemediationProgress === 'function') setRemediationProgress(nextRem);
+        if (typeof syncToCloud === 'function') {
+            syncToCloud({
+                scores: nextScores,
+                examScores: nextExam,
+                homeworkScores: nextHw,
+                pastpaperScores: nextPp,
+                remediationProgress: nextRem
+            });
+        }
+        alert(`✅ 已清除 ${name} 的全部成績並同步雲端。`);
+    };
+
+    // 清理「名單上不存在」的幽靈成績 key（舊生刪除後殘留）
+    const handlePurgeOrphanScores = () => {
+        const validIds = new Set((students || []).map(s => s.id));
+        const purge = (obj) => {
+            const next = { ...(obj || {}) };
+            let n = 0;
+            Object.keys(next).forEach(k => {
+                if (!validIds.has(k)) { delete next[k]; n++; }
+            });
+            return { next, n };
+        };
+        const r1 = purge(scores);
+        const r2 = purge(examScores);
+        const r3 = purge(homeworkScores);
+        const r4 = purge(pastpaperScores);
+        const r5 = purge(remediationProgress);
+        const total = r1.n + r2.n + r3.n + r4.n + r5.n;
+        if (total === 0) {
+            alert('目前沒有發現幽靈成績（所有成績 key 都對應現有學生）。');
+            return;
+        }
+        if (!window.confirm(`發現 ${total} 組「不在名單內」的成績 key：\n小測 ${r1.n}／考試 ${r2.n}／功課 ${r3.n}／Pastpaper ${r4.n}／補底 ${r5.n}\n\n確定全部清除並同步雲端？`)) return;
+        setScores(r1.next);
+        if (typeof setExamScores === 'function') setExamScores(r2.next);
+        if (typeof setHomeworkScores === 'function') setHomeworkScores(r3.next);
+        if (typeof setPastpaperScores === 'function') setPastpaperScores(r4.next);
+        if (typeof setRemediationProgress === 'function') setRemediationProgress(r5.next);
+        if (typeof syncToCloud === 'function') {
+            syncToCloud({
+                scores: r1.next,
+                examScores: r2.next,
+                homeworkScores: r3.next,
+                pastpaperScores: r4.next,
+                remediationProgress: r5.next
+            });
+        }
+        alert(`✅ 已清除 ${total} 組幽靈成績並同步雲端。`);
+    };
+
+    // 刪除學生（同步清光所有成績類型）
     const handleDeleteStudent = (id, name) => {
-        if (!window.confirm(`❌ 確定要徹底移除學生「${name}」嗎？\n警告：這將會同時刪除該學生的所有小測與功課分數！`)) return;
+        if (!window.confirm(`❌ 確定要徹底移除學生「${name}」嗎？\n警告：會同時刪除該生小測／考試／功課／Pastpaper／補底全部紀錄！`)) return;
 
         const updatedStudents = students.filter(s => s.id !== id);
-        let updatedScores = { ...scores };
-        delete updatedScores[id];
+        const nextScores = stripStudentFromScores(scores, id);
+        const nextExam = stripStudentFromScores(examScores, id);
+        const nextHw = stripStudentFromScores(homeworkScores, id);
+        const nextPp = stripStudentFromScores(pastpaperScores, id);
+        const nextRem = stripStudentFromScores(remediationProgress, id);
 
         setStudents(updatedStudents);
-        setScores(updatedScores);
+        setScores(nextScores);
+        if (typeof setExamScores === 'function') setExamScores(nextExam);
+        if (typeof setHomeworkScores === 'function') setHomeworkScores(nextHw);
+        if (typeof setPastpaperScores === 'function') setPastpaperScores(nextPp);
+        if (typeof setRemediationProgress === 'function') setRemediationProgress(nextRem);
 
-        if (typeof syncToCloud === 'function') syncToCloud({ students: updatedStudents, scores: updatedScores });
+        if (typeof syncToCloud === 'function') {
+            syncToCloud({
+                students: updatedStudents,
+                scores: nextScores,
+                examScores: nextExam,
+                homeworkScores: nextHw,
+                pastpaperScores: nextPp,
+                remediationProgress: nextRem
+            });
+        }
     };
 
     // 👇 新增：計算過濾後的學生名單 👇
@@ -4342,6 +4527,9 @@ const StudentPromotionView = ({
                         </button>
                         <button onClick={handleRepairOrphanScores} className="bg-amber-500 text-white px-5 py-2.5 rounded-lg shadow hover:bg-amber-600 font-bold flex items-center gap-2 transition justify-center">
                             <Icon name="RefreshCw" size={18} /> 修復舊成績 Key（S5→S6）
+                        </button>
+                        <button onClick={handlePurgeOrphanScores} className="bg-rose-600 text-white px-5 py-2.5 rounded-lg shadow hover:bg-rose-700 font-bold flex items-center gap-2 transition justify-center">
+                            <Icon name="Trash2" size={18} /> 清理幽靈成績（不在名單的 Key）
                         </button>
                     </div>
                 ) : (
@@ -4476,13 +4664,22 @@ const StudentPromotionView = ({
                                             </div>
                                         </td>
                                         <td className="p-3 text-center">
-                                            <button 
-                                                onClick={() => handleDeleteStudent(s.id, s.name)}
-                                                className="p-1 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors"
-                                                title="移除學生"
-                                            >
-                                                <Icon name="Trash2" size={16} />
-                                            </button>
+                                            <div className="flex items-center justify-center gap-1">
+                                                <button 
+                                                    onClick={() => handleClearAllScores(s.id, s.name)}
+                                                    className="px-2 py-1 text-xs font-bold text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded transition-colors"
+                                                    title="清除此生全部成績（保留名單）"
+                                                >
+                                                    清成績
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleDeleteStudent(s.id, s.name)}
+                                                    className="p-1 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors"
+                                                    title="移除學生"
+                                                >
+                                                    <Icon name="Trash2" size={16} />
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))
@@ -9985,7 +10182,23 @@ const App = () => {
                         <div className="flex-1 h-screen overflow-y-auto bg-slate-100">
                                 <div className="p-8">
                     {/* 更新：傳入 scores 和 syncToCloud，實現自動存檔 */}
-                    {view === 'students' && <StudentView students={students} setStudents={setStudents} scores={scores} setScores={setScores} syncToCloud={syncToCloud} />}
+                    {view === 'students' && (
+                        <StudentView
+                            students={students}
+                            setStudents={setStudents}
+                            scores={scores}
+                            setScores={setScores}
+                            examScores={examScores}
+                            setExamScores={setExamScores}
+                            homeworkScores={homeworkScores}
+                            setHomeworkScores={setHomeworkScores}
+                            pastpaperScores={pastpaperScores}
+                            setPastpaperScores={setPastpaperScores}
+                            remediationProgress={remediationProgress}
+                            setRemediationProgress={setRemediationProgress}
+                            syncToCloud={syncToCloud}
+                        />
+                    )}
                     {view === 'scores' && <ScoreInputView activeStudents={activeStudents} scores={scores} setScores={setScores} syncToCloud={syncToCloud} />}
                     {view === 'analysis' && <AnalysisView activeStudents={activeStudents} scores={scores} />}
       
