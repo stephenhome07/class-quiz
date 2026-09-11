@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>V4.11 Physics Quiz Analyzer</title>
+    <title>V4.12 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -7398,6 +7398,445 @@ const PastpaperSummaryView = ({ currentCohort, activeStudents, pastpaperScores }
 };
         
 // ==================== 升級版：分區模塊化 Sidebar (區分小測與考試版) ====================
+            // ==================== 教材生成（AI Prompt：模擬器 / 筆記 / Mindmap / PPT） ====================
+const MaterialGeneratorView = ({ activeStudents, scores, examScores, homeworkScores, pastpaperScores, homeworkMaps }) => {
+    const [sourceMode, setSourceMode] = React.useState('syllabus'); // syllabus | classWeak
+    const [selectedTopics, setSelectedTopics] = React.useState([]);
+    const [outputType, setOutputType] = React.useState('notes'); // simulator | notes | mindmap | powerpoint
+    const [aiLang, setAiLang] = React.useState('繁體中文');
+    const [level, setLevel] = React.useState('中'); // 淺 | 中 | 深
+    const [extraNote, setExtraNote] = React.useState('');
+    // 難點來源勾選
+    const [useHw, setUseHw] = React.useState(true);
+    const [useQuiz, setUseQuiz] = React.useState(true);
+    const [useExam, setUseExam] = React.useState(true);
+    const [usePP, setUsePP] = React.useState(false);
+    const [weakThreshold, setWeakThreshold] = React.useState(0.55);
+    const [selectedWeakTopics, setSelectedWeakTopics] = React.useState([]);
+
+    const syllabusTopics = React.useMemo(() => {
+        const topics = (typeof window !== 'undefined' && window.SYLLABUS_TOPICS) ? window.SYLLABUS_TOPICS
+            : (typeof SYLLABUS_TOPICS !== 'undefined' ? SYLLABUS_TOPICS : {});
+        return topics || {};
+    }, []);
+
+    // 依範疇分組課題
+    const groupedSyllabus = React.useMemo(() => {
+        const groups = {};
+        Object.entries(syllabusTopics).forEach(([id, val]) => {
+            const section = (typeof val === 'object' && val) ? (val.section || '其他') : '其他';
+            const name = (typeof val === 'object' && val) ? (val.topic || val.name || id) : (val || id);
+            const desc = (typeof val === 'object' && val) ? (val.desc || '') : '';
+            if (!groups[section]) groups[section] = [];
+            groups[section].push({ id, name, desc, section });
+        });
+        // 依 id 排序
+        Object.keys(groups).forEach(s => groups[s].sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true })));
+        return groups;
+    }, [syllabusTopics]);
+
+    const scoreOf = (val, q) => {
+        if (val === undefined || val === null || String(val).trim() === '') return null;
+        if (q.type === 'MC') {
+            if (!q.ans) return null;
+            const corrects = q.ans.toString().split(',').map(a => a.trim().toUpperCase());
+            return corrects.includes(String(val).trim().toUpperCase()) ? (q.max || 1) : 0;
+        }
+        const n = parseFloat(val);
+        return isNaN(n) ? 0 : n;
+    };
+
+    // 全班難點：跨功課 / 小測 / 考試 / Pastpaper 聚合課題掌握度
+    const classWeakList = React.useMemo(() => {
+        if (sourceMode !== 'classWeak') return [];
+        const topicAgg = {}; // id -> { e, m, name, sources:Set }
+        const bump = (tid, name, e, m, src) => {
+            if (!tid || !m) return;
+            if (!topicAgg[tid]) topicAgg[tid] = { id: tid, name: name || tid, e: 0, m: 0, sources: new Set() };
+            topicAgg[tid].e += e;
+            topicAgg[tid].m += m;
+            topicAgg[tid].sources.add(src);
+        };
+
+        (activeStudents || []).forEach(s => {
+            if (useHw && homeworkMaps && homeworkScores) {
+                Object.keys(homeworkMaps).forEach(hwId => {
+                    const map = homeworkMaps[hwId];
+                    if (!map?.questions) return;
+                    const rec = homeworkScores[s.id]?.[hwId];
+                    if (!rec?.scores) return;
+                    map.questions.forEach(q => {
+                        const sc = scoreOf(rec.scores[q.id], q);
+                        if (sc === null) return;
+                        bump(q.topicId, q.topicDesc, sc, q.max || 0, `功課:${map.title || hwId}`);
+                    });
+                });
+            }
+            if (useQuiz && typeof window !== 'undefined' && window.QUIZ_MAPS && scores) {
+                Object.keys(window.QUIZ_MAPS).forEach(qid => {
+                    const map = window.QUIZ_MAPS[qid];
+                    if (!map?.questions) return;
+                    const rec = scores[s.id]?.[qid];
+                    if (!rec) return;
+                    map.questions.forEach(q => {
+                        const sc = scoreOf(rec[q.id], q);
+                        if (sc === null) return;
+                        bump(q.topicId, q.topicDesc, sc, q.max || 0, `小測:${map.title || qid}`);
+                    });
+                });
+            }
+            if (useExam && typeof window !== 'undefined' && window.EXAM_MAPS && examScores) {
+                Object.keys(window.EXAM_MAPS).forEach(eid => {
+                    const map = window.EXAM_MAPS[eid];
+                    if (!map?.questions) return;
+                    const rec = examScores[s.id]?.[eid];
+                    if (!rec) return;
+                    map.questions.forEach(q => {
+                        const sc = scoreOf(rec[q.id], q);
+                        if (sc === null) return;
+                        bump(q.topicId, q.topicDesc, sc, q.max || 0, `統考:${map.title || eid}`);
+                    });
+                });
+            }
+            if (usePP && typeof window !== 'undefined' && window.PASTPAPER_MAPS && pastpaperScores) {
+                Object.keys(window.PASTPAPER_MAPS).forEach(pid => {
+                    const map = window.PASTPAPER_MAPS[pid];
+                    if (!map?.questions) return;
+                    const rec = pastpaperScores[s.id]?.[pid];
+                    if (!rec) return;
+                    map.questions.forEach(q => {
+                        const val = rec[q.id];
+                        if (val === undefined || val === null || String(val).trim() === '') return;
+                        let sc = 0;
+                        if (q.type === 'MC') {
+                            if (q.ans) {
+                                const corrects = q.ans.toString().split(',').map(a => a.trim().toUpperCase());
+                                if (corrects.includes(String(val).trim().toUpperCase())) sc = q.max || 1;
+                            }
+                        } else {
+                            sc = parseFloat(val) || 0;
+                        }
+                        bump(q.topicId, q.topicDesc, sc, q.max || 0, `PP:${pid}`);
+                    });
+                });
+            }
+        });
+
+        return Object.values(topicAgg)
+            .map(t => ({
+                ...t,
+                pct: t.m > 0 ? t.e / t.m : 1,
+                sourcesText: Array.from(t.sources).slice(0, 4).join('、')
+            }))
+            .filter(t => t.m > 0 && t.pct <= weakThreshold)
+            .sort((a, b) => a.pct - b.pct);
+    }, [sourceMode, activeStudents, homeworkMaps, homeworkScores, scores, examScores, pastpaperScores, useHw, useQuiz, useExam, usePP, weakThreshold]);
+
+    // 難點列表更新時，預設勾選前 8 個
+    React.useEffect(() => {
+        if (sourceMode === 'classWeak') {
+            setSelectedWeakTopics(classWeakList.slice(0, 8).map(t => t.id));
+        }
+    }, [classWeakList, sourceMode]);
+
+    const toggleTopic = (id, list, setList) => {
+        setList(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    };
+
+    const activeTopicIds = sourceMode === 'syllabus' ? selectedTopics : selectedWeakTopics;
+
+    const topicDetailText = () => {
+        if (activeTopicIds.length === 0) return '（尚未選擇課題）';
+        return activeTopicIds.map(id => {
+            const weak = classWeakList.find(t => t.id === id);
+            const syl = syllabusTopics[id];
+            const name = weak?.name || (typeof syl === 'object' ? (syl.topic || syl.name) : syl) || id;
+            const desc = (typeof syl === 'object' && syl) ? (syl.desc || '') : '';
+            const pctLine = weak ? `；全班掌握度約 ${(weak.pct * 100).toFixed(0)}%（來源：${weak.sourcesText || '多項評核'}）` : '';
+            return `- [${id}] ${name}${desc ? `｜學習要求：${desc}` : ''}${pctLine}`;
+        }).join('\n');
+    };
+
+    const OUTPUT_META = {
+        simulator: {
+            label: '互動模擬器 / 小實驗',
+            icon: 'Cpu',
+            title: '互動物理模擬器（網頁／概念動畫腳本）',
+            req: `請設計一個「可在課堂即時使用」的互動物理模擬／概念動畫方案，要求：
+1. 先用 3–5 句說明此模擬要糾正的迷思概念與對應學習重點。
+2. 提供【操作介面規格】：可調參數（滑桿／按鈕）、顯示量（圖表／數值）、初始條件。
+3. 提供【學生探索任務】3 個（由淺入深），每個任務有預期觀察與教師引導問題。
+4. 若適合，輸出可用於 AI 畫布／HTML canvas／p5.js 的實作大綱（變數、更新迴圈、碰撞／力的簡化模型）；若不適合程式，改為分鏡動畫腳本（每幕 5–15 秒）。
+5. 附 2 題即堂概念檢查題（CCQ）與簡短標準答案。
+6. 全程使用${aiLang}，難度定位：${level}。`
+        },
+        notes: {
+            label: '教學筆記 / 講義',
+            icon: 'FileText',
+            title: '課堂教學筆記與學生講義',
+            req: `請撰寫一份可直接用於堂上的【教師筆記 + 學生精簡講義】，要求：
+1. 學習目標（3 點，對應課程大綱）。
+2. 核心概念講解：用日常例子／比喻破除迷思，輔以關鍵公式與適用條件。
+3. 常見錯誤與對照正確想法（表格形式）。
+4. 例題 2 題（1 易 1 中），附完整解題步驟與評分點。
+5. 課末總結口訣或流程圖文字版 + 回家反思 2 題。
+6. 全程使用${aiLang}，難度定位：${level}。`
+        },
+        mindmap: {
+            label: 'Mindmap 思維導圖',
+            icon: 'GitBranch',
+            title: '課題思維導圖（Mindmap）',
+            req: `請輸出一份【可直接貼到 Whimsical / XMind / Miro / Markdown】的思維導圖結構，要求：
+1. 以所選課題為中心節點，向下展開 3–4 層（概念 → 公式／條件 → 典型情境 → 常見陷阱）。
+2. 同時提供兩種格式：
+   (A) 縮排大綱（純文字）
+   (B) Mermaid mindmap 程式碼區塊
+3. 標註「必背公式」「高頻陷阱」「與其他課題連結」。
+4. 末段給教師 3 個用導圖帶堂問答的提示問題。
+5. 全程使用${aiLang}，難度定位：${level}。`
+        },
+        powerpoint: {
+            label: 'PowerPoint 簡報',
+            icon: 'Presentation',
+            title: '課堂 PowerPoint 簡報大綱',
+            req: `請設計一堂約 20–30 分鐘的【投影片逐頁大綱】（可直接開 PPT 照做），要求：
+1. 總頁數建議 10–16 頁；每頁列出：頁碼、標題、重點 bullet（不多於 5 點）、建議圖示／動畫、教師口語提示。
+2. 結構：導入（真實情境）→ 概念建構 → 迷思拆解 → 例題示範 → 即堂小練習 → 總結與下一課預告。
+3. 至少 1 頁「常見錯誤對照」、1 頁「公式適用條件」、1 頁「學生討論任務」。
+4. 若有模擬／演示，註明何時插入。
+5. 全程使用${aiLang}，難度定位：${level}。`
+        }
+    };
+
+    const generateMaterialPrompt = () => {
+        if (activeTopicIds.length === 0) return '';
+        const meta = OUTPUT_META[outputType] || OUTPUT_META.notes;
+        const syllabus = typeof getSyllabusTableText === 'function' ? getSyllabusTableText() : '';
+        const sourceDesc = sourceMode === 'syllabus'
+            ? '教師手動點選課程大綱子課題'
+            : `根據全班在【${[
+                useHw ? '功課' : null,
+                useQuiz ? '小測' : null,
+                useExam ? '統考' : null,
+                usePP ? 'Pastpaper' : null
+            ].filter(Boolean).join('、')}】的真實表現，篩選掌握度 ≤ ${Math.round(weakThreshold * 100)}% 的難點課題`;
+
+        return `你是一位資深香港 DSE 物理科教師與教材設計師，擅長把抽象概念變成可教、可練、可演示的課堂材料。
+
+【任務】為我生成：${meta.title}
+
+【課題來源】${sourceDesc}
+
+【目標課題（子課題）】
+${topicDetailText()}
+
+【輸出類型】${meta.label}
+【語言】${aiLang}
+【難度】${level}
+${extraNote.trim() ? `【教師額外要求】\n${extraNote.trim()}\n` : ''}
+【課程大綱參考】
+${syllabus}
+
+【生成要求】
+${meta.req}
+
+請直接產出完整可用內容，勿只給空泛建議。`;
+    };
+
+    const promptText = generateMaterialPrompt();
+
+    const handleCopy = () => {
+        if (!promptText) { alert('請先選擇至少一個課題！'); return; }
+        navigator.clipboard.writeText(promptText);
+        alert('📋 教材生成 Prompt 已複製！可貼到 Gemini / ChatGPT / Claude 使用。');
+    };
+
+    const handleCopyAndGo = (url) => {
+        if (!promptText) { alert('請先選擇至少一個課題！'); return; }
+        navigator.clipboard.writeText(promptText);
+        alert('📋 Prompt 已複製，即將開啟 AI 平台，請直接貼上。');
+        window.open(url, '_blank');
+    };
+
+    return (
+        <div className="p-6 max-w-6xl mx-auto animate-fadeIn space-y-6">
+            <div className="border-b pb-4">
+                <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                    <Icon name="Sparkles" className="text-teal-500" /> 教材生成中心
+                </h1>
+                <p className="text-sm text-slate-500 mt-1">
+                    點選課題或全班難點，一鍵生成【模擬器／筆記／Mindmap／PowerPoint】的 AI Prompt（含課程大綱參考）。
+                </p>
+            </div>
+
+            {/* 來源模式 */}
+            <div className="flex flex-wrap gap-2">
+                {[
+                    { id: 'syllabus', label: '📖 按課程大綱選課題' },
+                    { id: 'classWeak', label: '📉 全班評核難點' },
+                ].map(m => (
+                    <button key={m.id} onClick={() => setSourceMode(m.id)}
+                        className={`px-4 py-2 rounded-full text-sm font-bold border transition ${
+                            sourceMode === m.id ? 'bg-teal-600 text-white border-teal-700 shadow' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                        }`}>{m.label}</button>
+                ))}
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                {/* 左：課題選擇 */}
+                <div className="lg:col-span-3 space-y-4">
+                    {sourceMode === 'syllabus' ? (
+                        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+                            <div className="flex justify-between items-center mb-3">
+                                <h3 className="font-bold text-slate-800">選擇子課題</h3>
+                                <div className="flex gap-2 text-xs">
+                                    <button className="text-teal-600 font-bold" onClick={() => setSelectedTopics(Object.keys(syllabusTopics))}>全選</button>
+                                    <button className="text-slate-400 font-bold" onClick={() => setSelectedTopics([])}>清空</button>
+                                </div>
+                            </div>
+                            {Object.keys(groupedSyllabus).length === 0 ? (
+                                <p className="text-sm text-slate-400">尚未載入課程大綱，請先到「課程大綱設定」匯入。</p>
+                            ) : (
+                                <div className="space-y-4 max-h-[520px] overflow-y-auto pr-1">
+                                    {Object.entries(groupedSyllabus).map(([section, items]) => (
+                                        <div key={section}>
+                                            <div className="text-xs font-black text-slate-500 uppercase tracking-wider mb-2 sticky top-0 bg-white py-1">{section}</div>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                                                {items.map(t => {
+                                                    const on = selectedTopics.includes(t.id);
+                                                    return (
+                                                        <label key={t.id} className={`flex items-start gap-2 p-2 rounded-lg border cursor-pointer text-sm transition ${on ? 'bg-teal-50 border-teal-300' : 'bg-slate-50 border-slate-100 hover:border-slate-300'}`}>
+                                                            <input type="checkbox" className="mt-0.5" checked={on} onChange={() => toggleTopic(t.id, selectedTopics, setSelectedTopics)} />
+                                                            <span>
+                                                                <span className="font-mono text-[11px] text-teal-700 font-bold">{t.id}</span>
+                                                                <span className="block text-slate-700 font-semibold leading-snug">{t.name}</span>
+                                                            </span>
+                                                        </label>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            <div className="mt-3 text-xs text-slate-500">已選 <b className="text-teal-700">{selectedTopics.length}</b> 個課題</div>
+                        </div>
+                    ) : (
+                        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                            <h3 className="font-bold text-slate-800">全班難點來源</h3>
+                            <div className="flex flex-wrap gap-3 text-sm">
+                                {[
+                                    { k: 'hw', label: '功課', v: useHw, set: setUseHw },
+                                    { k: 'quiz', label: '小測', v: useQuiz, set: setUseQuiz },
+                                    { k: 'exam', label: '統考', v: useExam, set: setUseExam },
+                                    { k: 'pp', label: 'Pastpaper', v: usePP, set: setUsePP },
+                                ].map(x => (
+                                    <label key={x.k} className="flex items-center gap-1.5 font-bold text-slate-600">
+                                        <input type="checkbox" checked={x.v} onChange={e => x.set(e.target.checked)} /> {x.label}
+                                    </label>
+                                ))}
+                                <label className="flex items-center gap-1.5 ml-auto text-slate-600 font-bold">
+                                    掌握度 ≤
+                                    <select className="border rounded px-2 py-1 text-sm" value={weakThreshold} onChange={e => setWeakThreshold(parseFloat(e.target.value))}>
+                                        <option value={0.4}>40%</option>
+                                        <option value={0.5}>50%</option>
+                                        <option value={0.55}>55%</option>
+                                        <option value={0.6}>60%</option>
+                                        <option value={0.7}>70%</option>
+                                    </select>
+                                </label>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span className="text-xs text-slate-500">共找到 <b>{classWeakList.length}</b> 個難點課題（依掌握度由低至高）</span>
+                                <div className="flex gap-2 text-xs">
+                                    <button className="text-teal-600 font-bold" onClick={() => setSelectedWeakTopics(classWeakList.map(t => t.id))}>全選</button>
+                                    <button className="text-slate-400 font-bold" onClick={() => setSelectedWeakTopics([])}>清空</button>
+                                </div>
+                            </div>
+                            <div className="max-h-[420px] overflow-y-auto space-y-1.5 pr-1">
+                                {classWeakList.length === 0 ? (
+                                    <p className="text-sm text-slate-400 py-8 text-center">目前沒有低於門檻的課題，可放寬門檻或勾選更多來源。</p>
+                                ) : classWeakList.map(t => {
+                                    const on = selectedWeakTopics.includes(t.id);
+                                    return (
+                                        <label key={t.id} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition ${on ? 'bg-rose-50 border-rose-300' : 'bg-slate-50 border-slate-100 hover:border-slate-300'}`}>
+                                            <input type="checkbox" checked={on} onChange={() => toggleTopic(t.id, selectedWeakTopics, setSelectedWeakTopics)} />
+                                            <div className="flex-1 min-w-0">
+                                                <div className="text-sm font-bold text-slate-800">
+                                                    <span className="font-mono text-rose-700 text-xs mr-1">[{t.id}]</span>{t.name}
+                                                </div>
+                                                <div className="text-[11px] text-slate-500 truncate">{t.sourcesText}</div>
+                                            </div>
+                                            <div className={`text-lg font-black tabular-nums ${t.pct < 0.4 ? 'text-red-600' : t.pct < 0.55 ? 'text-amber-600' : 'text-slate-600'}`}>
+                                                {(t.pct * 100).toFixed(0)}%
+                                            </div>
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* 右：輸出設定 + Prompt */}
+                <div className="lg:col-span-2 space-y-4">
+                    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                        <h3 className="font-bold text-slate-800">生成類型</h3>
+                        <div className="grid grid-cols-2 gap-2">
+                            {Object.entries(OUTPUT_META).map(([id, meta]) => (
+                                <button key={id} onClick={() => setOutputType(id)}
+                                    className={`p-3 rounded-xl border text-left transition ${
+                                        outputType === id ? 'bg-teal-600 text-white border-teal-700 shadow' : 'bg-slate-50 text-slate-700 border-slate-200 hover:border-teal-300'
+                                    }`}>
+                                    <div className="text-sm font-black">{meta.label}</div>
+                                </button>
+                            ))}
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="text-[11px] font-bold text-slate-500 block mb-1">語言</label>
+                                <select className="w-full border rounded-lg p-2 text-sm font-bold" value={aiLang} onChange={e => setAiLang(e.target.value)}>
+                                    <option value="繁體中文">繁體中文</option>
+                                    <option value="English">English</option>
+                                    <option value="繁中為主、關鍵術語附英文">繁中 + 英文術語</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-[11px] font-bold text-slate-500 block mb-1">難度</label>
+                                <select className="w-full border rounded-lg p-2 text-sm font-bold" value={level} onChange={e => setLevel(e.target.value)}>
+                                    <option value="淺">淺（導入／初學）</option>
+                                    <option value="中">中（DSE 常規）</option>
+                                    <option value="深">深（拔尖／綜合）</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label className="text-[11px] font-bold text-slate-500 block mb-1">額外要求（可選）</label>
+                            <textarea className="w-full border rounded-lg p-2 text-sm h-20 outline-none focus:ring-2 focus:ring-teal-400"
+                                placeholder="例如：加入能量守恆對照、適合 40 人班分組活動、避免用微積分…"
+                                value={extraNote} onChange={e => setExtraNote(e.target.value)} />
+                        </div>
+                    </div>
+
+                    <div className="bg-slate-900 rounded-2xl border border-slate-700 shadow-lg p-5 space-y-3">
+                        <div className="flex justify-between items-center">
+                            <h3 className="font-bold text-teal-300 text-sm">AI Prompt 預覽</h3>
+                            <button onClick={handleCopy} className="text-xs bg-teal-500 hover:bg-teal-400 text-slate-900 font-black px-3 py-1.5 rounded-lg">複製 Prompt</button>
+                        </div>
+                        <textarea readOnly value={promptText || '（請先選擇課題）'}
+                            className="w-full h-56 text-[11px] font-mono bg-slate-950 text-slate-300 border border-slate-700 rounded-lg p-3 outline-none resize-y" />
+                        <div className="grid grid-cols-3 gap-2">
+                            <button onClick={() => handleCopyAndGo('https://gemini.google.com/')} className="py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-bold">Gemini</button>
+                            <button onClick={() => handleCopyAndGo('https://chatgpt.com/')} className="py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-bold">ChatGPT</button>
+                            <button onClick={() => handleCopyAndGo('https://claude.ai/')} className="py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-bold">Claude</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
             const Sidebar = ({ view, setView, currentCohort, setCurrentCohort, allCohorts, isSaving }) => {
                 // 輔助函數：用來產生統一風格的按鈕
                 const navButton = (targetView, iconName, label, activeBg = 'bg-blue-600') => {
@@ -7461,6 +7900,14 @@ const PastpaperSummaryView = ({ currentCohort, activeStudents, pastpaperScores }
                                 {navButton('homeworkScoresInput', 'BookOpenCheck', '功課批改與狀態跟進', 'bg-amber-600')}
                                 {navButton('homeworkSettings', 'BookType', '功課內容與藍圖設定', 'bg-amber-600')}
                                 {navButton('homeworkSummary', 'Table', '功課成績總表與編輯', 'bg-amber-600')}
+                            </div>
+
+                            <div className="border-t border-slate-700/50 my-1 mx-2"></div>
+
+                            {/* ================= 教材生成 ================= */}
+                            <div className="flex flex-col gap-1">
+                                <p className="px-3 text-[11px] font-bold text-teal-400 tracking-wider uppercase mb-1">✨ 教學資源</p>
+                                {navButton('materialGenerator', 'Sparkles', '教材生成（模擬／筆記／圖／PPT）', 'bg-teal-600')}
                             </div>
 
                             <div className="border-t border-slate-700/50 my-1 mx-2"></div>
@@ -9585,7 +10032,17 @@ const App = () => {
                     {/* 更新：功課管理頁面傳入完整的狀態與更新函數 */}
                     {view === 'homeworkSettings' && <HomeworkSettingsView students={students} currentCohort={currentCohort} homeworkMaps={homeworkMaps} setHomeworkMaps={setHomeworkMaps} homeworkScores={homeworkScores} setHomeworkScores={setHomeworkScores} syncToCloud={syncToCloud} />}
                     {view === 'homeworkScoresInput' && <HomeworkScoresInputView activeStudents={activeStudents} currentCohort={currentCohort} homeworkMaps={homeworkMaps} homeworkScores={homeworkScores} setHomeworkScores={setHomeworkScores} syncToCloud={syncToCloud} />}
-                    {view === 'homeworkSummary' && <HomeworkSummaryView activeStudents={activeStudents} currentCohort={currentCohort} homeworkMaps={homeworkMaps} homeworkScores={homeworkScores} setHomeworkScores={setHomeworkScores} syncToCloud={syncToCloud} />}                
+                    {view === 'homeworkSummary' && <HomeworkSummaryView activeStudents={activeStudents} currentCohort={currentCohort} homeworkMaps={homeworkMaps} homeworkScores={homeworkScores} setHomeworkScores={setHomeworkScores} syncToCloud={syncToCloud} />}
+                    {view === 'materialGenerator' && (
+                        <MaterialGeneratorView
+                            activeStudents={activeStudents}
+                            scores={scores}
+                            examScores={examScores}
+                            homeworkScores={homeworkScores}
+                            pastpaperScores={pastpaperScores}
+                            homeworkMaps={homeworkMaps}
+                        />
+                    )}                
                             </div>
                     </div>
                 </div>
