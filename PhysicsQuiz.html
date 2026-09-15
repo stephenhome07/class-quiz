@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>V4.16 Physics Quiz Analyzer</title>
+    <title>V4.17 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -342,10 +342,26 @@
 const ScoreInputView = ({ activeStudents, scores, setScores, syncToCloud }) => {
     const [selectedQuiz, setSelectedQuiz] = React.useState(Object.keys(QUIZ_MAPS || {})[0] || '');
     const [selectedStudentId, setSelectedStudentId] = React.useState('');
+    const [quizSaveStatus, setQuizSaveStatus] = React.useState('idle'); // idle | saving | saved
     const map = QUIZ_MAPS[selectedQuiz];
     
     // ★ 關鍵：用來記錄所有輸入框的實體位置
     const inputRefs = React.useRef({});
+    const quizAutoSaveTimer = React.useRef(null);
+
+    const scheduleQuizCloudSave = (nextScores) => {
+        if (quizAutoSaveTimer.current) clearTimeout(quizAutoSaveTimer.current);
+        setQuizSaveStatus('saving');
+        quizAutoSaveTimer.current = setTimeout(() => {
+            quizAutoSaveTimer.current = null;
+            if (typeof syncToCloud === 'function') {
+                // ★ 必須用 override 帶入最新 scores，避免閉包讀到舊值
+                syncToCloud({ scores: nextScores });
+            }
+            setQuizSaveStatus('saved');
+            setTimeout(() => setQuizSaveStatus(s => s === 'saved' ? 'idle' : s), 2000);
+        }, 700);
+    };
 
     const handleScoreChange = (studentId, quizId, qId, val, qType) => {
         let stored = val;
@@ -356,9 +372,17 @@ const ScoreInputView = ({ activeStudents, scores, setScores, syncToCloud }) => {
         } else {
             stored = (val === '' || isNaN(parseFloat(val))) ? val : parseFloat(val);
         }
-        setScores(prev => ({
-            ...prev, [studentId]: { ...(prev[studentId] || {}), [quizId]: { ...((prev[studentId] && prev[studentId][quizId]) || {}), [qId]: stored } }
-        }));
+        setScores(prev => {
+            const next = {
+                ...prev,
+                [studentId]: {
+                    ...(prev[studentId] || {}),
+                    [quizId]: { ...((prev[studentId] && prev[studentId][quizId]) || {}), [qId]: stored }
+                }
+            };
+            scheduleQuizCloudSave(next);
+            return next;
+        });
     };
 
     // 清除單一學生特定小測的所有成績紀錄
@@ -375,11 +399,14 @@ const ScoreInputView = ({ activeStudents, scores, setScores, syncToCloud }) => {
             setScores(prev => {
                 const newScores = { ...prev };
                 if (newScores[selectedStudentId]) {
-                    delete newScores[selectedStudentId][selectedQuiz];
+                    const copy = { ...newScores[selectedStudentId] };
+                    delete copy[selectedQuiz];
+                    newScores[selectedStudentId] = copy;
                 }
+                scheduleQuizCloudSave(newScores);
                 return newScores;
             });
-            alert('紀錄已成功清除！');
+            alert('紀錄已清除，並會自動同步雲端。');
         }
     };
         
@@ -429,14 +456,22 @@ const ScoreInputView = ({ activeStudents, scores, setScores, syncToCloud }) => {
             <div className="flex-1 card p-6">
                 <div className="flex justify-between items-center border-b pb-4 mb-4">
                     <h2 className="text-xl font-bold">成績輸入</h2>
-
+                    <div className="flex items-center gap-3">
+                        <span className={`text-xs font-bold ${quizSaveStatus === 'saving' ? 'text-amber-600' : quizSaveStatus === 'saved' ? 'text-emerald-600' : 'text-slate-400'}`}>
+                            {quizSaveStatus === 'saving' ? '☁ 同步中…' : quizSaveStatus === 'saved' ? '✓ 已同步雲端' : '輸入後會自動同步'}
+                        </span>
                    <button
-                        onClick={() => syncToCloud()} 
+                        onClick={() => {
+                            if (typeof syncToCloud === 'function') syncToCloud({ scores });
+                            setQuizSaveStatus('saved');
+                            setTimeout(() => setQuizSaveStatus('idle'), 2000);
+                        }} 
                         className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all text-sm font-medium shadow-sm"
                     >
                         <Icon name="CloudUpload" size={16} />
-                        上傳至雲端
+                        立即上傳至雲端
                     </button>
+                    </div>
                     
                     {/* 小測選擇下拉表單 */}
                     <select 
@@ -8816,9 +8851,11 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
     const radarInstance = React.useRef(null);
 
     // ---------------- 3. 核心學生資訊與同儕名單 ----------------
+    // ★ 同時支援 ?sid=班別-座號 或 ?sid=永久學號；成績一律用 currentStudent.id 作 key
     const currentStudent = React.useMemo(() => {
-        return (students || []).find(s => s.id === studentId) || {};
+        return (students || []).find(s => s.id === studentId || s.sid === studentId) || {};
     }, [students, studentId]);
+    const scoreKey = currentStudent.id || studentId;
 
     const studentCohort = currentStudent.cohort || '';
 
@@ -8857,10 +8894,11 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
         const currentMonth = new Date().toISOString().slice(0, 7);
         const newRecord = { ...values, _submitMonth: currentMonth };
         const base = pastpaperScores || {};
+        const key = scoreKey;
         const finalUpdatedScores = {
             ...base,
-            [studentId]: {
-                ...(base[studentId] || {}),
+            [key]: {
+                ...(base[key] || {}),
                 [paperId]: newRecord
             }
         };
@@ -8879,7 +8917,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
             setTimeout(() => setPpSaveStatus(s => s === 'saved' ? 'idle' : s), 2500);
         }
         return true;
-    }, [studentId, pastpaperScores, setPastpaperScores, syncToCloud]);
+    }, [scoreKey, pastpaperScores, setPastpaperScores, syncToCloud]);
 
     const schedulePpAutoSave = React.useCallback((nextValues) => {
         if (ppAutoSaveTimer.current) clearTimeout(ppAutoSaveTimer.current);
@@ -8932,7 +8970,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
     const ppStats = React.useMemo(() => {
         const safePPMaps = pastpaperMaps || (typeof window !== 'undefined' ? window.PASTPAPER_MAPS : null) || {};
         const safePPScores = pastpaperScores || (typeof window !== 'undefined' ? window.PASTPAPER_SCORES : null) || {};
-        const studentPastpaper = safePPScores?.[studentId] || {};
+        const studentPastpaper = safePPScores?.[scoreKey] || {};
         const stats = {};
         let totalCompleted = 0;
         
@@ -9003,7 +9041,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
         
         const details = availableHws.map(hwId => {
             const hwInfo = homeworkMaps[hwId];
-            const studentHw = homeworkScores?.[studentId]?.[hwId];
+            const studentHw = homeworkScores?.[scoreKey]?.[hwId];
             
             if (!studentHw || !studentHw.scores || Object.keys(studentHw.scores).length === 0) {
                 missing++;
@@ -9041,7 +9079,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
         });
 
         return { total: availableHws.length, completed, needsCorrection, missing, details };
-    }, [studentId, studentCohort, homeworkMaps, homeworkScores]);
+    }, [scoreKey, studentCohort, homeworkMaps, homeworkScores]);
 
     // ---------------- 6. ★ 通用評估數據萃取函式 (小測與考試用) ----------------
     const getAssessmentData = (record, mapInfo) => {
@@ -9176,9 +9214,10 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
     // A. 抓取校內成績 (Quiz + Exam) 的弱點 (<60%)
     const schoolWeaknesses = React.useMemo(() => {
         const topicStats = {};
+        const scoreFn = (q, val) => (typeof quizQuestionScore === 'function') ? quizQuestionScore(q, val) : (parseFloat(val) || 0);
         
-        // 掃描小測
-        const sQuiz = scores[studentId] || {};
+        // 掃描小測（用 scoreKey = 學生 id，非 URL 參數）
+        const sQuiz = scores[scoreKey] || {};
         Object.keys(sQuiz).forEach(quizId => {
             const map = window.QUIZ_MAPS ? window.QUIZ_MAPS[quizId] : null;
             if (!map) return;
@@ -9186,15 +9225,16 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                 const val = sQuiz[quizId][q.id];
                 if (val !== undefined && val !== '' && q.topicId) {
                     if (!topicStats[q.topicId]) topicStats[q.topicId] = { id: q.topicId, name: q.topicDesc || '綜合', m: 0, e: 0, errorDesc: new Set() };
+                    const earned = scoreFn(q, val);
                     topicStats[q.topicId].m += q.max;
-                    topicStats[q.topicId].e += parseFloat(val) || 0;
-                    if (parseFloat(val) < q.max && q.topicDesc) topicStats[q.topicId].errorDesc.add(q.topicDesc);
+                    topicStats[q.topicId].e += earned;
+                    if (earned < q.max && q.topicDesc) topicStats[q.topicId].errorDesc.add(q.topicDesc);
                 }
             });
         });
 
         // 掃描大考
-        const sExam = examScores[studentId] || {};
+        const sExam = examScores[scoreKey] || {};
         Object.keys(sExam).forEach(examId => {
             const map = window.EXAM_MAPS ? window.EXAM_MAPS[examId] : null;
             if (!map) return;
@@ -9202,9 +9242,10 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                 const val = sExam[examId][q.id];
                 if (val !== undefined && val !== '' && q.topicId) {
                     if (!topicStats[q.topicId]) topicStats[q.topicId] = { id: q.topicId, name: q.topicDesc || '綜合', m: 0, e: 0, errorDesc: new Set() };
+                    const earned = scoreFn(q, val);
                     topicStats[q.topicId].m += q.max;
-                    topicStats[q.topicId].e += parseFloat(val) || 0;
-                    if (parseFloat(val) < q.max && q.topicDesc) topicStats[q.topicId].errorDesc.add(q.topicDesc);
+                    topicStats[q.topicId].e += earned;
+                    if (earned < q.max && q.topicDesc) topicStats[q.topicId].errorDesc.add(q.topicDesc);
                 }
             });
         });
@@ -9213,7 +9254,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
             .map(t => ({ ...t, pct: t.e / t.m, descList: Array.from(t.errorDesc) }))
             .filter(t => t.m >= 5 && t.pct <= 0.6)
             .sort((a, b) => a.pct - b.pct);
-    }, [scores, examScores, studentId]);
+    }, [scores, examScores, scoreKey]);
 
     // B. 抓取 Pastpaper 弱點 (根據選定的年份/卷目)
     const ppWeaknesses = React.useMemo(() => {
@@ -10144,12 +10185,12 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                         <Icon name="CheckSquare" size={18} className="text-amber-500" /> 課堂小測
                                     </h3>
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                        {(!scores || !scores[studentId] || Object.keys(scores[studentId]).length === 0) ? (
+                                        {(!scores || !scores[scoreKey] || Object.keys(scores[scoreKey]).length === 0) ? (
                                             <p className="text-sm text-slate-400">尚無小測紀錄</p>
                                         ) : (
-                                            Object.keys(scores[studentId]).map(quizId => {
-                                                const quizMap = typeof QUIZ_MAPS !== 'undefined' ? QUIZ_MAPS[quizId] : {};
-                                                const quizRecord = scores[studentId][quizId];
+                                            Object.keys(scores[scoreKey]).map(quizId => {
+                                                const quizMap = (typeof window !== 'undefined' && window.QUIZ_MAPS) ? window.QUIZ_MAPS[quizId] : (typeof QUIZ_MAPS !== 'undefined' ? QUIZ_MAPS[quizId] : {});
+                                                const quizRecord = scores[scoreKey][quizId];
                                                 
                                                 // ★ 使用新版函式，同時獲取分數與弱點數據
                                                 const quizData = getAssessmentData(quizRecord, quizMap);
@@ -10207,12 +10248,12 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                         <Icon name="Award" size={18} className="text-purple-500" /> 校內考試
                                     </h3>
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                        {(!examScores || !examScores[studentId] || Object.keys(examScores[studentId]).length === 0) ? (
+                                        {(!examScores || !examScores[scoreKey] || Object.keys(examScores[scoreKey]).length === 0) ? (
                                             <p className="text-sm text-slate-400">尚無考試紀錄</p>
                                         ) : (
-                                            Object.keys(examScores[studentId]).map(examId => {
-                                                const examMap = typeof EXAM_MAPS !== 'undefined' ? EXAM_MAPS[examId] : {};
-                                                const examRecord = examScores[studentId][examId];
+                                            Object.keys(examScores[scoreKey]).map(examId => {
+                                                const examMap = (typeof window !== 'undefined' && window.EXAM_MAPS) ? window.EXAM_MAPS[examId] : (typeof EXAM_MAPS !== 'undefined' ? EXAM_MAPS[examId] : {});
+                                                const examRecord = examScores[scoreKey][examId];
                                                 
                                                 // ★ 使用新版函式，同時獲取分數與弱點數據
                                                 const examData = getAssessmentData(examRecord, examMap);
@@ -10412,18 +10453,19 @@ const App = () => {
             const exportScoresCSV = () => {
                 const data = activeStudents.map(s => {
                     const row = { Class: s.class, ClassNumber: s.num, Name: s.name };
-                    Object.keys(QUIZ_MAPS).forEach(quizId => {
+                    Object.keys(QUIZ_MAPS || {}).forEach(quizId => {
                         const map = QUIZ_MAPS[quizId];
+                        if (!map?.questions) { row[quizId] = ''; return; }
                         const sScores = (scores[s.id] || {})[quizId] || {};
                         let total = 0;
-                        
-                        // 只計算總分，不再區分 MC 和 LQ
+                        let hasAny = false;
                         map.questions.forEach(q => {
-                            total += (sScores[q.id] || 0);
+                            const val = sScores[q.id];
+                            if (val === undefined || val === null || String(val).trim() === '') return;
+                            hasAny = true;
+                            total += (typeof quizQuestionScore === 'function') ? quizQuestionScore(q, val) : (parseFloat(val) || 0);
                         });
-                        
-                        // 欄位名稱直接顯示 CH01, CH02 等
-                        row[quizId] = total; 
+                        row[quizId] = hasAny ? total : '';
                     });
                     return row;
                 });
