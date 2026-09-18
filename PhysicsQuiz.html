@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>V4.19 Physics Quiz Analyzer</title>
+    <title>V4.20 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -5258,8 +5258,10 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkMaps, 
         const today = new Date().toISOString().slice(0, 10);
         const { total, max } = calcTotals(editObj, hwMap);
         let newStatus = editObj.remakeStatus;
-        if (max > 0 && total === max) newStatus = 'PERFECT';
-        else if (newStatus === 'MISSING' || !newStatus) newStatus = 'PENDING';
+        if (newStatus !== 'EXEMPT') {
+            if (max > 0 && total === max) newStatus = 'PERFECT';
+            else if (newStatus === 'MISSING' || !newStatus) newStatus = 'PENDING';
+        }
 
         const finalRecord = { ...editObj, remakeStatus: newStatus, gradingDate: editObj.gradingDate || today };
 
@@ -5373,6 +5375,7 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkMaps, 
         const status = homeworkScores[s.id]?.[selectedHw]?.remakeStatus || 'MISSING';
         if (filterStatus === 'PENDING') return status === 'PENDING';
         if (filterStatus === 'MISSING') return status === 'MISSING';
+        if (filterStatus === 'EXEMPT') return status === 'EXEMPT';
         return true;
     });
 
@@ -5413,6 +5416,7 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkMaps, 
                             <button onClick={()=>setFilterStatus('ALL')} className={`flex-1 text-[10px] py-1 rounded font-bold transition-colors ${filterStatus==='ALL' ? 'bg-white shadow-sm text-slate-700' : 'text-slate-500 hover:bg-slate-200'}`}>全部</button>
                             <button onClick={()=>setFilterStatus('PENDING')} className={`flex-1 text-[10px] py-1 rounded font-bold transition-colors ${filterStatus==='PENDING' ? 'bg-white shadow-sm text-red-600' : 'text-slate-500 hover:bg-slate-200'}`}>欠改正</button>
                             <button onClick={()=>setFilterStatus('MISSING')} className={`flex-1 text-[10px] py-1 rounded font-bold transition-colors ${filterStatus==='MISSING' ? 'bg-white shadow-sm text-slate-600' : 'text-slate-500 hover:bg-slate-200'}`}>未交/未改</button>
+                            <button onClick={()=>setFilterStatus('EXEMPT')} className={`flex-1 text-[10px] py-1 rounded font-bold transition-colors ${filterStatus==='EXEMPT' ? 'bg-white shadow-sm text-violet-600' : 'text-slate-500 hover:bg-slate-200'}`}>豁免</button>
                         </div>
                     </div>
                     <div className="flex-1 overflow-y-auto p-2 space-y-1">
@@ -5422,6 +5426,7 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkMaps, 
                             if (status === 'PERFECT') statusIcon = <span className="text-[10px] text-emerald-600 bg-emerald-100 font-bold px-1.5 py-0.5 rounded">✅ 完美</span>;
                             if (status === 'PENDING') statusIcon = <span className="text-[10px] text-red-600 bg-red-100 font-bold px-1.5 py-0.5 rounded">❌ 欠改正</span>;
                             if (status === 'DONE') statusIcon = <span className="text-[10px] text-blue-600 bg-blue-100 font-bold px-1.5 py-0.5 rounded">🔄 已改正</span>;
+                            if (status === 'EXEMPT') statusIcon = <span className="text-[10px] text-violet-700 bg-violet-100 font-bold px-1.5 py-0.5 rounded">豁免</span>;
                             return (
                                 <div key={s.id} onClick={() => handleSelectStudent(s.id)} className={`p-2.5 rounded-lg cursor-pointer border transition flex justify-between items-center ${selectedStudentId === s.id ? 'bg-amber-50 border-amber-400 shadow-sm' : 'hover:bg-slate-50 border-transparent border-b-slate-100'}`}>
                                     <span className="text-sm font-bold text-slate-700">{s.class}({s.num}) {s.name}</span>{statusIcon}
@@ -5440,6 +5445,26 @@ const HomeworkScoresInputView = ({ activeStudents, currentCohort, homeworkMaps, 
                                     <h3 className="font-bold text-lg text-slate-800">{activeStudents.find(s=>s.id===selectedStudentId)?.name} <span className="text-sm text-slate-500 font-normal ml-2">的功課批改區</span></h3>
                                     {currentEdit.gradingDate && <p className="text-[10px] font-mono text-slate-400 mt-1">批改日: {currentEdit.gradingDate} {currentEdit.remakeDate ? ` | 改正日: ${currentEdit.remakeDate}` : ''}</p>}
                                     <div className="mt-2 flex flex-wrap items-center gap-2">
+                                        {currentEdit.remakeStatus !== 'EXEMPT' && (
+                                            <button onClick={() => {
+                                                const next = { ...currentEdit, remakeStatus: 'EXEMPT', scores: currentEdit.scores || {} };
+                                                setCurrentEdit(next);
+                                                currentEditRef.current = next;
+                                                handleSaveRecord(next, selectedStudentIdRef.current, selectedHwRef.current);
+                                            }} className="text-xs bg-violet-100 text-violet-700 hover:bg-violet-200 px-3 py-1.5 rounded-full font-bold transition flex items-center gap-1 shadow-sm border border-violet-200" title="長缺豁免：不計入排行與平均">
+                                                標記為「豁免」
+                                            </button>
+                                        )}
+                                        {currentEdit.remakeStatus === 'EXEMPT' && (
+                                            <button onClick={() => {
+                                                const next = { ...currentEdit, remakeStatus: 'MISSING' };
+                                                setCurrentEdit(next);
+                                                currentEditRef.current = next;
+                                                handleSaveRecord(next, selectedStudentIdRef.current, selectedHwRef.current);
+                                            }} className="text-xs bg-slate-100 text-slate-600 hover:bg-rose-100 hover:text-rose-700 px-3 py-1.5 rounded-full font-bold transition flex items-center gap-1 border border-slate-200">
+                                                取消豁免
+                                            </button>
+                                        )}
                                         {currentEdit.remakeStatus === 'PENDING' && <button onClick={handleMarkAsRemade} className="text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 px-3 py-1.5 rounded-full font-bold transition flex items-center gap-1 shadow-sm"><Icon name="CheckCircle" size={14} /> 標記為「已完成改正」</button>}
                                         {currentEdit.remakeStatus === 'DONE' && (
                                             <>
@@ -5721,14 +5746,21 @@ ${syllabus}
 
                 const maxScore = hwMaxScores[hwId];
                 hwData[hwId] = {
-                    score: hasScore || Object.keys(scoresObj).length > 0 ? sum : '',
+                    score: status === 'EXEMPT' ? '豁免' : (hasScore || Object.keys(scoresObj).length > 0 ? sum : ''),
                     status: status
                 };
 
-                // 納入平均分計算 (滿分換算為 100)
-                if (includedHws[hwId] && (hasScore || Object.keys(scoresObj).length > 0) && maxScore > 0) {
-                    totalForAvg += (sum / maxScore) * 100;
-                    countForAvg++;
+                // 納入平均分計算 (滿分換算為 100)；豁免不計；欠交計 0
+                if (includedHws[hwId] && maxScore > 0) {
+                    if (status === 'EXEMPT') {
+                        // skip
+                    } else if (hasScore || Object.keys(scoresObj).length > 0) {
+                        totalForAvg += (sum / maxScore) * 100;
+                        countForAvg++;
+                    } else if (status === 'MISSING') {
+                        totalForAvg += 0;
+                        countForAvg++;
+                    }
                 }
             });
 
@@ -5765,10 +5797,12 @@ ${syllabus}
                 hwMap.questions.forEach(q => updatedScores[q.id] = '');
             }
 
-            // 狀態自動判斷 (防呆)
+            // 狀態自動判斷 (防呆)；豁免不被自動覆寫
             let finalStatus = newStatus;
-            if (newScore !== '' && finalStatus === 'MISSING') finalStatus = 'PENDING';
-            if (newScore === hwMaxScores[hwId]) finalStatus = 'PERFECT';
+            if (finalStatus !== 'EXEMPT') {
+                if (newScore !== '' && finalStatus === 'MISSING') finalStatus = 'PENDING';
+                if (newScore === hwMaxScores[hwId]) finalStatus = 'PERFECT';
+            }
 
             const newScoresState = {
                 ...prev,
@@ -5805,7 +5839,7 @@ ${syllabus}
         computedData.forEach(s => {
             const row = [s.class, s.num, s.name];
             availableHws.forEach(hwId => {
-                const statusMap = { 'PERFECT': '完美', 'DONE': '已改正', 'PENDING': '欠改正', 'MISSING': '未交' };
+                const statusMap = { 'PERFECT': '完美', 'DONE': '已改正', 'PENDING': '欠改正', 'MISSING': '未交', 'EXEMPT': '豁免' };
                 row.push(s.hwData[hwId].score !== '' ? s.hwData[hwId].score : '');
                 row.push(statusMap[s.hwData[hwId].status]);
             });
@@ -5820,6 +5854,7 @@ ${syllabus}
         if (status === 'PERFECT') return <span className="text-emerald-600 bg-emerald-50 px-1 rounded flex items-center gap-0.5"><Icon name="CheckCircle" size={12}/> 完美</span>;
         if (status === 'DONE') return <span className="text-blue-600 bg-blue-50 px-1 rounded flex items-center gap-0.5"><Icon name="RotateCw" size={12}/> 已改正</span>;
         if (status === 'PENDING') return <span className="text-red-600 bg-red-50 px-1 rounded flex items-center gap-0.5"><Icon name="XCircle" size={12}/> 欠改正</span>;
+        if (status === 'EXEMPT') return <span className="text-violet-700 bg-violet-50 px-1 rounded flex items-center gap-0.5 font-bold">豁免</span>;
         return <span className="text-slate-400 bg-slate-100 px-1 rounded flex items-center gap-0.5"><Icon name="Circle" size={12}/> 未交</span>;
     };
 
@@ -5941,6 +5976,7 @@ ${syllabus}
                                                             <option value="DONE">🔄 已改正</option>
                                                             <option value="PENDING">❌ 欠改正</option>
                                                             <option value="MISSING">⚪ 未交</option>
+                                                            <option value="EXEMPT">🟣 豁免</option>
                                                         </select>
                                                     </div>
                                                 )}
@@ -7874,15 +7910,23 @@ const TeacherClassRankingView = ({ activeStudents, currentCohort, scores, examSc
                 if (!map?.questions?.length) return;
                 if (map.cohort && cohort && map.cohort !== cohort) return;
                 const rec = homeworkScores?.[sId]?.[hwId];
-                if (!rec?.scores) return;
-                let earned = 0, max = 0, has = false;
+                // ★ 豁免：長缺不計入排行
+                if (rec && rec.remakeStatus === 'EXEMPT') return;
+                let earned = 0, max = 0;
+                map.questions.forEach(q => { max += q.max || 0; });
+                if (max <= 0) return;
+                if (!rec || !rec.scores || Object.keys(rec.scores).length === 0) {
+                    // ★ 欠交：計 0 分
+                    totalPct += 0;
+                    count++;
+                    return;
+                }
                 map.questions.forEach(q => {
-                    max += q.max || 0;
                     const sc = scoreOf(rec.scores[q.id], q);
-                    if (sc === null) return;
-                    has = true; earned += sc;
+                    earned += (sc === null ? 0 : sc);
                 });
-                if (has && max > 0) { totalPct += earned / max; count++; }
+                totalPct += earned / max;
+                count++;
             });
         } else if (category === 'quiz') {
             const maps = (typeof window !== 'undefined' && window.QUIZ_MAPS) ? window.QUIZ_MAPS : {};
@@ -9168,6 +9212,11 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
             const hwInfo = homeworkMaps[hwId];
             const studentHw = homeworkScores?.[scoreKey]?.[hwId];
             
+            // ★ 豁免：長缺不計分、不計欠交
+            if (studentHw && studentHw.remakeStatus === 'EXEMPT') {
+                return { id: hwId, title: hwInfo.title, status: 'exempt', score: '豁免', weaknesses: [] };
+            }
+
             if (!studentHw || !studentHw.scores || Object.keys(studentHw.scores).length === 0) {
                 missing++;
                 return { id: hwId, title: hwInfo.title, status: 'missing', weaknesses: [] };
@@ -9179,14 +9228,22 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
             let weaknesses = []; 
             
             hwInfo.questions.forEach(q => {
-                const qScore = Number(studentHw.scores[q.id]) || 0;
                 const qMax = Number(q.max) || 1;
+                const raw = studentHw.scores[q.id];
+                let qScore = 0;
+                // ★ MC 支援 A/B/C/D 字母答案（不可用 Number("B")）
+                if (q.type === 'MC' && q.ans && raw !== undefined && raw !== null && String(raw).trim() !== '') {
+                    const corrects = q.ans.toString().split(',').map(a => a.trim().toUpperCase());
+                    qScore = corrects.includes(String(raw).trim().toUpperCase()) ? qMax : 0;
+                } else {
+                    qScore = (raw === '' || raw === undefined || raw === null || isNaN(parseFloat(raw))) ? 0 : parseFloat(raw);
+                }
                 totalEarned += qScore;
                 totalMax += qMax;
                 
                 if (qScore < qMax) isPerfect = false;
                 
-                if (qScore / qMax <= 0.5) {
+                if (qMax > 0 && qScore / qMax <= 0.5) {
                     const weaknessText = q.topicDesc || q.topicId || q.desc || q.topic || q.id;
                     if (!weaknesses.includes(weaknessText)) weaknesses.push(weaknessText);
                 }
@@ -9435,23 +9492,32 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                 if (!map?.questions?.length) return;
                 if (map.cohort && cohort && map.cohort !== cohort) return;
                 const rec = sHw[hwId];
-                if (!rec?.scores) return;
-                let earned = 0, max = 0, has = false;
+                // ★ 豁免：長缺不計入排行
+                if (rec && rec.remakeStatus === 'EXEMPT') return;
+                let earned = 0, max = 0;
+                map.questions.forEach(q => { max += q.max || 0; });
+                if (max <= 0) return;
+                if (!rec || !rec.scores || Object.keys(rec.scores).length === 0) {
+                    // ★ 欠交：計 0 分
+                    totalPct += 0;
+                    count++;
+                    return;
+                }
                 map.questions.forEach(q => {
-                    max += q.max || 0;
                     const val = rec.scores[q.id];
-                    if (val === undefined || val === null || String(val).trim() === '') return;
-                    has = true;
                     if (q.type === 'MC') {
-                        if (q.ans) {
+                        if (val !== undefined && val !== null && String(val).trim() !== '' && q.ans) {
                             const corrects = q.ans.toString().split(',').map(a => a.trim().toUpperCase());
                             if (corrects.includes(String(val).trim().toUpperCase())) earned += q.max || 0;
                         }
                     } else {
-                        earned += parseFloat(val) || 0;
+                        if (val !== undefined && val !== null && String(val).trim() !== '') {
+                            earned += parseFloat(val) || 0;
+                        }
                     }
                 });
-                if (has && max > 0) { totalPct += earned / max; count++; }
+                totalPct += earned / max;
+                count++;
             });
         } else if (category === 'quiz') {
             const maps = (typeof window !== 'undefined' && window.QUIZ_MAPS) ? window.QUIZ_MAPS : {};
@@ -9763,6 +9829,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                                 {hw.status === 'completed' && <span className="text-emerald-600 font-bold">已改正 ({hw.score})</span>}
                                                 {hw.status === 'needsCorrection' && <span className="text-amber-600 font-bold">未改正 ({hw.score})</span>}
                                                 {hw.status === 'missing' && <span className="text-red-500 font-bold">欠交</span>}
+                                                {hw.status === 'exempt' && <span className="text-violet-600 font-bold">豁免</span>}
                                             </div>
                                         ))}
                                     </div>
@@ -10265,6 +10332,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                                             {hw.status === 'completed' && <span className="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold">已改正</span>}
                                                             {hw.status === 'needsCorrection' && <span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold">未改正</span>}
                                                             {hw.status === 'missing' && <span className="text-[9px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-bold">欠交</span>}
+                                                            {hw.status === 'exempt' && <span className="text-[9px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded font-bold">豁免</span>}
                                                         </div>
                                                     </div>
                                                     
@@ -10274,7 +10342,7 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                                             <span className="text-[10px] text-slate-400 block font-medium">實際分數</span>
                                                             <span className="text-sm font-black text-slate-700">{hw.score || '無資料'}</span>
                                                         </div>
-                                                        {hw.score && hw.status !== 'missing' && (
+                                                        {hw.score && hw.status !== 'missing' && hw.status !== 'exempt' && (
                                                             <div className="text-right">
                                                                 <span className="text-[10px] text-slate-400 block font-medium">表現定位</span>
                                                                 {pct >= 0.85 && <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-0.5">🌟 表現卓越</span>}
