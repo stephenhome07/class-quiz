@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>V4.20 Physics Quiz Analyzer</title>
+    <title>V4.21 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -8686,48 +8686,76 @@ ${meta.req}
                 );
             };
 // ==================== 新增：每年度專屬小雷達圖組件 ====================
+const safeDestroyChart = (ref) => {
+    try {
+        if (ref && ref.current) {
+            ref.current.destroy();
+            ref.current = null;
+        }
+    } catch (e) {
+        try { if (ref) ref.current = null; } catch (_) {}
+    }
+};
+
 const YearlyRadarChart = ({ domainData, year }) => {
     const canvasRef = React.useRef(null);
     const chartInst = React.useRef(null);
 
     React.useEffect(() => {
         if (!canvasRef.current || !domainData) return;
-        const ctx = canvasRef.current.getContext('2d');
-        const labels = [];
-        const dataPoints = [];
+        let cancelled = false;
+        try {
+            const ctx = canvasRef.current.getContext('2d');
+            if (!ctx) return;
+            const labels = [];
+            const dataPoints = [];
 
-        Object.keys(domainData).forEach(key => {
-            if (domainData[key].m > 0) {
-                labels.push(domainData[key].name);
-                dataPoints.push(Math.round((domainData[key].e / domainData[key].m) * 100));
+            Object.keys(domainData || {}).forEach(key => {
+                if (domainData[key] && domainData[key].m > 0) {
+                    labels.push(domainData[key].name || key);
+                    dataPoints.push(Math.round((domainData[key].e / domainData[key].m) * 100));
+                }
+            });
+
+            // iOS Safari：radar 標籤太少時 Chart.js 容易炸掉
+            if (labels.length < 3) {
+                safeDestroyChart(chartInst);
+                return;
             }
-        });
 
-        if (labels.length === 0) return;
-
-        if (chartInst.current) chartInst.current.destroy();
-        chartInst.current = new Chart(ctx, {
-            type: 'radar',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: `${year}年能力`,
-                    data: dataPoints,
-                    backgroundColor: 'rgba(99, 102, 241, 0.15)',
-                    borderColor: 'rgba(99, 102, 241, 0.8)',
-                    pointBackgroundColor: 'rgba(99, 102, 241, 1)',
-                    pointBorderColor: '#fff',
-                    borderWidth: 1.5,
-                    pointRadius: 2
-                }]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                scales: { r: { angleLines: { color: 'rgba(0,0,0,0.05)' }, grid: { color: 'rgba(0,0,0,0.05)' }, pointLabels: { font: { size: 9, weight: 'bold' }, color: '#64748b' }, ticks: { display: false, min: 0, max: 100, stepSize: 25 } } },
-                plugins: { legend: { display: false } }
-            }
-        });
-        return () => { if (chartInst.current) chartInst.current.destroy(); };
+            safeDestroyChart(chartInst);
+            if (cancelled) return;
+            chartInst.current = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: `${year}年能力`,
+                        data: dataPoints,
+                        backgroundColor: 'rgba(99, 102, 241, 0.15)',
+                        borderColor: 'rgba(99, 102, 241, 0.8)',
+                        pointBackgroundColor: 'rgba(99, 102, 241, 1)',
+                        pointBorderColor: '#fff',
+                        borderWidth: 1.5,
+                        pointRadius: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    scales: { r: { angleLines: { color: 'rgba(0,0,0,0.05)' }, grid: { color: 'rgba(0,0,0,0.05)' }, pointLabels: { font: { size: 9, weight: 'bold' }, color: '#64748b' }, ticks: { display: false, min: 0, max: 100, stepSize: 25 } } },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        } catch (err) {
+            console.warn('YearlyRadarChart failed', err);
+            safeDestroyChart(chartInst);
+        }
+        return () => {
+            cancelled = true;
+            safeDestroyChart(chartInst);
+        };
     }, [domainData, year]);
 
     return (
@@ -8735,6 +8763,39 @@ const YearlyRadarChart = ({ domainData, year }) => {
             <canvas ref={canvasRef}></canvas>
         </div>
     );
+};
+
+// ★ 學生端錯誤邊界：避免單一區塊崩潰變成整頁空白（尤其 iPad Safari）
+class StudentErrorBoundary extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = { hasError: false, message: '' };
+    }
+    static getDerivedStateFromError(error) {
+        return { hasError: true, message: (error && error.message) ? error.message : '未知錯誤' };
+    }
+    componentDidCatch(error, info) {
+        console.error('StudentErrorBoundary', error, info);
+    }
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div className="min-h-[50vh] flex flex-col items-center justify-center p-8 text-center bg-rose-50 border border-rose-200 rounded-2xl m-4">
+                    <div className="text-4xl mb-3">⚠️</div>
+                    <h2 className="text-lg font-black text-rose-800 mb-2">此頁面暫時無法顯示</h2>
+                    <p className="text-sm text-rose-700 mb-4 max-w-md">可能是裝置記憶體或瀏覽器相容問題。請嘗試重新整理，或改用 Safari / Chrome 開啟。</p>
+                    <p className="text-[11px] text-rose-400 mb-4 font-mono break-all">{this.state.message}</p>
+                    <button
+                        onClick={() => { this.setState({ hasError: false, message: '' }); try { window.location.reload(); } catch(e) {} }}
+                        className="px-5 py-2.5 bg-rose-600 text-white rounded-xl font-bold shadow"
+                    >
+                        重新整理頁面
+                    </button>
+                </div>
+            );
+        }
+        return this.props.children;
+    }
 };
 
         // ==================== 新增：專屬 AI 補底特訓中心 (獨立組件) ====================
@@ -9097,8 +9158,12 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
 
     // 動態解析可用年份 (例如 2014, 2015)
     const availableYears = React.useMemo(() => {
-        const years = Object.keys(safePPMaps).map(key => key.split('-')[0]);
-        return [...new Set(years)].sort((a, b) => b - a);
+        try {
+            const years = Object.keys(safePPMaps || {}).map(key => (key || '').split('-')[0]).filter(Boolean);
+            return [...new Set(years)].sort((a, b) => String(b).localeCompare(String(a), undefined, { numeric: true }));
+        } catch (e) {
+            return [];
+        }
     }, [safePPMaps]);
 
     // 當選擇年份後，動態篩選卷目 (例如 P1A, P1B)
@@ -9342,9 +9407,10 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
             if (!map || !map.questions) return;
             map.questions.forEach(q => {
                 const val = sScores[paperId][q.id];
-                if (val !== undefined && val !== '') {
-                    let dKey = q.topicId.startsWith('E3') ? 'E3' : q.topicId.startsWith('E4') ? 'E4' : q.topicId.charAt(0);
-                    if (ds[dKey]) {
+                if (val !== undefined && val !== null && val !== '') {
+                    const tid = (q.topicId || '').toString();
+                    let dKey = tid.startsWith('E3') ? 'E3' : tid.startsWith('E4') ? 'E4' : tid.charAt(0);
+                    if (dKey && ds[dKey]) {
                         ds[dKey].m += q.max;
                         ds[dKey].e += getPastpaperQScore(resolvedStudentId, paperId, q);
                     }
@@ -9354,41 +9420,52 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
         return ds;
     }, [resolvedStudentId, pastpaperScores, pastpaperMaps, getPastpaperQScore]);
 
-    // 繪製雷達圖
+    // 繪製雷達圖（iPad 安全：標籤不足不繪製；destroy 包 try/catch）
     React.useEffect(() => {
         if (activeTab !== 'overview' || !chartRef.current) return;
-        const ctx = chartRef.current.getContext('2d');
-        const labels = [];
-        const dataPoints = [];
-        Object.keys(personalDomainStats).forEach(key => {
-            if (personalDomainStats[key].m > 0) {
-                labels.push(personalDomainStats[key].name);
-                dataPoints.push(Math.round((personalDomainStats[key].e / personalDomainStats[key].m) * 100));
+        try {
+            const ctx = chartRef.current.getContext('2d');
+            if (!ctx) return;
+            const labels = [];
+            const dataPoints = [];
+            Object.keys(personalDomainStats || {}).forEach(key => {
+                if (personalDomainStats[key] && personalDomainStats[key].m > 0) {
+                    labels.push(personalDomainStats[key].name);
+                    dataPoints.push(Math.round((personalDomainStats[key].e / personalDomainStats[key].m) * 100));
+                }
+            });
+            if (labels.length < 3) {
+                safeDestroyChart(chartInstance);
+                return;
             }
-        });
-
-        if (chartInstance.current) chartInstance.current.destroy();
-        chartInstance.current = new Chart(ctx, {
-            type: 'radar',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: '我的能力值 (%)',
-                    data: dataPoints,
-                    backgroundColor: 'rgba(56, 189, 248, 0.4)', // Sky blue
-                    borderColor: 'rgba(2, 132, 199, 1)',
-                    pointBackgroundColor: 'rgba(2, 132, 199, 1)',
-                    pointBorderColor: '#fff',
-                    borderWidth: 2,
-                }]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                scales: { r: { angleLines: { color: 'rgba(0, 0, 0, 0.1)' }, grid: { color: 'rgba(0, 0, 0, 0.1)' }, pointLabels: { font: { size: 10, weight: 'bold' } }, ticks: { stepSize: 20, min: 0, max: 100, display: false } } },
-                plugins: { legend: { display: false } }
-            }
-        });
-        return () => { if (chartInstance.current) chartInstance.current.destroy(); };
+            safeDestroyChart(chartInstance);
+            chartInstance.current = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '我的能力值 (%)',
+                        data: dataPoints,
+                        backgroundColor: 'rgba(56, 189, 248, 0.4)',
+                        borderColor: 'rgba(2, 132, 199, 1)',
+                        pointBackgroundColor: 'rgba(2, 132, 199, 1)',
+                        pointBorderColor: '#fff',
+                        borderWidth: 2,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    scales: { r: { angleLines: { color: 'rgba(0, 0, 0, 0.1)' }, grid: { color: 'rgba(0, 0, 0, 0.1)' }, pointLabels: { font: { size: 10, weight: 'bold' } }, ticks: { stepSize: 20, min: 0, max: 100, display: false } } },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        } catch (err) {
+            console.warn('overview radar failed', err);
+            safeDestroyChart(chartInstance);
+        }
+        return () => { safeDestroyChart(chartInstance); };
     }, [personalDomainStats, activeTab]);
 
     // ================== AI 補底運算區 ==================
@@ -10011,7 +10088,19 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                         <p className="text-sm text-slate-500 mt-1">基於你已輸入的卷目，系統將自動為你對答並推算 HKDSE 預期等級。</p>
                                     </div>
                                     <button 
-                                        onClick={() => setPpMode('input')}
+                                        type="button"
+                                        onClick={() => {
+                                            try {
+                                                setPpMode('input');
+                                                // iOS：切換後滾回頂部，避免看起來像空白
+                                                setTimeout(() => {
+                                                    try { window.scrollTo(0, 0); } catch (e) {}
+                                                }, 50);
+                                            } catch (e) {
+                                                console.error(e);
+                                                alert('無法開啟輸入頁，請重新整理後再試。');
+                                            }
+                                        }}
                                         className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-indigo-700 transition-colors flex items-center gap-2 shadow-sm"
                                     >
                                         <Icon name="Edit3" size={18} /> 新增/修改成績
@@ -10102,11 +10191,10 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                             onChange={(e) => setPpSelectedYear(e.target.value)}
                                         >
                                             <option value="">-- 請選擇 DSE 年份 --</option>
-                                            {/* 防呆處理，避免 undefined */}
-                                            {((pastpaperMaps ? Object.keys(pastpaperMaps).map(k => k.split('-')[0]) : [])
-                                                .filter((v, i, a) => a.indexOf(v) === i)
-                                                .sort().reverse()
-                                            ).map(year => <option key={year} value={year}>{year} 年 DSE</option>)}
+                                            {/* ★ 一律用 safePPMaps，避免 pastpaperMaps prop 空而 window 有資料時選不到 */}
+                                            {(availableYears || []).map(year => (
+                                                <option key={year} value={year}>{year} 年 DSE</option>
+                                            ))}
                                         </select>
                                     </div>
                                     <div>
@@ -10118,18 +10206,26 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                             onChange={(e) => {
                                                 const paperId = e.target.value;
                                                 setPpSelectedPaper(paperId);
-                                                setPpInputValues(pastpaperScores?.[resolvedStudentId]?.[paperId] || {});
+                                                const existing = (pastpaperScores && resolvedStudentId)
+                                                    ? (pastpaperScores[resolvedStudentId]?.[paperId] || {})
+                                                    : {};
+                                                setPpInputValues(existing && typeof existing === 'object' ? { ...existing } : {});
+                                                setPpSaveStatus('idle');
                                             }}
                                         >
                                             <option value="">-- 請選擇卷目 --</option>
-                                            {(pastpaperMaps ? Object.keys(pastpaperMaps) : [])
-                                                .filter(key => key.startsWith(ppSelectedYear))
-                                                .map(key => (
-                                                    <option key={key} value={key}>{key.replace(`${ppSelectedYear}-`, "")} - {pastpaperMaps[key].title}</option>
+                                            {(availablePapers || []).map(p => (
+                                                <option key={p.id} value={p.id}>{p.type} - {p.title}</option>
                                             ))}
                                         </select>
                                     </div>
                                 </div>
+
+                                {Object.keys(safePPMaps || {}).length === 0 && (
+                                    <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800 font-bold">
+                                        系統尚未載入歷屆試題題庫。請稍後重新整理，或通知老師檢查 Pastpaper 設定。
+                                    </div>
+                                )}
 
                                 {/* 安全讀取題庫 */}
                                 {ppSelectedPaper && safePPMaps?.[ppSelectedPaper] && (
@@ -10160,9 +10256,9 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                                                 </h4>
                                                             )}
                                                             
-                                                            <div className="grid grid-cols-5 gap-3">
+                                                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 sm:gap-3">
                                                                 {qs.map((q) => {
-                                                                    const studentAns = ppInputValues[q.id];
+                                                                    const studentAns = ppInputValues ? ppInputValues[q.id] : undefined;
                                                                     const isMC = q.type === 'MC';
                                                                     
                                                                     let bgColor = "bg-slate-50";
@@ -10171,7 +10267,8 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                                                     let showCorrectAns = false;
 
                                                                     if (isMC && studentAns && q.ans) {
-                                                                        const isCorrect = studentAns === q.ans;
+                                                                        const corrects = String(q.ans).split(',').map(a => a.trim().toUpperCase());
+                                                                        const isCorrect = corrects.includes(String(studentAns).trim().toUpperCase());
                                                                         if (isCorrect) {
                                                                             bgColor = "bg-emerald-50";
                                                                             borderColor = "border-emerald-300";
@@ -10187,13 +10284,13 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                                                     return (
                                                                         <div key={q.id} className={`${bgColor} p-2 rounded-xl border ${borderColor} flex flex-col justify-center items-center relative transition-colors`}>
                                                                             
-                                                                            <label className="text-[10px] font-bold text-slate-500 mb-1 w-full text-center truncate" title={q.id.split('-').pop()}>
-                                                                                {q.id.split('-').pop()}
+                                                                            <label className="text-[10px] font-bold text-slate-500 mb-1 w-full text-center truncate" title={(q.id || '').split('-').pop()}>
+                                                                                {(q.id || '').split('-').pop()}
                                                                             </label>
 
                                                                             {showCorrectAns && (
                                                                                 <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-sm">
-                                                                                    {q.ans}
+                                                                                    {String(q.ans).split(',')[0]}
                                                                                 </span>
                                                                             )}
 
@@ -10201,24 +10298,27 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                                                                 <input 
                                                                                     id={`pp-input-${q.id}`} 
                                                                                     type="text" 
-                                                                                    maxLength="1"
+                                                                                    inputMode="text"
+                                                                                    autoComplete="off"
+                                                                                    autoCorrect="off"
+                                                                                    maxLength={1}
                                                                                     className={`w-full text-center font-black text-lg p-1.5 border border-slate-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none uppercase transition-all ${textColor}`}
-                                                                                    value={studentAns || ''}
+                                                                                    value={studentAns === undefined || studentAns === null ? '' : studentAns}
                                                                                     onChange={(e) => {
-                                                                                        const val = e.target.value.toUpperCase();
-                                                                                        if (val === '' || ['A','B','C','D'].includes(val)) {
-                                                                                            setPpInputValues(prev => {
-                                                                                                const next = {...prev, [q.id]: val};
-                                                                                                schedulePpAutoSave(next);
-                                                                                                return next;
-                                                                                            });
-                                                                                            if (val !== '') {
-                                                                                                const currentGlobalIdx = paperQuestions.findIndex(item => item.id === q.id);
-                                                                                                if (currentGlobalIdx !== -1 && currentGlobalIdx + 1 < paperQuestions.length) {
-                                                                                                    const nextId = paperQuestions[currentGlobalIdx + 1].id;
+                                                                                        const val = e.target.value.toUpperCase().replace(/[^A-D]/g, '').slice(0, 1);
+                                                                                        setPpInputValues(prev => {
+                                                                                            const next = {...(prev || {}), [q.id]: val};
+                                                                                            schedulePpAutoSave(next);
+                                                                                            return next;
+                                                                                        });
+                                                                                        if (val !== '') {
+                                                                                            const currentGlobalIdx = paperQuestions.findIndex(item => item.id === q.id);
+                                                                                            if (currentGlobalIdx !== -1 && currentGlobalIdx + 1 < paperQuestions.length) {
+                                                                                                const nextId = paperQuestions[currentGlobalIdx + 1].id;
+                                                                                                setTimeout(() => {
                                                                                                     const nextInput = document.getElementById(`pp-input-${nextId}`);
                                                                                                     if (nextInput) nextInput.focus();
-                                                                                                }
+                                                                                                }, 10);
                                                                                             }
                                                                                         }
                                                                                     }}
@@ -10228,32 +10328,31 @@ const StudentPortalView = ({ studentId, students, scores, examScores, homeworkSc
                                                                                     <input 
                                                                                         id={`pp-input-${q.id}`}
                                                                                         type="number" 
-                                                                                        min="0"
+                                                                                        inputMode="decimal"
+                                                                                        min={0}
                                                                                         max={q.max}
+                                                                                        step="0.5"
                                                                                         className="w-full text-center font-black text-base p-1.5 border border-slate-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all"
-                                                                                        value={studentAns !== undefined ? studentAns : ''}
+                                                                                        value={studentAns === undefined || studentAns === null ? '' : studentAns}
                                                                                         onChange={(e) => {
                                                                                             let val = e.target.value;
-                                                                                            if (val !== '') {
-                                                                                                val = Number(val);
-                                                                                                if (val < 0) val = 0;
-                                                                                                if (val > q.max) val = q.max;
+                                                                                            if (val === '') {
+                                                                                                setPpInputValues(prev => {
+                                                                                                    const next = {...(prev || {}), [q.id]: ''};
+                                                                                                    schedulePpAutoSave(next);
+                                                                                                    return next;
+                                                                                                });
+                                                                                                return;
                                                                                             }
+                                                                                            let n = parseFloat(val);
+                                                                                            if (isNaN(n)) return;
+                                                                                            if (n < 0) n = 0;
+                                                                                            if (q.max != null && n > q.max) n = q.max;
                                                                                             setPpInputValues(prev => {
-                                                                                                const next = {...prev, [q.id]: val};
+                                                                                                const next = {...(prev || {}), [q.id]: n};
                                                                                                 schedulePpAutoSave(next);
                                                                                                 return next;
                                                                                             });
-                                                                                        }}
-                                                                                        onKeyDown={(e) => {
-                                                                                            if (e.key === 'Enter') {
-                                                                                                const currentGlobalIdx = paperQuestions.findIndex(item => item.id === q.id);
-                                                                                                if (currentGlobalIdx !== -1 && currentGlobalIdx + 1 < paperQuestions.length) {
-                                                                                                    const nextId = paperQuestions[currentGlobalIdx + 1].id;
-                                                                                                    const nextInput = document.getElementById(`pp-input-${nextId}`);
-                                                                                                    if (nextInput) nextInput.focus();
-                                                                                                }
-                                                                                            }
                                                                                         }}
                                                                                     />
                                                                                     <span className="text-[10px] text-slate-400 font-bold w-6">/{q.max}</span>
@@ -10717,22 +10816,20 @@ const App = () => {
                         // ★ 核心分流邏輯：如果有 sid，就只渲染學生畫面，完全隱藏老師 Sidebar
                     if (studentSid) {
                         return (
-                            <StudentPortalView 
-                                studentId={studentSid} 
-                                students={students} 
-                                scores={scores} 
-                                examScores={examScores} 
-                                homeworkScores={homeworkScores} 
-                                pastpaperScores={pastpaperScores}
-                                homeworkMaps={homeworkMaps}
-                                // 👇 請務必補上這三行，把歷屆試題的資料傳給學生介面 👇
-                                pastpaperMaps={pastpaperMaps}
-                                pastpaperScores={pastpaperScores}
-                                setPastpaperScores={setPastpaperScores}
-                                syncToCloud={syncToCloud}
-                                
-                                // ← 添加这一行
-                            />
+                            <StudentErrorBoundary>
+                                <StudentPortalView 
+                                    studentId={studentSid} 
+                                    students={students} 
+                                    scores={scores} 
+                                    examScores={examScores} 
+                                    homeworkScores={homeworkScores} 
+                                    pastpaperScores={pastpaperScores}
+                                    homeworkMaps={homeworkMaps}
+                                    pastpaperMaps={pastpaperMaps}
+                                    setPastpaperScores={setPastpaperScores}
+                                    syncToCloud={syncToCloud}
+                                />
+                            </StudentErrorBoundary>
                         );
                     }
             return (
