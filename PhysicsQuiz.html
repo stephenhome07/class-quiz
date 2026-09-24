@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>V4.22 Physics Quiz Analyzer</title>
+    <title>V4.23 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -8924,6 +8924,20 @@ const AITrainingCenterPanel = ({ studentId, scoreKey, studentCohort, scores, exa
     }, [subTab, selections, sk, studentCohort, scores, examScores, homeworkScores, pastpaperScores, homeworkMaps, pastpaperMaps, getPastpaperQScore, scoreOneQuestion]);
 
     const { items, weaknesses, totalPct } = getStats();
+
+    // Step 2：弱點多選（預設全選；可取消全選）
+    const [selectedWeaknesses, setSelectedWeaknesses] = React.useState([]);
+    const weaknessesKey = React.useMemo(() => (weaknesses || []).join('||'), [weaknesses]);
+    React.useEffect(() => {
+        // 當萃取到的弱點清單改變時，預設全選
+        setSelectedWeaknesses([...(weaknesses || [])]);
+    }, [weaknessesKey]);
+
+    const toggleWeakness = (w) => {
+        setSelectedWeaknesses(prev => prev.includes(w) ? prev.filter(x => x !== w) : [...prev, w]);
+    };
+    const selectAllWeaknesses = () => setSelectedWeaknesses([...(weaknesses || [])]);
+    const clearAllWeaknesses = () => setSelectedWeaknesses([]);
     
     // 計算自動建議難度
     let suggestedDiff = '中 (Medium)';
@@ -8937,9 +8951,10 @@ const AITrainingCenterPanel = ({ studentId, scoreKey, studentCohort, scores, exa
         }
 
         let diffText = config.difficulty === 'auto' ? suggestedDiff : config.difficulty;
+        const chosenWeak = selectedWeaknesses.filter(w => (weaknesses || []).includes(w));
 
-        const weaknessText = weaknesses.length > 0
-            ? `特別是以下幾個我得分不到一半的核心概念（弱點）：\n${weaknesses.map(w => `- ${w}`).join('\n')}\n\n請務必針對這些錯因設計陷阱題。`
+        const weaknessText = chosenWeak.length > 0
+            ? `特別是以下幾個我得分不到一半的核心概念（弱點）：\n${chosenWeak.map(w => `- ${w}`).join('\n')}\n\n請務必針對這些錯因設計陷阱題。`
             : `我希望全面複習該範圍的核心概念。`;
 
         const syllabus = typeof getSyllabusTableText === 'function' ? getSyllabusTableText() : '';
@@ -8952,11 +8967,9 @@ const AITrainingCenterPanel = ({ studentId, scoreKey, studentCohort, scores, exa
 ${syllabus}
 
 🎯 任務要求：
-1. 請先用一句話鼓勵我。
-2. 請根據我的現有程度（目標難度：${diffText}），為我出 ${config.mcCount} 條多項選擇題 (MC) 以及 ${config.lqCount} 條長題目 (LQ)。
-3. ⚠️ 嚴格注意：請先「只給我題目」，絕對不要直接提供答案！
-4. 等我回答後，你再給出詳細的評分標準 (Marking Scheme) 與解題思路。
-5. 題目必須嚴格對應上方課程大綱的學習要求。`;
+1. 請根據我的現有程度（目標難度：${diffText}），為我出 ${config.mcCount} 條多項選擇題 (MC) 以及 ${config.lqCount} 條長題目 (LQ)。
+2. 題目必須嚴格對應上方課程大綱的學習要求。
+3. ⚠️ 請使用「Canvas 畫布模式」生成一份「AI 互動式小測驗」：版面清晰、可逐題作答、即時顯示對錯與簡短解析，讓我可以像做網上練習卷一樣互動完成。`;
         
         navigator.clipboard.writeText(prompt).then(() => {
             alert('✅ 專屬 AI 特訓指令已成功複製！\n\n即將為您開啟 AI 平台，請直接「貼上 (Ctrl+V)」發送給 AI 導師！');
@@ -9021,16 +9034,41 @@ ${syllabus}
 
                     {/* 2. 弱點與參數設定 (左右排版) */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                        {/* 左：萃取弱點 */}
+                        {/* 左：萃取弱點（可多選，預設全選） */}
                         <div>
-                            <label className="text-sm font-black text-slate-800 mb-3 flex items-center gap-2"><span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded text-xs">Step 2</span> 系統自動萃取弱點：</label>
-                            <div className="bg-slate-900 text-emerald-400 font-mono text-xs p-4 rounded-xl h-[180px] overflow-y-auto custom-scrollbar leading-relaxed">
+                            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                                <label className="text-sm font-black text-slate-800 flex items-center gap-2">
+                                    <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded text-xs">Step 2</span>
+                                    系統自動萃取弱點（可多選）：
+                                </label>
+                                {weaknesses.length > 0 && (
+                                    <div className="flex items-center gap-2 text-[11px] font-bold">
+                                        <span className="text-slate-400">{selectedWeaknesses.length}/{weaknesses.length} 已選</span>
+                                        <button type="button" onClick={selectAllWeaknesses} className="px-2 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-100 hover:bg-indigo-100">全選</button>
+                                        <button type="button" onClick={clearAllWeaknesses} className="px-2 py-1 rounded-lg bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200">取消全選</button>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="bg-slate-900 text-emerald-400 font-mono text-xs p-3 rounded-xl h-[200px] overflow-y-auto custom-scrollbar leading-relaxed">
                                 {(!selections[subTab] || selections[subTab].length === 0) ? (
                                     <span className="text-slate-500">// 請先在上方選擇至少一個項目...</span>
                                 ) : weaknesses.length === 0 ? (
                                     <span className="text-emerald-500">// 太強了！在你選定的範圍內，目前沒有得分低於 50% 的概念弱點。</span>
                                 ) : (
-                                    weaknesses.map((w, idx) => <div key={idx} className="mb-1.5 break-words">► {w}</div>)
+                                    weaknesses.map((w, idx) => {
+                                        const checked = selectedWeaknesses.includes(w);
+                                        return (
+                                            <label key={idx} className={`mb-1.5 flex items-start gap-2 cursor-pointer rounded-lg px-2 py-1.5 transition ${checked ? 'bg-white/10' : 'opacity-50 hover:opacity-80'}`}>
+                                                <input
+                                                    type="checkbox"
+                                                    className="mt-0.5 accent-emerald-400 shrink-0"
+                                                    checked={checked}
+                                                    onChange={() => toggleWeakness(w)}
+                                                />
+                                                <span className="break-words">{w}</span>
+                                            </label>
+                                        );
+                                    })
                                 )}
                             </div>
                         </div>
