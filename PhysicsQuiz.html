@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>V4.23 Physics Quiz Analyzer</title>
+    <title>V4.24 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -4892,14 +4892,19 @@ const HomeworkSettingsView = ({ students, currentCohort, homeworkMaps, setHomewo
 
         if (questions.length === 0) return alert('無法解析題目，請檢查格式是否正確。');
 
-        const newId = hwId.trim().toUpperCase();
+        const newId = hwId.trim(); // 保留大小寫（如 2629_S4_03），避免強制全大寫造成混淆
         const oldId = editingOriginalId;
+        if (oldId && oldId !== newId && homeworkMaps[newId] && oldId !== newId) {
+            // 目標編號已存在：確認是否覆寫（改名場景常已先複製出新編號）
+            if (!confirm(`編號「${newId}」已存在。\n將把「${oldId}」的成績合併進去，並刪除舊編號「${oldId}」。\n繼續？`)) return;
+        }
         const newMaps = { ...homeworkMaps };
-        // 若改了編號：刪除舊 key，並遷移所有學生的成績記錄
+        // 若改了編號：刪除舊 key，並遷移所有學生的成績記錄（真正改名，不是複製）
         let migratedScores = homeworkScores || {};
+        const removeIds = [];
         if (oldId && oldId !== newId) {
             delete newMaps[oldId];
-            // ★ 遷移 homeworkScores：每個學生的 oldId → newId
+            removeIds.push(oldId);
             const nextScores = { ...(homeworkScores || {}) };
             Object.keys(nextScores).forEach(sid => {
                 const studentHw = nextScores[sid];
@@ -4918,19 +4923,22 @@ const HomeworkSettingsView = ({ students, currentCohort, homeworkMaps, setHomewo
         }
         newMaps[newId] = { title: hwTitle, cohort: selectedCohort, questions: questions };
         setHomeworkMaps(newMaps);
-        // 一併同步題庫 +（若有改編號）遷移後的成績
+        // 同步題庫 + 遷移後成績，並請伺服器明確刪除舊編號（merge 預設不會刪 key）
         if (typeof syncToCloud === 'function') {
-            syncToCloud(oldId && oldId !== newId
-                ? { homeworkMaps: newMaps, homeworkScores: migratedScores }
-                : { homeworkMaps: newMaps });
+            const payload = { homeworkMaps: newMaps };
+            if (oldId && oldId !== newId) {
+                payload.homeworkScores = migratedScores;
+                payload.removeHomeworkIds = removeIds;
+            }
+            syncToCloud(payload);
         }
         
-        alert(`✅ 群組 [${selectedCohort}] 的功課 [${newId}] ${oldId && oldId !== newId ? `已由「${oldId}」改編號並遷移成績` : (oldId ? '已更新' : '已儲存')}！`);
+        alert(`✅ 群組 [${selectedCohort}] 的功課 [${newId}] ${oldId && oldId !== newId ? `已由「${oldId}」改名並遷移成績（舊編號已刪除）` : (oldId ? '已更新' : '已儲存')}！`);
         setHwId(''); setHwTitle(''); setPasteData(''); setEditingOriginalId(null);
     };
 
     const handleDelete = (id) => {
-        if (confirm(`確定要刪除功課 [${id}] 的設定嗎？\n（成績記錄會一併清除，請小心）`)) {
+        if (confirm(`確定要刪除功課 [${id}] 的設定嗎？\n（成績記錄會一併從雲端清除，請小心）`)) {
             const newMaps = { ...homeworkMaps };
             delete newMaps[id];
             setHomeworkMaps(newMaps);
@@ -4945,7 +4953,8 @@ const HomeworkSettingsView = ({ students, currentCohort, homeworkMaps, setHomewo
             });
             if (typeof setHomeworkScores === 'function') setHomeworkScores(nextScores);
             if (typeof syncToCloud === 'function') {
-                syncToCloud({ homeworkMaps: newMaps, homeworkScores: nextScores });
+                // ★ removeHomeworkIds：伺服器 merge 後仍會刪掉這些 key
+                syncToCloud({ homeworkMaps: newMaps, homeworkScores: nextScores, removeHomeworkIds: [id] });
             }
             if (editingOriginalId === id) {
                 setHwId(''); setHwTitle(''); setPasteData(''); setEditingOriginalId(null);
@@ -10828,6 +10837,8 @@ const App = () => {
                     const safeExamMaps = typeof EXAM_MAPS !== 'undefined' ? EXAM_MAPS : (window.EXAM_MAPS || {});
                     const safePastpaperMaps = typeof PASTPAPER_MAPS !== 'undefined' ? PASTPAPER_MAPS : (window.PASTPAPER_MAPS || {});
 
+                    // ★ 預設合併寫入（mode: merge）：伺服器會保留雲端已有、但本機沒帶的卷目／學生分數
+                    // 若要整包覆蓋（例如確定刪除學生），傳 overrideData: { forceReplace: true }
                     const payload = { 
                         students: students, 
                         scores: scores,
@@ -10839,7 +10850,8 @@ const App = () => {
                         homeworkMaps: homeworkMaps,      
                         homeworkScores: homeworkScores,  
                         pastpaperMaps: safePastpaperMaps, 
-                        pastpaperScores: pastpaperScores, // ★ 將成績加入上傳封包
+                        pastpaperScores: pastpaperScores,
+                        mode: 'merge',
                         ...overrideData                  
                     };
 
@@ -10852,7 +10864,10 @@ const App = () => {
                     .then(data => {
                         setIsSaving(false);
                         if(data.status === 'success') {
-                            console.log("✅ 雲端同步成功");
+                            console.log("✅ 雲端同步成功（" + (data.mode || 'merge') + "）");
+                        } else {
+                            console.error("雲端存檔回報錯誤:", data);
+                            alert("同步到雲端失敗：" + (data.message || '未知錯誤'));
                         }
                     })
                     .catch(err => {
