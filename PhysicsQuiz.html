@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>V4.24 Physics Quiz Analyzer</title>
+    <title>V4.25 Physics Quiz Analyzer</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -1976,44 +1976,347 @@ const SyllabusSettingsView = ({ syncToCloud }) => {
 };
 
 
-// ==================== 1. 小測內容設定組件 (升級 9 欄版 + AI Prompt) ====================
-const QuizSettingsView = ({ syncToCloud }) => {
+// ==================== 1. 小測內容設定組件 (升級 9 欄版 + AI Prompt + 清單管理) ====================
+const QuizSettingsView = ({ syncToCloud, students, currentCohort, scores, setScores }) => {
     const [quizText, setQuizText] = React.useState('');
+    const [quizListVersion, setQuizListVersion] = React.useState(0); // 強制刷新清單
+    const [editQuizId, setEditQuizId] = React.useState('');
+    const [editQuizTitle, setEditQuizTitle] = React.useState('');
+    const [editingOriginalId, setEditingOriginalId] = React.useState(null);
 
-    React.useEffect(() => {
+    const getQuizMaps = () => {
+        if (typeof QUIZ_MAPS !== 'undefined' && QUIZ_MAPS && typeof QUIZ_MAPS === 'object') return QUIZ_MAPS;
+        return (typeof window !== 'undefined' && window.QUIZ_MAPS) ? window.QUIZ_MAPS : {};
+    };
+
+    const rebuildTextFromMaps = (maps) => {
         let qText = "小測編號\t小測標題\t題目ID\t題型\t滿分\t難度\t課題編號\t題目描述\t正確答案\n";
-        Object.entries(QUIZ_MAPS).forEach(([quizId, map]) => {
-            if (map.questions) {
+        Object.entries(maps || {}).forEach(([quizId, map]) => {
+            if (map && map.questions) {
                 map.questions.forEach(q => {
-                    qText += `${quizId}\t${map.title}\t${q.id}\t${q.type}\t${q.max}\t${q.level}\t${q.topicId}\t${q.topicDesc}\t${q.ans || ''}\n`;
+                    qText += `${quizId}\t${map.title || ''}\t${q.id}\t${q.type}\t${q.max}\t${q.level || ''}\t${q.topicId || ''}\t${q.topicDesc || ''}\t${q.ans || ''}\n`;
                 });
             }
         });
         setQuizText(qText);
+    };
+
+    React.useEffect(() => {
+        rebuildTextFromMaps(getQuizMaps());
     }, []);
+
+    // 目前檢視群組中，各小測已入成績的學生數
+    const scoreCountByQuiz = React.useMemo(() => {
+        const maps = getQuizMaps();
+        const counts = {};
+        Object.keys(maps).forEach(qid => { counts[qid] = 0; });
+        const cohortStudents = (students || []).filter(s => {
+            if (!currentCohort || currentCohort === '所有學生') return true;
+            return (s.cohort || '') === currentCohort;
+        });
+        const idSet = new Set(cohortStudents.map(s => s.id));
+        Object.entries(scores || {}).forEach(([sid, quizScores]) => {
+            if (!idSet.has(sid)) return;
+            if (!quizScores || typeof quizScores !== 'object') return;
+            Object.keys(quizScores).forEach(qid => {
+                const rec = quizScores[qid];
+                if (rec && typeof rec === 'object' && Object.keys(rec).length > 0) {
+                    counts[qid] = (counts[qid] || 0) + 1;
+                }
+            });
+        });
+        return counts;
+    }, [students, currentCohort, scores, quizListVersion]);
+
+    const quizIds = React.useMemo(() => {
+        return Object.keys(getQuizMaps()).sort();
+    }, [quizListVersion, quizText]);
+
+    const countScoresForQuiz = (qid) => {
+        // 全庫（不限群組）有成績的學生數，刪除時提醒用
+        let n = 0;
+        Object.values(scores || {}).forEach(quizScores => {
+            if (quizScores && quizScores[qid] && typeof quizScores[qid] === 'object' && Object.keys(quizScores[qid]).length > 0) n++;
+        });
+        return n;
+    };
+
+    const handleLoadForEdit = (id) => {
+        const maps = getQuizMaps();
+        const map = maps[id];
+        if (!map) return;
+        setEditQuizId(id);
+        setEditQuizTitle(map.title || '');
+        setEditingOriginalId(id);
+    };
+
+    const handleRenameOrUpdateMeta = () => {
+        const maps = { ...getQuizMaps() };
+        const oldId = editingOriginalId;
+        const newId = (editQuizId || '').trim();
+        const newTitle = (editQuizTitle || '').trim();
+        if (!oldId || !maps[oldId]) return alert('請先從左側點選要修改的小測。');
+        if (!newId) return alert('小測編號不可空白。');
+        if (!newTitle) return alert('小測標題不可空白。');
+
+        const cohortCount = scoreCountByQuiz[oldId] || 0;
+        const totalCount = countScoresForQuiz(oldId);
+
+        if (oldId !== newId) {
+            if (maps[newId]) {
+                if (!confirm(`編號「${newId}」已存在。\n將把「${oldId}」的題目與成績合併到「${newId}」，並刪除舊編號。\n目前檢視群組已有 ${cohortCount} 人成績；全庫共 ${totalCount} 人。\n繼續？`)) return;
+            } else {
+                if (totalCount > 0) {
+                    if (!confirm(`將小測編號由「${oldId}」改為「${newId}」。\n目前檢視群組已有 ${cohortCount} 人成績；全庫共 ${totalCount} 人，成績會一併遷移。\n繼續？`)) return;
+                }
+            }
+        }
+
+        // 更新題目藍圖
+        const oldMap = maps[oldId];
+        const mergedQuestions = (oldId !== newId && maps[newId]?.questions)
+            ? [...(maps[newId].questions || []), ...(oldMap.questions || [])]
+            : (oldMap.questions || []);
+        // 去重 by q.id（保留較後／新編號既有）
+        const seen = new Set();
+        const deduped = [];
+        // 先放目標既有，再放舊的
+        if (oldId !== newId && maps[newId]?.questions) {
+            maps[newId].questions.forEach(q => { if (q?.id && !seen.has(q.id)) { seen.add(q.id); deduped.push(q); } });
+            (oldMap.questions || []).forEach(q => { if (q?.id && !seen.has(q.id)) { seen.add(q.id); deduped.push(q); } });
+        } else {
+            (oldMap.questions || []).forEach(q => { if (q?.id && !seen.has(q.id)) { seen.add(q.id); deduped.push(q); } });
+        }
+
+        if (oldId !== newId) {
+            delete maps[oldId];
+        }
+        maps[newId] = { title: newTitle, questions: deduped };
+
+        // 遷移成績
+        let nextScores = scores || {};
+        if (oldId !== newId) {
+            nextScores = { ...(scores || {}) };
+            Object.keys(nextScores).forEach(sid => {
+                const student = nextScores[sid];
+                if (!student || typeof student !== 'object') return;
+                if (student[oldId] === undefined) return;
+                const merged = student[newId]
+                    ? { ...student[oldId], ...student[newId] }
+                    : student[oldId];
+                const updated = { ...student, [newId]: merged };
+                delete updated[oldId];
+                nextScores[sid] = updated;
+            });
+            if (typeof setScores === 'function') setScores(nextScores);
+        }
+
+        QUIZ_MAPS = maps;
+        if (typeof window !== 'undefined') window.QUIZ_MAPS = maps;
+        rebuildTextFromMaps(maps);
+        setQuizListVersion(v => v + 1);
+        setEditingOriginalId(newId);
+        setEditQuizId(newId);
+        setEditQuizTitle(newTitle);
+
+        if (typeof syncToCloud === 'function') {
+            const payload = { quizMaps: maps };
+            if (oldId !== newId) {
+                payload.scores = nextScores;
+                payload.removeQuizIds = [oldId];
+            }
+            syncToCloud(payload);
+        }
+        alert(oldId !== newId
+            ? `✅ 小測已由「${oldId}」改為「${newId}」，標題已更新${totalCount ? '，成績已遷移' : ''}。`
+            : `✅ 小測「${newId}」標題已更新為「${newTitle}」。`);
+    };
+
+    const handleDeleteQuiz = (id) => {
+        const maps = getQuizMaps();
+        if (!maps[id]) return;
+        const cohortCount = scoreCountByQuiz[id] || 0;
+        const totalCount = countScoresForQuiz(id);
+        const title = maps[id].title || id;
+        let msg = `確定刪除小測「${id}」\n（${title}）？\n\n題目藍圖會被移除。`;
+        if (totalCount > 0) {
+            msg += `\n\n⚠️ 警告：全庫有 ${totalCount} 位學生已有此小測成績`;
+            if (currentCohort && currentCohort !== '所有學生') {
+                msg += `（目前檢視群組「${currentCohort}」中有 ${cohortCount} 人）`;
+            }
+            msg += `，刪除後成績會一併清除，無法復原。`;
+        }
+        if (!confirm(msg)) return;
+
+        const newMaps = { ...maps };
+        delete newMaps[id];
+        const nextScores = { ...(scores || {}) };
+        Object.keys(nextScores).forEach(sid => {
+            if (nextScores[sid] && nextScores[sid][id] !== undefined) {
+                const copy = { ...nextScores[sid] };
+                delete copy[id];
+                nextScores[sid] = copy;
+            }
+        });
+        if (typeof setScores === 'function') setScores(nextScores);
+        QUIZ_MAPS = newMaps;
+        if (typeof window !== 'undefined') window.QUIZ_MAPS = newMaps;
+        rebuildTextFromMaps(newMaps);
+        setQuizListVersion(v => v + 1);
+        if (editingOriginalId === id) {
+            setEditingOriginalId(null);
+            setEditQuizId('');
+            setEditQuizTitle('');
+        }
+        if (typeof syncToCloud === 'function') {
+            syncToCloud({ quizMaps: newMaps, scores: nextScores, removeQuizIds: [id] });
+        }
+        alert(`✅ 已刪除小測「${id}」${totalCount ? `及 ${totalCount} 位學生的相關成績` : ''}。`);
+    };
+
+    // 解析一行：支援 Tab、CSV 逗號、多空白
+    const parseQuizLine = (rawLine) => {
+        let line = (rawLine || '').trim();
+        if (!line) return null;
+        // 去掉可能的 BOM / 全形空白
+        line = line.replace(/^\uFEFF/, '').replace(/\u3000/g, ' ');
+
+        const splitCsv = (s) => {
+            const out = [];
+            let cur = '';
+            let inQ = false;
+            for (let i = 0; i < s.length; i++) {
+                const ch = s[i];
+                if (ch === '"') {
+                    if (inQ && s[i + 1] === '"') { cur += '"'; i++; }
+                    else inQ = !inQ;
+                } else if ((ch === ',' || ch === '，') && !inQ) {
+                    out.push(cur.trim());
+                    cur = '';
+                } else {
+                    cur += ch;
+                }
+            }
+            out.push(cur.trim());
+            return out;
+        };
+
+        let cols = line.split('\t').map(c => c.trim());
+        if (cols.length < 8) {
+            const csv = splitCsv(line);
+            if (csv.length >= 8) cols = csv;
+        }
+        if (cols.length < 8) {
+            const multi = line.split(/\s{2,}/).map(c => c.trim()).filter(Boolean);
+            if (multi.length >= 8) cols = multi;
+        }
+        if (cols.length < 8) return null;
+
+        // 若第一欄是表頭則略過
+        const c0 = (cols[0] || '').toLowerCase();
+        if (c0.includes('小測編號') || c0 === 'quizid' || c0 === 'quiz_id') return null;
+
+        const quizId = cols[0] || '';
+        const title = cols[1] || '';
+        const qId = cols[2] || '';
+        const type = (cols[3] || 'LQ').toUpperCase();
+        const max = cols[4] || '1';
+        const level = cols[5] || '';
+        const topicId = cols[6] || '';
+        const desc = cols[7] || '';
+        const ans = (cols[8] || '').toString().trim().toUpperCase();
+        if (!quizId || !qId) return null;
+        let maxNum = parseFloat(max);
+        if (isNaN(maxNum) || maxNum <= 0) maxNum = 1;
+        return {
+            quizId: quizId.trim(),
+            title: title.trim(),
+            question: {
+                id: qId.trim(),
+                type: type === 'MC' ? 'MC' : 'LQ',
+                max: maxNum,
+                level: level.trim(),
+                topicId: topicId.trim(),
+                topicDesc: desc.trim(),
+                ans: ans
+            }
+        };
+    };
 
     const handleSave = () => {
         try {
             const newQuizMaps = {};
-            const qLines = quizText.trim().split('\n');
-            for (let i = 1; i < qLines.length; i++) {
-                if (!qLines[i].trim()) continue;
-                const cols = qLines[i].split('\t');
-                if (cols.length < 8) continue; 
-                
-                // 讀取包含第 9 欄的資料
-                const [quizId, title, qId, type, max, level, topicId, desc, ans] = cols.map(c => c ? c.trim() : '');
-                
+            const qLines = quizText.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim().split('\n');
+            let parsedCount = 0;
+            let skipped = 0;
+            for (let i = 0; i < qLines.length; i++) {
+                const row = parseQuizLine(qLines[i]);
+                if (!row) {
+                    if (qLines[i].trim()) skipped++;
+                    continue;
+                }
+                const { quizId, title, question } = row;
                 if (!newQuizMaps[quizId]) {
                     newQuizMaps[quizId] = { title: title, questions: [] };
+                } else if (title && !newQuizMaps[quizId].title) {
+                    newQuizMaps[quizId].title = title;
                 }
-                newQuizMaps[quizId].questions.push({
-                    id: qId, type: type, max: Number(max), level: level, topicId: topicId, topicDesc: desc, ans: ans || ''
-                });
+                // 若同一題 id 重複，以後面為準
+                const qi = newQuizMaps[quizId].questions.findIndex(q => q.id === question.id);
+                if (qi >= 0) newQuizMaps[quizId].questions[qi] = question;
+                else newQuizMaps[quizId].questions.push(question);
+                parsedCount++;
             }
+
+            if (parsedCount === 0) {
+                alert('❌ 未能解析到任何題目！\n\n請確認格式為 9 欄，可用：\n• Tab 分隔（建議）\n• CSV 逗號分隔\n\n欄位順序：\n小測編號 | 小測標題 | 題目ID | 題型 | 滿分 | 難度 | 課題編號 | 題目描述 | 正確答案\n\n（略過 ' + skipped + ' 行無法辨識的內容）');
+                return;
+            }
+
+            const oldMaps = getQuizMaps();
+            const removed = Object.keys(oldMaps).filter(id => !newQuizMaps[id]);
+            let nextScores = scores || {};
+            let removeIds = removed.slice();
+
+            if (removed.length > 0) {
+                const withScores = removed.filter(id => countScoresForQuiz(id) > 0);
+                if (withScores.length > 0) {
+                    const detail = withScores.map(id => `• ${id}（全庫 ${countScoresForQuiz(id)} 人已有成績）`).join('\n');
+                    if (!confirm(`以下小測不在新資料中，將被刪除並清除相關成績：\n${detail}\n\n確定儲存？`)) return;
+                    nextScores = { ...(scores || {}) };
+                    withScores.forEach(qid => {
+                        Object.keys(nextScores).forEach(sid => {
+                            if (nextScores[sid] && nextScores[sid][qid] !== undefined) {
+                                const copy = { ...nextScores[sid] };
+                                delete copy[qid];
+                                nextScores[sid] = copy;
+                            }
+                        });
+                    });
+                    if (typeof setScores === 'function') setScores(nextScores);
+                } else if (removed.length > 0) {
+                    if (!confirm(`以下小測不在新資料中，將從藍圖刪除：\n${removed.map(id => '• ' + id).join('\n')}\n\n確定儲存？`)) return;
+                }
+            }
+
             QUIZ_MAPS = newQuizMaps;
-            syncToCloud();
-            alert('✅ 小測內容（含正確答案）已同步到 Google Sheet！');
+            if (typeof window !== 'undefined') window.QUIZ_MAPS = newQuizMaps;
+            rebuildTextFromMaps(newQuizMaps);
+            setQuizListVersion(v => v + 1);
+
+            if (typeof syncToCloud === 'function') {
+                // ★ 強制以文字框內容完整覆蓋 quizMaps（避免 merge 把舊編號留在雲端）
+                const payload = {
+                    quizMaps: newQuizMaps,
+                    replaceKeys: ['quizMaps']
+                };
+                if (removeIds.length > 0) payload.removeQuizIds = removeIds;
+                if (nextScores !== scores) payload.scores = nextScores;
+                syncToCloud(payload);
+            }
+
+            const quizN = Object.keys(newQuizMaps).length;
+            alert(`✅ 已解析 ${parsedCount} 題、${quizN} 份小測，並同步到雲端！` + (skipped ? `\n（略過 ${skipped} 行無法辨識）` : ''));
         } catch (err) { alert('❌ 儲存失敗！' + err); }
     };
 
@@ -2048,65 +2351,165 @@ ${getSyllabusTableText()}
 - MC 或 LQ（全大寫）。
 
 四、滿分（max）
-- 若小測卷上已標示分數，直接採用該分數。
+- 若小測上已標示分數，直接採用該分數。
 - 若無標示，請根據題目複雜度合理估計：
   - MC 預設 1 分
-  - LQ 簡短計算/解釋題 1-2 分
-  - LQ 多步驟題 3 分（特殊情況可至 4 分）
+  - LQ 簡短計算/解釋題 2 分
+  - LQ 多步驟題 3-4 分
 - 輸出請寫數字。
 
-五、難度（level）
+五、深淺度（level）
 - 對象為香港 Band 3 學生，程度偏弱。
 - 判斷標準：
   - 淺：直接代入公式、單一步驟、基礎概念。
   - 中：需兩步推理或結合兩個概念。
-  - 深：多步驟分析、繪圖、綜合應用或需分辨常見誤解（可標註「殺手題」特徵）。
+  - 深：多步驟分析、繪圖、綜合應用或解釋現象。
 - 請用中文輸出：「淺」「中」「深」。
 
-六、課題編號（topicId）
-- 請根據題目內容，與上方【課程大綱對照表】進行比對，找出最相關的課題編號（例如 2.6.1, 2.9.2）。若找不到精確對應，請選擇最接近的一個。若完全無法對應，可留空。
+六、課題編號與題目描述
+- topicId：請根據題目內容，與上方【課程大綱對照表】進行比對，找出最相關的課題編號（例如 1.1, 2.2, E1.1）。若無法找到精確對應，請選擇最接近的一個。若完全無法對應，topicId 可留空。
+- topicDesc：不要直接抄寫對照表中的學習要求文字。請你根據該題目實際問的內容，用中文撰寫一個 20-30 字的簡短描述，說明這題在考什麼。
+  維持一句話，簡潔準確。
 
-七、題目描述（topicDesc）
-- 不要直接抄寫對照表中的學習要求文字。請你根據該題目實際問的內容，用中文撰寫一個 20-30 字的簡短描述，說明這題在考什麼。
-- 範例：
-  - 「計算與位移成夾角的施力所作的功」
-  - 「利用能量守恆定律計算物體克服水阻力作功後的最大深度」
-  - 「分析勻加速運動中，作功與位移的線圖關係」
-- 若為 MC 題，可點出關鍵概念；若為 LQ 題，可概述任務。
-
-八、正確答案（ans）
-- MC 題：請填寫正確選項代號（A / B / C / D），注意大小寫統一使用大寫。
+七、正確答案（ans）★ 必須填寫
+- MC 題：必須填寫正確選項代號（A / B / C / D），統一使用大寫。
+- 若題目有多個正確答案，用逗號分隔（例如 A,C）。
 - LQ 題：本欄留空（僅輸出 Tab 分隔符）。
+- 若上傳檔案中未能直接看到答案，請根據物理知識自行判斷最合理的正確選項並填上。
 
 【輸出格式】
-每一行代表一題，欄位以 Tab 分隔，順序固定為：
-小測編號 [Tab] 小測標題 [Tab] 題目ID [Tab] 題型 [Tab] 滿分 [Tab] 難度 [Tab] 課題編號 [Tab] 題目描述 [Tab] 正確答案
-
-例如：
-CH09	09 功、能量和功率	MC1	MC	1	中	2.6.1	計算與位移成夾角的施力所作的功	A
-CH09	09 功、能量和功率	MC2	MC	1	淺	2.6.3	分析無摩擦斜面上物體的動能與勢能變化	B
-CH09	09 功、能量和功率	LQ1a	LQ	2	淺	2.6.2	計算石塊被拉至頂部時所增加的重力勢能	
-CH09	09 功、能量和功率	LQ3b	LQ	3	深	2.6.3	根據能量守恆定律，描繪對應的動能-時間線圖	
-
-【絕對禁止】
-- 不要輸出任何表格、標題、Markdown 語法或說明文字。
-- 只能輸出題目行，欄位數量固定為 9 個 Tab 分隔值。
-- 題目描述必須是你自己歸納的 20-30 字描述，不可直接抄寫對照表中的長句。
-- 除了 MC 題的正確答案欄需填寫 A/B/C/D 外，LQ 題的正確答案欄務必留空。`;
+每一行代表一題，欄位以 Tab 分隔，順序固定為 9 欄。
+不要輸出任何表格、標題、Markdown 或說明文字。
+除了 MC 題的正確答案欄需填寫 A/B/C/D 外，LQ 題的正確答案欄務必留空。`;
 
     const copyPromptToClipboard = () => {
         navigator.clipboard.writeText(buildQuickPromptText());
         alert('Prompt 已複製！（已自動附上最新課程大綱）');
     };
 
+    const maps = getQuizMaps();
+
     return (
         <div className="p-6 max-w-6xl mx-auto animate-fadeIn">
             <div className="flex justify-between items-center mb-6">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><Icon name="FileEdit" /> 小測內容設定 (新增正確答案)</h1>
-                    <p className="text-sm text-slate-500 mt-1">可包含九欄，最後一欄為正確答案 (MC填 A/B/C/D，LQ可留空)。</p>
+                    <p className="text-sm text-slate-500 mt-1">左側可改編號／標題或刪除；下方文字框可批次貼上題目。有成績時會提醒。</p>
                 </div>
                 <button onClick={handleSave} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2"><Icon name="CloudUpload" size={18} /> 儲存至雲端</button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                {/* 左側：現有小測清單 */}
+                <div className="lg:col-span-1 card p-5 border border-slate-200 shadow-sm bg-slate-50">
+                    <div className="flex justify-between items-center mb-3">
+                        <h3 className="font-bold text-slate-700 text-sm">現有小測清單</h3>
+                        <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-bold">
+                            {currentCohort || '所有學生'}
+                        </span>
+                    </div>
+                    <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+                        {quizIds.length === 0 && <p className="text-xs text-slate-400">尚未設定任何小測。</p>}
+                        {quizIds.map(id => {
+                            const qCount = maps[id]?.questions?.length || 0;
+                            const sc = scoreCountByQuiz[id] || 0;
+                            const active = editingOriginalId === id;
+                            return (
+                                <div
+                                    key={id}
+                                    className={`p-3 bg-white border rounded-lg shadow-sm flex justify-between items-start cursor-pointer transition ${active ? 'border-blue-400 ring-2 ring-blue-200' : 'border-slate-200 hover:border-blue-300'}`}
+                                    onClick={() => handleLoadForEdit(id)}
+                                >
+                                    <div className="min-w-0 pr-2">
+                                        <div className="font-bold text-blue-700 text-sm font-mono truncate">{id}</div>
+                                        <div className="text-xs text-slate-600 font-bold mt-0.5 truncate">{maps[id]?.title || '（無標題）'}</div>
+                                        <div className="text-[10px] text-slate-400 mt-1">共 {qCount} 題 · 點擊可改編號／標題</div>
+                                        <div className={`text-[10px] mt-0.5 font-medium ${sc > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
+                                            {sc > 0
+                                                ? `目前群組已有 ${sc} 人入成績`
+                                                : '目前群組尚無成績'}
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); handleDeleteQuiz(id); }}
+                                        className="text-red-400 hover:text-red-600 p-1 flex-shrink-0"
+                                        title="刪除此小測"
+                                    >
+                                        <Icon name="Trash2" size={14} />
+                                    </button>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* 右側：改編號／標題 */}
+                <div className="lg:col-span-2 card p-5 border border-slate-200 shadow-sm">
+                    <h3 className="font-bold text-slate-700 text-sm mb-3 flex items-center gap-2">
+                        <Icon name="Pencil" size={16} className="text-blue-500" />
+                        修改小測編號與標題
+                    </h3>
+                    {!editingOriginalId ? (
+                        <p className="text-sm text-slate-400 py-8 text-center">請從左側清單點選一份小測進行修改。</p>
+                    ) : (
+                        <div className="space-y-4">
+                            <div className="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded px-3 py-2">
+                                正在編輯：<span className="font-mono font-bold text-blue-700">{editingOriginalId}</span>
+                                {(scoreCountByQuiz[editingOriginalId] || 0) > 0 && (
+                                    <span className="ml-2 text-amber-600 font-medium">
+                                        （目前群組 {scoreCountByQuiz[editingOriginalId]} 人已有成績
+                                        {countScoresForQuiz(editingOriginalId) !== scoreCountByQuiz[editingOriginalId]
+                                            ? `；全庫 ${countScoresForQuiz(editingOriginalId)} 人`
+                                            : ''}）
+                                    </span>
+                                )}
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-600 mb-1">小測編號</label>
+                                <input
+                                    type="text"
+                                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none"
+                                    value={editQuizId}
+                                    onChange={(e) => setEditQuizId(e.target.value)}
+                                    placeholder="例如 S5 Quiz1"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-600 mb-1">小測標題</label>
+                                <input
+                                    type="text"
+                                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                    value={editQuizTitle}
+                                    onChange={(e) => setEditQuizTitle(e.target.value)}
+                                    placeholder="例如 S5氧化還原1 - Ch.28至30"
+                                />
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                <button
+                                    onClick={handleRenameOrUpdateMeta}
+                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-bold flex items-center gap-1"
+                                >
+                                    <Icon name="Save" size={16} /> 儲存編號／標題
+                                </button>
+                                <button
+                                    onClick={() => handleDeleteQuiz(editingOriginalId)}
+                                    className="px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 text-sm font-bold flex items-center gap-1"
+                                >
+                                    <Icon name="Trash2" size={16} /> 刪除此小測
+                                </button>
+                                <button
+                                    onClick={() => { setEditingOriginalId(null); setEditQuizId(''); setEditQuizTitle(''); }}
+                                    className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 text-sm"
+                                >
+                                    取消
+                                </button>
+                            </div>
+                            <p className="text-[11px] text-slate-400">
+                                改編號時若已有學生成績，會自動遷移到新編號。刪除則會連成績一併清除（會先確認）。
+                            </p>
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* ========== 快速 Prompt 複製區 ========== */}
@@ -2134,7 +2537,7 @@ CH09	09 功、能量和功率	LQ3b	LQ	3	深	2.6.3	根據能量守恆定律，描
             {/* ========== 快速 Prompt 複製區結束 ========== */}
 
             <textarea 
-                className="w-full h-[600px] p-4 text-sm font-mono bg-slate-50 border border-slate-200 rounded focus:ring-2 focus:ring-blue-500 overflow-x-auto whitespace-pre" 
+                className="w-full h-[480px] p-4 text-sm font-mono bg-slate-50 border border-slate-200 rounded focus:ring-2 focus:ring-blue-500 overflow-x-auto whitespace-pre" 
                 wrap="off" 
                 value={quizText} 
                 onChange={(e) => setQuizText(e.target.value)} 
@@ -11036,7 +11439,7 @@ const App = () => {
                     {view === 'settings' && <SettingsView />}
 
                     {view === 'syllabusSettings' && <SyllabusSettingsView syncToCloud={syncToCloud} />}
-                    {view === 'quizSettings' && <QuizSettingsView syncToCloud={syncToCloud} />}
+                    {view === 'quizSettings' && <QuizSettingsView syncToCloud={syncToCloud} students={students} currentCohort={currentCohort} scores={scores} setScores={setScores} />}
                     {view === 'examSettings' && <ExamSettingsView syncToCloud={syncToCloud} />}
                     {view === 'examScoresInput' && <ExamScoresInputView activeStudents={activeStudents} examScores={examScores} setExamScores={setExamScores} syncToCloud={syncToCloud} />}
                     {view === 'examAnalysis' && <ExamAnalysisView activeStudents={activeStudents} examScores={examScores} currentCohort={currentCohort} getRelevantExamMaps={getRelevantExamMaps} />}
